@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import type { CertificateRequest } from '@/lib/types';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
+import { useAuth } from '@/providers/auth-provider';
 
 interface CertificateRequestsTableProps {
   requests: CertificateRequest[];
@@ -28,6 +28,7 @@ interface CertificateRequestsTableProps {
 
 export function CertificateRequestsTable({ requests }: CertificateRequestsTableProps) {
   const router = useRouter();
+  const { user } = useAuth();
 
   const handleRowClick = (id: string) => {
     router.push(`/dashboard/requests/${id}`);
@@ -84,6 +85,11 @@ export function CertificateRequestsTable({ requests }: CertificateRequestsTableP
                             <DropdownMenuItem onClick={() => handleRowClick(request.id)}>
                                 View Details
                             </DropdownMenuItem>
+                            {user?.role === 'requester' && request.status === 'approved' && request.certificateId && (
+                                <DropdownMenuItem onClick={() => router.push(`/dashboard/certificates/${request.certificateId}`)}>
+                                    View Certificate
+                                </DropdownMenuItem>
+                            )}
                         </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
