@@ -77,7 +77,7 @@ export default function UsersPage() {
   const confirmDelete = async () => {
     if (selectedUser) {
         try {
-            await deleteDoc(doc(db, 'users', selectedUser.id));
+            await deleteDoc(doc(db!, 'users', selectedUser.id));
             toast({
                 title: 'User Deleted',
                 description: `${selectedUser.name}'s data has been deleted. Note: The auth account must be deleted separately using a backend function.`,

@@ -56,7 +56,7 @@ export default function NewRequestPage() {
 
   const { data: teams } = useCollection<Team>('teams');
   const { data: projects } = useCollection<Project>('projects');
-  const { data: qaUsers } = useCollection<User>('users', query(collection(db, 'users'), where('role', '==', 'qa_tester')));
+  const { data: qaUsers } = useCollection<User>('users', query(collection(db!, 'users'), where('role', '==', 'qa_tester')));
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -122,7 +122,7 @@ export default function NewRequestPage() {
     }
 
     try {
-        await addDoc(collection(db, 'requests'), {
+        await addDoc(collection(db!, 'requests'), {
             ...values,
             requesterId: user.id,
             requesterName: user.name,

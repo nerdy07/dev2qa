@@ -67,7 +67,7 @@ export default function TeamsPage() {
   const confirmDelete = async () => {
     if (selectedTeam) {
         try {
-            await deleteDoc(doc(db, 'teams', selectedTeam.id));
+            await deleteDoc(doc(db!, 'teams', selectedTeam.id));
             toast({
                 title: 'Team Deleted',
                 description: `The team "${selectedTeam.name}" has been deleted.`,
@@ -89,14 +89,14 @@ export default function TeamsPage() {
     const isEditing = !!selectedTeam;
     try {
         if (isEditing) {
-            const teamRef = doc(db, 'teams', selectedTeam.id);
+            const teamRef = doc(db!, 'teams', selectedTeam.id);
             await updateDoc(teamRef, { name });
             toast({
                 title: 'Team Updated',
                 description: `The team "${name}" has been successfully updated.`,
             });
         } else {
-            await addDoc(collection(db, 'teams'), { name });
+            await addDoc(collection(db!, 'teams'), { name });
             toast({
                 title: 'Team Created',
                 description: `The team "${name}" has been successfully created.`,

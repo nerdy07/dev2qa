@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, type Query } from 'firebase/firestore';
+import { db, firebaseInitialized } from '@/lib/firebase';
+import { collection, onSnapshot, query, type Query, doc } from 'firebase/firestore';
 
 export function useCollection<T>(collectionName: string, firestoreQuery?: Query) {
   const [data, setData] = useState<T[] | null>(null);
@@ -9,7 +9,13 @@ export function useCollection<T>(collectionName: string, firestoreQuery?: Query)
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const q = firestoreQuery || query(collection(db, collectionName));
+    if (!firebaseInitialized) {
+        setLoading(false);
+        // AuthProvider will show a config error, so we don't need to do anything here.
+        return;
+    }
+
+    const q = firestoreQuery || query(collection(db!, collectionName));
     
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const docs: T[] = [];
@@ -36,12 +42,17 @@ export function useDocument<T>(collectionName: string, docId: string) {
     const [error, setError] = useState<Error | null>(null);
   
     useEffect(() => {
+      if (!firebaseInitialized) {
+          setLoading(false);
+          return;
+      }
+
       if (!docId) {
         setLoading(false);
         setData(null);
         return;
       }
-      const docRef = collection(db, collectionName).doc(docId);
+      const docRef = doc(db!, collectionName, docId);
       
       const unsubscribe = onSnapshot(docRef, (doc) => {
         if (doc.exists()) {

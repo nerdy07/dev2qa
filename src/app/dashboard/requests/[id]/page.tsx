@@ -46,7 +46,7 @@ export default function RequestDetailsPage() {
 
     const fetchRequest = async () => {
         try {
-            const docRef = doc(db, 'requests', id as string);
+            const docRef = doc(db!, 'requests', id as string);
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
@@ -69,7 +69,7 @@ export default function RequestDetailsPage() {
     if (!request || !user) return;
     try {
         // 1. Create Certificate
-        const certCollection = collection(db, 'certificates');
+        const certCollection = collection(db!, 'certificates');
         const certDocRef = await addDoc(certCollection, {
             requestId: request.id,
             taskTitle: request.taskTitle,
@@ -81,7 +81,7 @@ export default function RequestDetailsPage() {
         });
 
         // 2. Update Request
-        const requestRef = doc(db, 'requests', request.id);
+        const requestRef = doc(db!, 'requests', request.id);
         await updateDoc(requestRef, {
             status: 'approved',
             qaTesterId: user.id,
@@ -115,7 +115,7 @@ export default function RequestDetailsPage() {
     }
 
     try {
-        const requestRef = doc(db, 'requests', request.id);
+        const requestRef = doc(db!, 'requests', request.id);
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: rejectionReason,

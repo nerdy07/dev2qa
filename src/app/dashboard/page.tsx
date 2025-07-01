@@ -23,7 +23,7 @@ export default function DashboardPage() {
     const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
     const { data: requests, loading: requestsLoading, error } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db, 'requests'), limit(5))
+        query(collection(db!, 'requests'), limit(5))
     );
 
     const loading = usersLoading || teamsLoading || projectsLoading || requestsLoading;
@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const RequesterDashboard = () => {
     const { data: myRequests, loading, error } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db, 'requests'), where('requesterId', '==', user?.id || ''))
+        query(collection(db!, 'requests'), where('requesterId', '==', user?.id || ''))
     );
 
     if (error) {
@@ -94,7 +94,7 @@ export default function DashboardPage() {
   const QATesterDashboard = () => {
     const { data: pendingRequests, loading, error } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db, 'requests'), where('status', '==', 'pending'))
+        query(collection(db!, 'requests'), where('status', '==', 'pending'))
     );
 
     if (error) {

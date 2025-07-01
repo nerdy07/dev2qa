@@ -15,10 +15,10 @@ const EchobitLogo = () => (
     <div className="flex items-center gap-3">
         <div className="w-10 h-10">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="50" fill="#294B43"/>
+                <circle cx="50" cy="50" r="50" fill="hsl(var(--accent))"/>
                 <circle cx="50" cy="50" r="42" fill="#4B8678"/>
                 <path d="M40 50C40 55.5228 44.4772 60 50 60C55.5228 60 60 55.5228 60 50C60 44.4772 55.5228 40 50 40C47.2386 40 44.7386 41.1193 42.9289 42.9289L39.0711 39.0711C41.9772 36.165 45.7893 34 50 34C58.8365 34 66 41.1635 66 50C66 58.8365 58.8365 66 50 66C41.1635 66 34 58.8365 34 50H40Z" fill="white"/>
-                <path d="M50 56C53.3137 56 56 53.3137 56 50C56 46.6863 53.3137 44 50 44C48.4193 44 46.9696 44.6286 45.8787 45.7196L43.0503 42.8912C44.7196 41.2219 47.2196 40 50 40C55.5228 40 60 44.4772 60 50C60 55.5228 55.5228 60 50 60C44.4772 60 40 55.5228 40 50H43C43 53.3137 46.1634 56 50 56Z" fill="#C99248"/>
+                <path d="M50 56C53.3137 56 56 53.3137 56 50C56 46.6863 53.3137 44 50 44C48.4193 44 46.9696 44.6286 45.8787 45.7196L43.0503 42.8912C44.7196 41.2219 47.2196 40 50 40C55.5228 40 60 44.4772 60 50C60 55.5228 55.5228 60 50 60C44.4772 60 40 55.5228 40 50H43C43 53.3137 46.1634 56 50 56Z" fill="hsl(var(--gold))"/>
             </svg>
         </div>
         <div>
@@ -69,7 +69,7 @@ export default function CertificatePage() {
 
         const fetchCertificate = async () => {
             try {
-                const docRef = doc(db, 'certificates', id as string);
+                const docRef = doc(db!, 'certificates', id as string);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
                     setCertificate({ id: docSnap.id, ...docSnap.data() } as Certificate);
@@ -120,9 +120,9 @@ export default function CertificatePage() {
             <div className="w-full max-w-5xl bg-white shadow-2xl print:shadow-none aspect-[1.414] p-8 relative">
                  {/* Decorative background elements */}
                 <div className="absolute top-0 right-0 w-1/4 h-1/4 bg-accent/80" style={{clipPath: 'polygon(100% 0, 0 0, 100% 100%)'}}></div>
-                <div className="absolute top-0 right-0 w-1/5 h-1/5 bg-gold/70" style={{clipPath: 'polygon(100% 0, 0 0, 100% 100%)'}}></div>
+                <div className="absolute top-0 right-0 w-1/5 h-1/5" style={{backgroundColor: 'hsl(var(--gold))', opacity: 0.7, clipPath: 'polygon(100% 0, 0 0, 100% 100%)'}}></div>
                 <div className="absolute bottom-0 left-0 w-1/4 h-1/4 bg-accent/80" style={{clipPath: 'polygon(0 100%, 100% 100%, 0 0)'}}></div>
-                <div className="absolute bottom-0 left-0 w-1/5 h-1/5 bg-gold/70" style={{clipPath: 'polygon(0 100%, 100% 100%, 0 0)'}}></div>
+                <div className="absolute bottom-0 left-0 w-1/5 h-1/5" style={{backgroundColor: 'hsl(var(--gold))', opacity: 0.7, clipPath: 'polygon(0 100%, 100% 100%, 0 0)'}}></div>
 
                 <div className="w-full h-full p-2 border-2 border-border/20 relative">
                     <div className="w-full h-full flex flex-col p-10 border border-border/60 relative">

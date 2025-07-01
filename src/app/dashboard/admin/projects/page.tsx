@@ -67,7 +67,7 @@ export default function ProjectsPage() {
     const confirmDelete = async () => {
       if (selectedProject) {
         try {
-            await deleteDoc(doc(db, 'projects', selectedProject.id));
+            await deleteDoc(doc(db!, 'projects', selectedProject.id));
             toast({
                 title: 'Project Deleted',
                 description: `The project "${selectedProject.name}" has been deleted.`,
@@ -89,14 +89,14 @@ export default function ProjectsPage() {
       const isEditing = !!selectedProject;
       try {
         if (isEditing) {
-            const projectRef = doc(db, 'projects', selectedProject.id);
+            const projectRef = doc(db!, 'projects', selectedProject.id);
             await updateDoc(projectRef, { name });
             toast({
                 title: 'Project Updated',
                 description: `The project "${name}" has been successfully updated.`,
             });
         } else {
-            await addDoc(collection(db, 'projects'), { name });
+            await addDoc(collection(db!, 'projects'), { name });
             toast({
                 title: 'Project Created',
                 description: `The project "${name}" has been successfully created.`,
