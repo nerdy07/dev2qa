@@ -1,8 +1,9 @@
 export type User = {
-  id: string;
+  id: string; // This will be the Firebase Auth UID
   name: string;
   email: string;
   role: 'admin' | 'requester' | 'qa_tester';
+  photoURL?: string;
 };
 
 export type Team = {
@@ -25,8 +26,8 @@ export type CertificateRequest = {
   requesterId: string;
   requesterName: string;
   status: 'pending' | 'approved' | 'rejected';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
   qaTesterId?: string;
   qaTesterName?: string;
   rejectionReason?: string;
@@ -41,5 +42,5 @@ export type Certificate = {
     associatedProject: string;
     requesterName: string;
     qaTesterName: string;
-    approvalDate: Date;
+    approvalDate: any; // Firestore Timestamp
 };

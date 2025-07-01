@@ -1,7 +1,6 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { mockRequests } from '@/lib/mock-data';
 import { PageHeader } from '@/components/common/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +8,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, XCircle } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -25,30 +24,87 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { CertificateRequest } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  const [request, setRequest] = React.useState<CertificateRequest | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  
   const [rejectionReason, setRejectionReason] = React.useState('');
 
-  const request = mockRequests.find((r) => r.id === id);
+  React.useEffect(() => {
+    if (!id) return;
 
-  if (!request) {
-    return <div>Request not found.</div>;
+    const fetchRequest = async () => {
+        try {
+            const docRef = doc(db, 'requests', id as string);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                setRequest({ id: docSnap.id, ...docSnap.data() } as CertificateRequest);
+            } else {
+                setError("Request not found.");
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Failed to fetch request details.");
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    fetchRequest();
+  }, [id]);
+
+  const handleApprove = async () => {
+    if (!request || !user) return;
+    try {
+        // 1. Create Certificate
+        const certCollection = collection(db, 'certificates');
+        const certDocRef = await addDoc(certCollection, {
+            requestId: request.id,
+            taskTitle: request.taskTitle,
+            associatedTeam: request.associatedTeam,
+            associatedProject: request.associatedProject,
+            requesterName: request.requesterName,
+            qaTesterName: user.name,
+            approvalDate: serverTimestamp(),
+        });
+
+        // 2. Update Request
+        const requestRef = doc(db, 'requests', request.id);
+        await updateDoc(requestRef, {
+            status: 'approved',
+            qaTesterId: user.id,
+            qaTesterName: user.name,
+            updatedAt: serverTimestamp(),
+            certificateId: certDocRef.id,
+        });
+
+        toast({
+            title: 'Request Approved',
+            description: `Certificate for "${request.taskTitle}" has been generated.`,
+        });
+        router.push('/dashboard');
+
+    } catch (e) {
+        console.error("Error approving request: ", e);
+        toast({ title: 'Approval Failed', variant: 'destructive' });
+    }
   }
   
-  const handleApprove = () => {
-    toast({
-        title: 'Request Approved',
-        description: `Certificate for "${request.taskTitle}" has been generated.`,
-    });
-    // In real app, update status and generate certificate, then redirect.
-    router.push('/dashboard');
-  }
-  
-  const handleReject = () => {
+  const handleReject = async () => {
+    if (!request || !user) return;
+
     if (rejectionReason.trim().length < 10) {
         toast({
             title: 'Reason Required',
@@ -57,13 +113,26 @@ export default function RequestDetailsPage() {
         });
         return;
     }
-    toast({
-        title: 'Request Rejected',
-        description: `Request for "${request.taskTitle}" has been rejected.`,
-        variant: 'destructive'
-    });
-    // In real app, update status with reason, then redirect.
-    router.push('/dashboard');
+
+    try {
+        const requestRef = doc(db, 'requests', request.id);
+        await updateDoc(requestRef, {
+            status: 'rejected',
+            rejectionReason: rejectionReason,
+            qaTesterId: user.id,
+            qaTesterName: user.name,
+            updatedAt: serverTimestamp(),
+        });
+        toast({
+            title: 'Request Rejected',
+            description: `Request for "${request.taskTitle}" has been rejected.`,
+            variant: 'destructive'
+        });
+        router.push('/dashboard');
+    } catch(e) {
+        console.error("Error rejecting request: ", e);
+        toast({ title: 'Rejection Failed', variant: 'destructive' });
+    }
   }
 
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
@@ -79,7 +148,46 @@ export default function RequestDetailsPage() {
     }
   };
 
+  if (loading) {
+    return (
+        <>
+            <PageHeader title=""><Skeleton className="h-9 w-64" /></PageHeader>
+            <Card>
+                <CardHeader>
+                    <CardTitle><Skeleton className="h-7 w-1/3" /></CardTitle>
+                    <CardDescription><Skeleton className="h-5 w-1/4" /></CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        {[...Array(6)].map((_, i) => (
+                            <div key={i} className="flex flex-col gap-2">
+                                <Skeleton className="h-4 w-20" />
+                                <Skeleton className="h-5 w-32" />
+                            </div>
+                        ))}
+                    </div>
+                    <Separator />
+                    <div>
+                        <Skeleton className="h-6 w-24 mb-2" />
+                        <Skeleton className="h-20 w-full" />
+                    </div>
+                </CardContent>
+            </Card>
+        </>
+    )
+  }
+
+  if (error || !request) {
+    return <Alert variant="destructive">
+        <TriangleAlert className="h-4 w-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{error || "Request not found."}</AlertDescription>
+    </Alert>;
+  }
+
   const isActionable = user?.role === 'qa_tester' && request.status === 'pending';
+  const createdAtDate = (request.createdAt as any)?.toDate() || new Date();
+  const updatedAtDate = (request.updatedAt as any)?.toDate() || new Date();
 
   return (
     <>
@@ -149,7 +257,7 @@ export default function RequestDetailsPage() {
         <CardHeader>
           <CardTitle>Request Details</CardTitle>
           <CardDescription>
-            Submitted on {format(request.createdAt, 'PPP')}
+            Submitted on {format(createdAtDate, 'PPP')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -164,7 +272,7 @@ export default function RequestDetailsPage() {
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">Last Updated</span>
-              <span className="font-medium">{format(request.updatedAt, 'PPP p')}</span>
+              <span className="font-medium">{format(updatedAtDate, 'PPP p')}</span>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">Team</span>

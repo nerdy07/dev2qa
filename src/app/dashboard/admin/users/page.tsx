@@ -3,7 +3,7 @@
 import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, TriangleAlert } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -39,12 +39,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { mockUsers } from '@/lib/mock-data';
-import type { User } from '@/lib/types';
+import { User } from '@/lib/types';
 import { UserForm } from '@/components/admin/user-form';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection } from '@/hooks/use-collection';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { collection, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/providers/auth-provider';
 
 export default function UsersPage() {
+  const { data: users, loading, error } = useCollection<User>('users');
+  const { user: currentUser } = useAuth();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
@@ -63,17 +70,26 @@ export default function UsersPage() {
   const handleResetPassword = (user: User) => {
     toast({
         title: 'Password Reset',
-        description: `A password reset link has been sent to ${user.email}.`,
+        description: `(Simulated) A password reset link has been sent to ${user.email}.`,
     });
   }
   
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedUser) {
-        toast({
-            title: 'User Deleted',
-            description: `${selectedUser.name} has been deleted.`,
-            variant: 'destructive',
-        });
+        try {
+            await deleteDoc(doc(db, 'users', selectedUser.id));
+            toast({
+                title: 'User Deleted',
+                description: `${selectedUser.name}'s data has been deleted. Note: The auth account must be deleted separately using a backend function.`,
+            });
+        } catch (error) {
+            console.error("Error deleting user:", error);
+            toast({
+                title: 'Error',
+                description: 'Failed to delete user.',
+                variant: 'destructive',
+            });
+        }
     }
     setIsAlertOpen(false);
     setSelectedUser(undefined);
@@ -93,6 +109,70 @@ export default function UsersPage() {
       default:
         return 'outline';
     }
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <TableBody>
+          {[...Array(5)].map((_, i) => (
+            <TableRow key={i}>
+              <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+              <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+              <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+              <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      );
+    }
+
+    if (error) {
+      return (
+        <TableBody>
+          <TableRow>
+            <TableCell colSpan={4}>
+                <Alert variant="destructive">
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Error Loading Users</AlertTitle>
+                    <AlertDescription>{error.message}</AlertDescription>
+                </Alert>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      )
+    }
+
+    return (
+      <TableBody>
+        {users?.map((user) => (
+          <TableRow key={user.id}>
+            <TableCell className="font-medium">{user.name}</TableCell>
+            <TableCell>{user.email}</TableCell>
+            <TableCell>
+              <Badge variant={roleVariant(user.role)} className="capitalize">{user.role.replace('_', ' ')}</Badge>
+            </TableCell>
+            <TableCell className="text-right">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id}>
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleResetPassword(user)}>Reset Password</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(user)}>Delete User</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    );
   };
 
   return (
@@ -129,34 +209,7 @@ export default function UsersPage() {
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {mockUsers.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">{user.name}</TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Badge variant={roleVariant(user.role)} className="capitalize">{user.role.replace('_', ' ')}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleResetPassword(user)}>Reset Password</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(user)}>Delete User</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
+          {renderContent()}
         </Table>
       </Card>
 
@@ -165,7 +218,7 @@ export default function UsersPage() {
               <AlertDialogHeader>
                   <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{selectedUser?.name}</span>.
+                      This action cannot be undone. This will permanently delete the user account for <span className="font-semibold">{selectedUser?.name}</span>. This only removes the user from the database, not from the authentication system.
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

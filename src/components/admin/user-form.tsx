@@ -22,13 +22,19 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
+import { useAuth } from '@/providers/auth-provider';
 
-const formSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Invalid email address.' }),
-  role: z.enum(['requester', 'qa_tester']),
-  password: z.string().min(8, { message: 'Password must be at least 8 characters.' }).optional().or(z.literal('')),
+const formSchemaBase = z.object({
+    name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
+    email: z.string().email({ message: 'Invalid email address.' }),
+    role: z.enum(['requester', 'qa_tester'], { required_error: 'Please select a role.' }),
+  });
+  
+const createFormSchema = formSchemaBase.extend({
+    password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
 });
+
+const editFormSchema = formSchemaBase;
 
 interface UserFormProps {
   user?: User;
@@ -37,26 +43,54 @@ interface UserFormProps {
 
 export function UserForm({ user, onSuccess }: UserFormProps) {
   const { toast } = useToast();
+  const { createUser, updateUser } = useAuth();
   const isEditing = !!user;
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const formSchema = isEditing ? editFormSchema : createFormSchema;
+
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      role: user?.role === 'admin' ? 'requester' : user?.role || 'requester', // Can't edit to admin
+      role: user?.role === 'admin' ? 'requester' : user?.role || 'requester', // Can't edit to/from admin
       password: '',
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // In a real app, you'd call a server action here to create/update the user.
-    console.log(values);
-    toast({
-      title: isEditing ? 'User Updated' : 'User Created',
-      description: `${values.name} has been successfully ${isEditing ? 'updated' : 'created'}.`,
-    });
-    onSuccess();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    try {
+        if (isEditing && user) {
+            await updateUser(user.id, {
+                name: values.name,
+                email: values.email,
+                role: values.role,
+            });
+            toast({
+                title: 'User Updated',
+                description: `${values.name} has been successfully updated.`,
+            });
+        } else if (!isEditing) {
+            const createValues = values as z.infer<typeof createFormSchema>;
+            await createUser(createValues.name, createValues.email, createValues.password, createValues.role);
+            toast({
+                title: 'User Created',
+                description: `${values.name} has been successfully created.`,
+            });
+        }
+        onSuccess();
+    } catch (error: any) {
+        console.error('User form error:', error);
+        let errorMessage = 'An unexpected error occurred.';
+        if (error.code === 'auth/email-already-in-use') {
+            errorMessage = 'This email address is already in use.';
+        }
+        toast({
+            title: isEditing ? 'Update Failed' : 'Creation Failed',
+            description: errorMessage,
+            variant: 'destructive'
+        });
+    }
   }
 
   return (
@@ -82,7 +116,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
-                <Input type="email" placeholder="name@example.com" {...field} />
+                <Input type="email" placeholder="name@example.com" {...field} disabled={isEditing} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -128,7 +162,9 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
           <Button type="button" variant="outline" onClick={onSuccess}>
             Cancel
           </Button>
-          <Button type="submit">{isEditing ? 'Save Changes' : 'Create User'}</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create User')}
+            </Button>
         </div>
       </form>
     </Form>

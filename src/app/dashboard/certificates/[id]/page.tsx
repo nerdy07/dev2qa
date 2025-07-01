@@ -1,10 +1,15 @@
 'use client';
 
+import React from 'react';
 import { useParams } from 'next/navigation';
-import { mockCertificates } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
-import { Printer } from 'lucide-react';
+import { Printer, TriangleAlert } from 'lucide-react';
 import { format } from 'date-fns';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { Certificate } from '@/lib/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const EchobitLogo = () => (
     <div className="flex items-center gap-3">
@@ -31,13 +36,74 @@ const SignaturePlaceholder = () => (
     </svg>
 );
 
+const CertificateLoadingSkeleton = () => (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4 font-serif">
+        <div className="w-full max-w-5xl bg-white shadow-2xl aspect-[1.414] p-8">
+            <div className="w-full h-full p-2 border-2 border-border/20">
+                <div className="w-full h-full flex flex-col p-10 border border-border/60">
+                    <header className="flex justify-start mb-10"><Skeleton className="h-12 w-48" /></header>
+                    <main className="flex-grow flex flex-col justify-center text-center">
+                        <div className="mb-8"><Skeleton className="h-6 w-1/3 mx-auto" /><Skeleton className="h-10 w-1/2 mx-auto mt-2" /></div>
+                        <div className="space-y-6 my-8">
+                            <div className="flex flex-col items-center"><Skeleton className="h-4 w-24" /><Skeleton className="h-7 w-48 mt-2" /></div>
+                            <div className="flex flex-col items-center"><Skeleton className="h-4 w-24" /><Skeleton className="h-7 w-56 mt-2" /></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4 my-10"><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div></div>
+                        <div className="mt-auto pt-4"><Skeleton className="h-12 w-full max-w-md mx-auto" /></div>
+                    </main>
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+
 export default function CertificatePage() {
     const { id } = useParams();
-    const certificate = mockCertificates.find((c) => c.id === id);
+    const [certificate, setCertificate] = React.useState<Certificate | null>(null);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState<string | null>(null);
 
-    if (!certificate) {
-        return <div>Certificate not found.</div>
+    React.useEffect(() => {
+        if (!id) return;
+
+        const fetchCertificate = async () => {
+            try {
+                const docRef = doc(db, 'certificates', id as string);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setCertificate({ id: docSnap.id, ...docSnap.data() } as Certificate);
+                } else {
+                    setError('Certificate not found.');
+                }
+            } catch (err) {
+                console.error(err);
+                setError('Failed to load certificate data.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCertificate();
+    }, [id]);
+
+    if (loading) {
+        return <CertificateLoadingSkeleton />;
     }
+
+    if (error || !certificate) {
+        return (
+            <div className="flex items-center justify-center h-screen">
+                <Alert variant="destructive" className="w-full max-w-md">
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error || "Certificate could not be loaded."}</AlertDescription>
+                </Alert>
+            </div>
+        );
+    }
+    
+    const approvalDate = (certificate.approvalDate as any)?.toDate() || new Date();
 
     const handlePrint = () => {
         window.print();
@@ -92,7 +158,7 @@ export default function CertificatePage() {
 
                             <div className="grid grid-cols-3 gap-4 my-10 text-center text-xs">
                                 <div>
-                                    <p className="font-semibold uppercase tracking-wider">{format(certificate.approvalDate, 'do MMMM yyyy')}</p>
+                                    <p className="font-semibold uppercase tracking-wider">{format(approvalDate, 'do MMMM yyyy')}</p>
                                     <div className="w-24 h-px bg-border mx-auto my-1.5"></div>
                                     <p className="uppercase tracking-widest text-muted-foreground">Completion Date</p>
                                 </div>
@@ -119,7 +185,7 @@ export default function CertificatePage() {
                                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Signature</p>
                                     </div>
                                     <div className="text-center">
-                                        <p className="font-semibold uppercase tracking-wider pb-1 text-xs">{format(certificate.approvalDate, 'do MMMM yyyy')}</p>
+                                        <p className="font-semibold uppercase tracking-wider pb-1 text-xs">{format(approvalDate, 'do MMMM yyyy')}</p>
                                         <div className="w-full h-px bg-border mx-auto"></div>
                                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Date</p>
                                     </div>

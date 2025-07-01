@@ -83,8 +83,8 @@ export function Sidebar() {
             <Button variant="ghost" className="flex h-auto w-full items-center justify-between p-2">
               <div className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={`https://avatar.vercel.sh/${user?.email}.png`} alt={user?.name} />
-                  <AvatarFallback>{user?.name?.[0]}</AvatarFallback>
+                  <AvatarImage src={user?.photoURL} alt={user?.name} />
+                  <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="grid gap-0.5 text-left">
                     <div className="text-sm font-medium">{user?.name}</div>

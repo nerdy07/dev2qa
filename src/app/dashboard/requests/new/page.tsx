@@ -28,10 +28,14 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { mockTeams, mockProjects, mockUsers } from '@/lib/mock-data';
 import { getQATesterSuggestion } from '@/app/actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2 } from 'lucide-react';
+import { useCollection } from '@/hooks/use-collection';
+import { Team, Project, User } from '@/lib/types';
+import { query, where, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useAuth } from '@/providers/auth-provider';
 
 const formSchema = z.object({
   taskTitle: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -46,8 +50,13 @@ type Suggestion = { suggestedQATester: string; reason: string };
 export default function NewRequestPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+
+  const { data: teams } = useCollection<Team>('teams');
+  const { data: projects } = useCollection<Project>('projects');
+  const { data: qaUsers } = useCollection<User>('users', query(collection(db, 'users'), where('role', '==', 'qa_tester')));
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -71,17 +80,26 @@ export default function NewRequestPage() {
         return;
     }
 
+    if (!qaUsers || qaUsers.length === 0) {
+        toast({
+            title: 'No QA Testers',
+            description: 'There are no QA testers available to assign.',
+            variant: 'destructive',
+        });
+        return;
+    }
+
     setIsSuggesting(true);
     setSuggestion(null);
 
-    const qaTesters = mockUsers.filter(u => u.role === 'qa_tester').map(u => u.name);
+    const qaTesterList = qaUsers.map(u => u.name);
 
     const result = await getQATesterSuggestion({
       taskTitle,
       taskDescription: description,
       associatedTeam,
       associatedProject,
-      qaTesterList: qaTesters,
+      qaTesterList,
     });
 
     if (result.success) {
@@ -97,13 +115,31 @@ export default function NewRequestPage() {
     setIsSuggesting(false);
   };
   
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
-    toast({
-      title: 'Request Submitted!',
-      description: 'Your certificate request has been sent for QA review.',
-    });
-    router.push('/dashboard');
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    if (!user) {
+        toast({ title: "Not Authenticated", description: "You must be logged in to create a request.", variant: "destructive"});
+        return;
+    }
+
+    try {
+        await addDoc(collection(db, 'requests'), {
+            ...values,
+            requesterId: user.id,
+            requesterName: user.name,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+
+        toast({
+          title: 'Request Submitted!',
+          description: 'Your certificate request has been sent for QA review.',
+        });
+        router.push('/dashboard');
+    } catch (error) {
+        console.error("Error creating request: ", error);
+        toast({ title: "Submission Failed", description: "Could not create your request. Please try again.", variant: "destructive"});
+    }
   }
 
   return (
@@ -156,7 +192,7 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {mockTeams.map(team => <SelectItem key={team.id} value={team.name}>{team.name}</SelectItem>)}
+                          {teams?.map(team => <SelectItem key={team.id} value={team.name}>{team.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -176,7 +212,7 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {mockProjects.map(project => <SelectItem key={project.id} value={project.name}>{project.name}</SelectItem>)}
+                          {projects?.map(project => <SelectItem key={project.id} value={project.name}>{project.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -238,7 +274,9 @@ export default function NewRequestPage() {
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                   Cancel
                 </Button>
-                <Button type="submit">Submit Request</Button>
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? 'Submitting...' : 'Submit Request'}
+                </Button>
               </div>
             </form>
           </Form>

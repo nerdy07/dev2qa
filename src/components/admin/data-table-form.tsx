@@ -13,16 +13,15 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
 
 interface DataTableFormProps {
   entity?: { id: string; name: string };
   entityName: string;
-  onSuccess: () => void;
+  onSave: (name: string) => Promise<boolean>;
+  onCancel: () => void;
 }
 
-export function DataTableForm({ entity, entityName, onSuccess }: DataTableFormProps) {
-  const { toast } = useToast();
+export function DataTableForm({ entity, entityName, onSave, onCancel }: DataTableFormProps) {
   const isEditing = !!entity;
 
   const formSchema = z.object({
@@ -36,14 +35,8 @@ export function DataTableForm({ entity, entityName, onSuccess }: DataTableFormPr
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // In a real app, you'd call a server action here.
-    console.log(values);
-    toast({
-      title: isEditing ? `${entityName} Updated` : `${entityName} Created`,
-      description: `The ${entityName.toLowerCase()} "${values.name}" has been successfully ${isEditing ? 'updated' : 'created'}.`,
-    });
-    onSuccess();
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    await onSave(values.name);
   }
 
   return (
@@ -63,10 +56,12 @@ export function DataTableForm({ entity, entityName, onSuccess }: DataTableFormPr
           )}
         />
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onSuccess}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit">{isEditing ? 'Save Changes' : `Create ${entityName}`}</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : `Create ${entityName}`)}
+          </Button>
         </div>
       </form>
     </Form>

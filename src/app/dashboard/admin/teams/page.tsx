@@ -3,7 +3,7 @@
 import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, TriangleAlert } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -38,12 +38,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
-import { mockTeams } from '@/lib/mock-data';
 import type { Team } from '@/lib/types';
 import { DataTableForm } from '@/components/admin/data-table-form';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection } from '@/hooks/use-collection';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function TeamsPage() {
+  const { data: teams, loading, error } = useCollection<Team>('teams');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedTeam, setSelectedTeam] = React.useState<Team | undefined>(undefined);
@@ -59,16 +64,55 @@ export default function TeamsPage() {
     setIsAlertOpen(true);
   }
   
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (selectedTeam) {
-        toast({
-            title: 'Team Deleted',
-            description: `The team "${selectedTeam.name}" has been deleted.`,
-            variant: 'destructive',
-        });
+        try {
+            await deleteDoc(doc(db, 'teams', selectedTeam.id));
+            toast({
+                title: 'Team Deleted',
+                description: `The team "${selectedTeam.name}" has been deleted.`,
+            });
+        } catch (error) {
+            console.error("Error deleting team: ", error);
+            toast({
+                title: 'Error',
+                description: 'Failed to delete team.',
+                variant: 'destructive',
+            });
+        }
     }
     setIsAlertOpen(false);
     setSelectedTeam(undefined);
+  }
+
+  const handleSave = async (name: string) => {
+    const isEditing = !!selectedTeam;
+    try {
+        if (isEditing) {
+            const teamRef = doc(db, 'teams', selectedTeam.id);
+            await updateDoc(teamRef, { name });
+            toast({
+                title: 'Team Updated',
+                description: `The team "${name}" has been successfully updated.`,
+            });
+        } else {
+            await addDoc(collection(db, 'teams'), { name });
+            toast({
+                title: 'Team Created',
+                description: `The team "${name}" has been successfully created.`,
+            });
+        }
+        handleFormSuccess();
+        return true;
+    } catch (error) {
+        console.error("Error saving team: ", error);
+        toast({
+            title: 'Error',
+            description: 'Failed to save team.',
+            variant: 'destructive'
+        });
+        return false;
+    }
   }
 
   const handleFormSuccess = () => {
@@ -76,40 +120,39 @@ export default function TeamsPage() {
     setSelectedTeam(undefined);
   };
 
-  return (
-    <>
-      <PageHeader
-        title="Team Management"
-        description="Create and manage team names for certificate requests."
-      >
-        <Dialog open={isFormOpen} onOpenChange={(open) => {
-            if (!open) setSelectedTeam(undefined);
-            setIsFormOpen(open);
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Team
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{selectedTeam ? 'Edit Team' : 'Create New Team'}</DialogTitle>
-            </DialogHeader>
-            <DataTableForm entity={selectedTeam} entityName="Team" onSuccess={handleFormSuccess} />
-          </DialogContent>
-        </Dialog>
-      </PageHeader>
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Team Name</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
+  const renderContent = () => {
+    if (loading) {
+        return (
+            <TableBody>
+                {[...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                        <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        );
+    }
+
+    if (error) {
+        return (
           <TableBody>
-            {mockTeams.map((team) => (
+            <TableRow>
+              <TableCell colSpan={2}>
+                  <Alert variant="destructive">
+                      <TriangleAlert className="h-4 w-4" />
+                      <AlertTitle>Error Loading Teams</AlertTitle>
+                      <AlertDescription>{error.message}</AlertDescription>
+                  </Alert>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        )
+      }
+
+    return (
+        <TableBody>
+            {teams?.map((team) => (
               <TableRow key={team.id}>
                 <TableCell className="font-medium">{team.name}</TableCell>
                 <TableCell className="text-right">
@@ -131,6 +174,47 @@ export default function TeamsPage() {
               </TableRow>
             ))}
           </TableBody>
+    )
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Team Management"
+        description="Create and manage team names for certificate requests."
+      >
+        <Dialog open={isFormOpen} onOpenChange={(open) => {
+            if (!open) setSelectedTeam(undefined);
+            setIsFormOpen(open);
+        }}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Team
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{selectedTeam ? 'Edit Team' : 'Create New Team'}</DialogTitle>
+            </DialogHeader>
+            <DataTableForm 
+                entity={selectedTeam} 
+                entityName="Team" 
+                onSave={handleSave}
+                onCancel={handleFormSuccess}
+            />
+          </DialogContent>
+        </Dialog>
+      </PageHeader>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Team Name</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          {renderContent()}
         </Table>
       </Card>
 

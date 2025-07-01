@@ -1,0 +1,63 @@
+'use client';
+import { useState, useEffect } from 'react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, type Query } from 'firebase/firestore';
+
+export function useCollection<T>(collectionName: string, firestoreQuery?: Query) {
+  const [data, setData] = useState<T[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const q = firestoreQuery || query(collection(db, collectionName));
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const docs: T[] = [];
+      querySnapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() } as T);
+      });
+      setData(docs);
+      setLoading(false);
+    }, (err) => {
+      console.error(err);
+      setError(err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [collectionName, firestoreQuery]);
+
+  return { data, loading, error };
+}
+
+export function useDocument<T>(collectionName: string, docId: string) {
+    const [data, setData] = useState<T | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+  
+    useEffect(() => {
+      if (!docId) {
+        setLoading(false);
+        setData(null);
+        return;
+      }
+      const docRef = collection(db, collectionName).doc(docId);
+      
+      const unsubscribe = onSnapshot(docRef, (doc) => {
+        if (doc.exists()) {
+          setData({ id: doc.id, ...doc.data() } as T);
+        } else {
+          setData(null);
+        }
+        setLoading(false);
+      }, (err) => {
+        console.error(err);
+        setError(err);
+        setLoading(false);
+      });
+  
+      return () => unsubscribe();
+    }, [collectionName, docId]);
+  
+    return { data, loading, error };
+}

@@ -21,12 +21,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
 import { useAuth } from '@/providers/auth-provider';
+import { Skeleton } from '../ui/skeleton';
 
 interface CertificateRequestsTableProps {
   requests: CertificateRequest[];
+  isLoading?: boolean;
 }
 
-export function CertificateRequestsTable({ requests }: CertificateRequestsTableProps) {
+export function CertificateRequestsTable({ requests, isLoading = false }: CertificateRequestsTableProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -47,6 +49,67 @@ export function CertificateRequestsTable({ requests }: CertificateRequestsTableP
     }
   };
 
+  const renderLoading = () => (
+    <TableBody>
+      {[...Array(5)].map((_, i) => (
+        <TableRow key={i}>
+          <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+          <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-28" /></TableCell>
+          <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-28" /></TableCell>
+          <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+          <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  )
+
+  const renderData = () => (
+    <TableBody>
+        {requests.length > 0 ? (
+          requests.map((request) => (
+            <TableRow key={request.id} onClick={() => handleRowClick(request.id)} className="cursor-pointer">
+              <TableCell className="font-medium">{request.taskTitle}</TableCell>
+              <TableCell className="hidden md:table-cell">{request.associatedProject}</TableCell>
+              <TableCell className="hidden lg:table-cell">{request.requesterName}</TableCell>
+              <TableCell className="hidden sm:table-cell">{format((request.createdAt as any)?.toDate() || new Date(), 'PP')}</TableCell>
+              <TableCell>
+                <Badge variant={statusVariant(request.status)} className="capitalize">
+                  {request.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                 <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleRowClick(request.id)}>
+                            View Details
+                        </DropdownMenuItem>
+                        {user?.role === 'requester' && request.status === 'approved' && request.certificateId && (
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/certificates/${request.certificateId}`)}>
+                                View Certificate
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+              </TableCell>
+            </TableRow>
+          ))
+        ) : (
+          <TableRow>
+            <TableCell colSpan={6} className="h-24 text-center">
+              No requests found.
+            </TableCell>
+          </TableRow>
+        )}
+      </TableBody>
+  );
+
   return (
     <div className="rounded-lg border shadow-sm">
         <Table>
@@ -60,49 +123,7 @@ export function CertificateRequestsTable({ requests }: CertificateRequestsTableP
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {requests.length > 0 ? (
-              requests.map((request) => (
-                <TableRow key={request.id} onClick={() => handleRowClick(request.id)} className="cursor-pointer">
-                  <TableCell className="font-medium">{request.taskTitle}</TableCell>
-                  <TableCell className="hidden md:table-cell">{request.associatedProject}</TableCell>
-                  <TableCell className="hidden lg:table-cell">{request.requesterName}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{format(request.createdAt, 'PP')}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(request.status)} className="capitalize">
-                      {request.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleRowClick(request.id)}>
-                                View Details
-                            </DropdownMenuItem>
-                            {user?.role === 'requester' && request.status === 'approved' && request.certificateId && (
-                                <DropdownMenuItem onClick={() => router.push(`/dashboard/certificates/${request.certificateId}`)}>
-                                    View Certificate
-                                </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  No requests found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+          {isLoading ? renderLoading() : renderData()}
         </Table>
     </div>
   );
