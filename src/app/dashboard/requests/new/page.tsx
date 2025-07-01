@@ -218,20 +218,20 @@ export default function NewRequestPage() {
                           Suggest QA Tester
                       </Button>
                   </div>
-                  {isSuggesting && (
+                  {isSuggesting &&
                     <div className="flex items-center justify-center rounded-md border border-dashed p-4">
                         <p className="text-sm text-muted-foreground">Analyzing request details...</p>
                     </div>
-                  )}
-                  {suggestion && (
+                  }
+                  {suggestion &&
                      <Alert>
                         <Lightbulb className="h-4 w-4" />
                         <AlertTitle>Suggestion: {suggestion.suggestedQATester}</AlertTitle>
                         <AlertDescription>
                           <strong>Reason:</strong> {suggestion.reason}
-                        </dAlertDescription>
+                        </AlertDescription>
                     </Alert>
-                  )}
+                  }
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
