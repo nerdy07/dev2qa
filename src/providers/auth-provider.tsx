@@ -80,9 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: authUser.photoURL || undefined
           });
         } else {
-            console.error("No user document found in Firestore for UID:", authUser.uid);
-            signOut(auth);
-            setUser(null);
+            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating a new one.");
+            // This is a failsafe for when an Auth user exists without a DB record.
+            const userToCreate: Omit<User, 'id'> = {
+              name: authUser.displayName || 'New User',
+              email: authUser.email!,
+              role: 'requester', // Default to least privileged role
+            };
+            await setDoc(userDocRef, userToCreate);
+            setUser({ id: authUser.uid, ...userToCreate });
         }
       } else {
         // User is signed out
@@ -96,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loading && firebaseInitialized) {
-      const isAuthPage = pathname === '/' || pathname === '/signup';
+      const isAuthPage = pathname === '/';
       if (user && isAuthPage) {
         router.push('/dashboard');
       } else if (!user && !isAuthPage) {
