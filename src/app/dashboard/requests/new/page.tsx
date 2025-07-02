@@ -62,8 +62,6 @@ export default function NewRequestPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       taskTitle: '',
-      associatedTeam: '',
-      associatedProject: '',
       description: '',
       taskLink: '',
     },
