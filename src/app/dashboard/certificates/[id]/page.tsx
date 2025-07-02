@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const EchobitLogo = () => (
     <div className="flex items-center gap-3">
-        <div className="w-10 h-10">
+        <div className="w-16 h-16">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="50" cy="50" r="50" fill="hsl(var(--accent))"/>
                 <circle cx="50" cy="50" r="42" fill="#4B8678"/>
@@ -41,14 +41,16 @@ const CertificateLoadingSkeleton = () => (
         <div className="w-full max-w-5xl bg-white shadow-2xl aspect-[1.414] p-8">
             <div className="w-full h-full p-2 border-2 border-border/20">
                 <div className="w-full h-full flex flex-col p-10 border border-border/60">
-                    <header className="flex justify-start mb-10"><Skeleton className="h-12 w-48" /></header>
+                    <header className="flex justify-between items-center mb-10"><Skeleton className="h-12 w-48" /><Skeleton className="h-6 w-32" /></header>
                     <main className="flex-grow flex flex-col justify-center text-center">
-                        <div className="mb-8"><Skeleton className="h-6 w-1/3 mx-auto" /><Skeleton className="h-10 w-1/2 mx-auto mt-2" /></div>
+                        <div className="mb-8"><Skeleton className="h-6 w-1/3 mx-auto" /><Skeleton className="h-12 w-2/3 mx-auto mt-2" /></div>
                         <div className="space-y-6 my-8">
-                            <div className="flex flex-col items-center"><Skeleton className="h-4 w-24" /><Skeleton className="h-7 w-48 mt-2" /></div>
-                            <div className="flex flex-col items-center"><Skeleton className="h-4 w-24" /><Skeleton className="h-7 w-56 mt-2" /></div>
+                            <Skeleton className="h-5 w-1/4 mx-auto" />
+                            <Skeleton className="h-10 w-1/2 mx-auto" />
+                            <Skeleton className="h-5 w-1/4 mx-auto mt-4" />
+                            <Skeleton className="h-8 w-1/3 mx-auto" />
                         </div>
-                        <div className="grid grid-cols-3 gap-4 my-10"><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div><div className="flex flex-col items-center"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24 mt-2" /></div></div>
+                        <div className="grid grid-cols-3 gap-8 my-10 items-end"><div className="flex flex-col items-center gap-2"><Skeleton className="h-12 w-32" /><Skeleton className="h-4 w-24" /></div><div className="flex flex-col items-center"><Skeleton className="h-20 w-20 rounded-full" /></div><div className="flex flex-col items-center gap-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-4 w-24" /></div></div>
                         <div className="mt-auto pt-4"><Skeleton className="h-12 w-full max-w-md mx-auto" /></div>
                     </main>
                 </div>
@@ -118,78 +120,57 @@ export default function CertificatePage() {
             </div>
 
             <div className="w-full max-w-5xl bg-white shadow-2xl print:shadow-none aspect-[1.414] p-8 relative">
-                 {/* Decorative background elements */}
-                <div className="absolute top-0 right-0 w-1/4 h-1/4 bg-accent/80" style={{clipPath: 'polygon(100% 0, 0 0, 100% 100%)'}}></div>
-                <div className="absolute top-0 right-0 w-1/5 h-1/5" style={{backgroundColor: 'hsl(var(--gold))', opacity: 0.7, clipPath: 'polygon(100% 0, 0 0, 100% 100%)'}}></div>
-                <div className="absolute bottom-0 left-0 w-1/4 h-1/4 bg-accent/80" style={{clipPath: 'polygon(0 100%, 100% 100%, 0 0)'}}></div>
-                <div className="absolute bottom-0 left-0 w-1/5 h-1/5" style={{backgroundColor: 'hsl(var(--gold))', opacity: 0.7, clipPath: 'polygon(0 100%, 100% 100%, 0 0)'}}></div>
+                <div className="absolute inset-0 bg-repeat bg-[length:40px_40px] opacity-5" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23a0aec0\' fill-opacity=\'0.2\' fill-rule=\'evenodd\'%3E%3Cpath d=\'M0 40L40 0H20L0 20M40 40V20L20 40\'/%3E%3C/g%3E%3C/svg%3E")'}}></div>
 
-                <div className="w-full h-full p-2 border-2 border-border/20 relative">
-                    <div className="w-full h-full flex flex-col p-10 border border-border/60 relative">
-                         {/* Corner ornaments */}
-                        <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-border"></div>
-                        <div className="absolute top-0 right-0 w-16 h-16 border-t-2 border-r-2 border-border"></div>
-                        <div className="absolute bottom-0 left-0 w-16 h-16 border-b-2 border-l-2 border-border"></div>
-                        <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-border"></div>
+                <div className="w-full h-full p-2 border-2 border-gold/50 relative">
+                    <div className="w-full h-full flex flex-col p-10 border-2 border-accent/80 relative">
+                        {/* Corner ornaments */}
+                        <div className="absolute -top-1 -left-1 w-16 h-16 border-t-4 border-l-4 border-gold"></div>
+                        <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-gold"></div>
+                        <div className="absolute -bottom-1 -left-1 w-16 h-16 border-b-4 border-l-4 border-gold"></div>
+                        <div className="absolute -bottom-1 -right-1 w-16 h-16 border-b-4 border-r-4 border-gold"></div>
 
-                        <header className="flex justify-start mb-10">
+                        <header className="flex justify-between items-start mb-10">
                             <EchobitLogo />
+                            <div className='text-right'>
+                                <p className='font-semibold text-muted-foreground'>Certificate ID</p>
+                                <p className='text-xs font-mono text-foreground/80'>{certificate.id}</p>
+                            </div>
                         </header>
 
                         <main className="flex-grow flex flex-col justify-center text-center">
                             
                             <div className="mb-8">
-                                <p className="text-lg tracking-[0.3em] text-gold uppercase">Completion</p>
-                                <h1 className="text-4xl font-bold tracking-[0.15em] text-foreground/90 uppercase mt-1">Certificate</h1>
+                                <p className="text-xl tracking-[0.3em] text-gold uppercase">Certificate of Achievement</p>
+                                <h1 className="text-5xl font-bold tracking-tight text-foreground/90 uppercase mt-2">{certificate.associatedProject}</h1>
                             </div>
+                            
+                            <p className="text-muted-foreground text-lg">This certificate is proudly presented to</p>
+                            <p className="text-4xl font-semibold my-2 text-primary">{certificate.requesterName}</p>
+                            
+                            <p className="text-muted-foreground mt-4 text-lg">for successfully completing the task</p>
+                            <p className="text-2xl font-bold mt-2 uppercase tracking-wider">{certificate.taskTitle}</p>
+                            
 
-                            <div className="space-y-6 my-8">
-                                <div className="flex flex-col items-center">
-                                    <p className="text-xs uppercase tracking-widest text-muted-foreground">Product Name</p>
-                                    <div className="w-20 h-px bg-border my-1.5"></div>
-                                    <p className="text-xl font-semibold tracking-wider text-foreground uppercase">{certificate.associatedProject}</p>
+                            <div className="mt-16 w-full max-w-3xl mx-auto flex justify-between items-end">
+                                <div className="text-center w-48">
+                                    <SignaturePlaceholder />
+                                    <div className="w-full h-px bg-border mx-auto mt-1"></div>
+                                    <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5 font-semibold">{certificate.qaTesterName}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">QA Sign-off</p>
                                 </div>
-                                <div className="flex flex-col items-center">
-                                    <p className="text-xs uppercase tracking-widest text-muted-foreground">Task/Feature</p>
-                                    <div className="w-20 h-px bg-border my-1.5"></div>
-                                    <p className="text-xl font-semibold tracking-wider text-foreground uppercase">{certificate.taskTitle}</p>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4 my-10 text-center text-xs">
-                                <div>
-                                    <p className="font-semibold uppercase tracking-wider">{format(approvalDate, 'do MMMM yyyy')}</p>
-                                    <div className="w-24 h-px bg-border mx-auto my-1.5"></div>
-                                    <p className="uppercase tracking-widest text-muted-foreground">Completion Date</p>
-                                </div>
-                                <div>
-                                    <p className="font-semibold uppercase tracking-wider">{certificate.qaTesterName}</p>
-                                    <div className="w-24 h-px bg-border mx-auto my-1.5"></div>
-                                    <p className="uppercase tracking-widest text-muted-foreground">QA Sign-off</p>
-                                </div>
-                                <div>
-                                    <p className="font-semibold uppercase tracking-wider">{certificate.requesterName}</p>
-                                    <div className="w-24 h-px bg-border mx-auto my-1.5"></div>
-                                    <p className="uppercase tracking-widest text-muted-foreground">Developer/Team</p>
+                                
+                                <div className="text-center w-48">
+                                <p className="font-semibold uppercase tracking-wider pb-1 text-lg">{format(approvalDate, 'do MMMM yyyy')}</p>
+                                    <div className="w-full h-px bg-border mx-auto"></div>
+                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Date of Issue</p>
                                 </div>
                             </div>
                             
-                            <div className="mt-auto pt-4">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider max-w-md mx-auto">
-                                    Verification: The task/feature has been completed satisfactorily, meeting the requirements/specifications.
+                            <div className="mt-auto pt-12">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider max-w-lg mx-auto">
+                                This certificate confirms that the task/feature has been completed satisfactorily, meeting all specified requirements and quality assurance standards.
                                 </p>
-                                <div className="grid grid-cols-2 gap-16 mt-6 max-w-sm mx-auto items-end">
-                                    <div className="text-center flex flex-col items-center">
-                                        <SignaturePlaceholder />
-                                        <div className="w-full h-px bg-border mx-auto mt-1"></div>
-                                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Signature</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="font-semibold uppercase tracking-wider pb-1 text-xs">{format(approvalDate, 'do MMMM yyyy')}</p>
-                                        <div className="w-full h-px bg-border mx-auto"></div>
-                                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Date</p>
-                                    </div>
-                                </div>
                             </div>
                         </main>
                     </div>

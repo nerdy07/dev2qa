@@ -2,13 +2,13 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/common/page-header';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -17,17 +17,19 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-    DialogFooter,
+    DialogFooter as DialogFooterComponent,
     DialogClose
   } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { CertificateRequest } from '@/lib/types';
+import { CertificateRequest, Comment, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useCollection } from '@/hooks/use-collection';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -40,6 +42,13 @@ export default function RequestDetailsPage() {
   const [error, setError] = React.useState<string | null>(null);
   
   const [rejectionReason, setRejectionReason] = React.useState('');
+  const [newComment, setNewComment] = React.useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
+
+  const { data: comments, loading: commentsLoading } = useCollection<Comment>(
+    'comments',
+    id ? query(collection(db!, 'comments'), where('requestId', '==', id), orderBy('createdAt', 'asc')) : undefined
+  );
 
   React.useEffect(() => {
     if (!id) return;
@@ -135,6 +144,32 @@ export default function RequestDetailsPage() {
     }
   }
 
+  const handlePostComment = async () => {
+    if (!newComment.trim() || !user || !request) return;
+
+    setIsSubmittingComment(true);
+    try {
+      await addDoc(collection(db!, 'comments'), {
+        requestId: request.id,
+        userId: user.id,
+        userName: user.name,
+        userRole: user.role,
+        text: newComment,
+        createdAt: serverTimestamp(),
+      });
+      setNewComment('');
+    } catch (error) {
+      console.error("Error posting comment: ", error);
+      toast({
+        title: "Comment Failed",
+        description: "Could not post your comment. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
       case 'approved':
@@ -214,12 +249,12 @@ export default function RequestDetailsPage() {
                                 className="min-h-[100px]"
                             />
                         </div>
-                        <DialogFooter>
+                        <DialogFooterComponent>
                             <DialogClose asChild>
                                 <Button type="button" variant="outline">Cancel</Button>
                             </DialogClose>
                             <Button type="submit" variant="destructive" onClick={handleReject}>Confirm Rejection</Button>
-                        </DialogFooter>
+                        </DialogFooterComponent>
                     </DialogContent>
                 </Dialog>
 
@@ -253,56 +288,108 @@ export default function RequestDetailsPage() {
         </Alert>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Request Details</CardTitle>
-          <CardDescription>
-            Submitted on {format(createdAtDate, 'PPP')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Status</span>
-              <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
+      <div className="space-y-6">
+        <Card>
+            <CardHeader>
+            <CardTitle>Request Details</CardTitle>
+            <CardDescription>
+                Submitted on {format(createdAtDate, 'PPP')}
+            </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Status</span>
+                <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
+                </div>
+                <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Requester</span>
+                <span className="font-medium">{request.requesterName}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Last Updated</span>
+                <span className="font-medium">{format(updatedAtDate, 'PPP p')}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Team</span>
+                <span className="font-medium">{request.associatedTeam}</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Project</span>
+                <span className="font-medium">{request.associatedProject}</span>
+                </div>
+                {request.taskLink && (
+                <div className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Task Link</span>
+                    <a
+                    href={request.taskLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary hover:underline flex items-center gap-1"
+                    >
+                    View Task <ExternalLink className="h-3 w-3" />
+                    </a>
+                </div>
+                )}
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Requester</span>
-              <span className="font-medium">{request.requesterName}</span>
+            <Separator />
+            <div>
+                <h4 className="font-semibold mb-2">Description</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap">{request.description}</p>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Last Updated</span>
-              <span className="font-medium">{format(updatedAtDate, 'PPP p')}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Team</span>
-              <span className="font-medium">{request.associatedTeam}</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-muted-foreground">Project</span>
-              <span className="font-medium">{request.associatedProject}</span>
-            </div>
-            {request.taskLink && (
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Task Link</span>
-                <a
-                  href={request.taskLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-primary hover:underline flex items-center gap-1"
-                >
-                  View Task <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
-            )}
-          </div>
-          <Separator />
-          <div>
-            <h4 className="font-semibold mb-2">Description</h4>
-            <p className="text-muted-foreground whitespace-pre-wrap">{request.description}</p>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Comments</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-6">
+                    {commentsLoading && <p className="text-sm text-muted-foreground">Loading comments...</p>}
+                    {!commentsLoading && comments && comments.length > 0 ? (
+                    comments.map(comment => (
+                        <div key={comment.id} className="flex gap-4">
+                            <Avatar>
+                                <AvatarFallback>{comment.userName?.charAt(0) || 'U'}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                <p className="font-semibold">{comment.userName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {comment.createdAt ? formatDistanceToNowStrict(comment.createdAt.toDate(), { addSuffix: true }) : 'just now'}
+                                </p>
+                                <Badge variant="secondary" className='capitalize text-xs'>{comment.userRole.replace('_', ' ')}</Badge>
+                                </div>
+                                <p className="text-muted-foreground whitespace-pre-wrap mt-1">{comment.text}</p>
+                            </div>
+                        </div>
+                    ))
+                    ) : (
+                    !commentsLoading && <p className="text-sm text-muted-foreground">No comments yet. Start the conversation!</p>
+                    )}
+                </div>
+            </CardContent>
+            <CardFooter className="flex gap-4 items-start border-t pt-6">
+                <Avatar>
+                    <AvatarImage src={user?.photoURL} />
+                    <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-2">
+                    <Textarea 
+                        placeholder="Add a comment..."
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        className="min-h-[80px]"
+                    />
+                    <Button onClick={handlePostComment} disabled={isSubmittingComment || !newComment.trim()}>
+                        {isSubmittingComment ? "Posting..." : "Post Comment"}
+                        <Send className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+            </CardFooter>
+        </Card>
+      </div>
     </>
   );
 }

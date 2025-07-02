@@ -45,3 +45,13 @@ export type Certificate = {
     qaTesterName: string;
     approvalDate: any; // Firestore Timestamp
 };
+
+export type Comment = {
+  id: string;
+  requestId: string;
+  userId: string;
+  userName: string;
+  userRole: User['role'];
+  text: string;
+  createdAt: any; // Firestore Timestamp
+};
