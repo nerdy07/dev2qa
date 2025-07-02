@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
@@ -13,6 +13,7 @@ import { TriangleAlert } from 'lucide-react';
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<any>;
+  signup: (name: string, email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
   createUser: (name: string, email: string, pass: string, role: 'requester' | 'qa_tester') => Promise<any>;
@@ -46,7 +47,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID="1:1234567890:web:abcdef..."`}
                     </pre>
                 </div>
                 <p className="mt-4 text-xs text-muted-foreground">
-                    You can find these values in your Firebase project settings under "General" &gt; "Your apps" &gt; "Web app". After adding them, you may need to restart the development server.
+                    You can find these values in your Firebase project settings under "General" > "Your apps" > "Web app". After adding them, you may need to restart the development server.
                 </p>
             </div>
         </div>
@@ -95,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!loading && firebaseInitialized) {
-      const isAuthPage = pathname === '/';
+      const isAuthPage = pathname === '/' || pathname === '/signup';
       if (user && isAuthPage) {
         router.push('/dashboard');
       } else if (!user && !isAuthPage) {
@@ -108,6 +109,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (email: string, pass: string) => {
     if (!auth) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     return signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const signup = async (name: string, email: string, pass: string) => {
+    if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
+    
+    // Check if any user exists to determine role
+    const usersCollectionRef = collection(db, 'users');
+    const q = query(usersCollectionRef, limit(1));
+    const querySnapshot = await getDocs(q);
+    const isFirstUser = querySnapshot.empty;
+    const role = isFirstUser ? 'admin' : 'requester';
+
+    // Create user in Auth
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(userCredential.user, { displayName: name });
+    
+    // Create user document in Firestore
+    const userDocRef = doc(db, 'users', userCredential.user.uid);
+    await setDoc(userDocRef, {
+        name,
+        email,
+        role,
+    });
+
+    // Manually set the user in the context so they are logged in immediately
+    setUser({
+        id: userCredential.user.uid,
+        name: name,
+        email: email,
+        role: role,
+        photoURL: undefined
+    });
+
+    return userCredential;
   };
 
   const logout = () => {
@@ -136,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await setDoc(userDocRef, data, { merge: true });
   }
 
-  const value = { user, login, logout, loading, createUser, updateUser };
+  const value = { user, login, signup, logout, loading, createUser, updateUser };
 
   if (!firebaseInitialized) {
     return <MissingFirebaseConfig />;

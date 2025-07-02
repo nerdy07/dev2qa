@@ -29,18 +29,20 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 
 const formSchema = z.object({
+  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(1, { message: 'Password is required.' }),
+  password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
 });
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { signup } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
     },
@@ -49,26 +51,24 @@ export default function LoginPage() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setError(null);
     try {
-      await login(values.email, values.password);
+      await signup(values.name, values.email, values.password);
       router.push('/dashboard');
     } catch (err: any) {
-        let errorMessage = 'An unexpected error occurred.';
-        if (err.code) {
-            switch (err.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    errorMessage = 'Invalid email or password. Please try again.';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Too many failed login attempts. Please try again later.';
-                    break;
-                default:
-                    errorMessage = 'Failed to sign in. Please check your credentials.';
-            }
+      let errorMessage = 'An unexpected error occurred.';
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = 'This email address is already in use.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = 'The password is too weak.';
+            break;
+          default:
+            errorMessage = 'Failed to create an account. Please try again.';
         }
-        setError(errorMessage);
-        console.error(err);
+      }
+      setError(errorMessage);
+      console.error(err);
     }
   }
 
@@ -80,9 +80,9 @@ export default function LoginPage() {
       </div>
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Welcome Back!</CardTitle>
+          <CardTitle className="text-2xl">Create an Account</CardTitle>
           <CardDescription>
-            Sign in to your account to continue.
+            The first user to sign up will become an admin.
           </CardDescription>
         </CardHeader>
         <Form {...form}>
@@ -90,11 +90,24 @@ export default function LoginPage() {
             <CardContent className="space-y-4">
               {error && (
                 <Alert variant="destructive">
-                    <TriangleAlert className="h-4 w-4" />
-                    <AlertTitle>Login Failed</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
+                  <TriangleAlert className="h-4 w-4" />
+                  <AlertTitle>Signup Failed</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Full Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="John Doe" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField
                 control={form.control}
                 name="email"
@@ -115,7 +128,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Password</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} autoComplete="current-password" />
+                      <Input type="password" placeholder="••••••••" {...field} autoComplete="new-password" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -123,19 +136,19 @@ export default function LoginPage() {
               />
             </CardContent>
             <CardFooter className="flex-col items-center gap-4">
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={form.formState.isSubmitting}
-              >
-                {form.formState.isSubmitting ? 'Signing In...' : 'Sign In'}
-              </Button>
-              <p className="text-sm text-center text-muted-foreground">
-                Don&apos;t have an account?{' '}
-                <Link href="/signup" className="font-medium text-primary hover:underline">
-                  Sign up
-                </Link>
-              </p>
+                <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={form.formState.isSubmitting}
+                >
+                    {form.formState.isSubmitting ? 'Creating Account...' : 'Create Account'}
+                </Button>
+                <p className="text-sm text-center text-muted-foreground">
+                    Already have an account?{' '}
+                    <Link href="/" className="font-medium text-primary hover:underline">
+                        Sign In
+                    </Link>
+                </p>
             </CardFooter>
           </form>
         </Form>
