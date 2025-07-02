@@ -33,6 +33,7 @@ export type CertificateRequest = {
   qaTesterName?: string;
   rejectionReason?: string;
   certificateId?: string;
+  certificateStatus?: 'valid' | 'revoked';
 };
 
 export type Certificate = {
@@ -44,6 +45,9 @@ export type Certificate = {
     requesterName: string;
     qaTesterName: string;
     approvalDate: any; // Firestore Timestamp
+    status: 'valid' | 'revoked';
+    revocationReason?: string;
+    revocationDate?: any; // Firestore Timestamp
 };
 
 export type Comment = {

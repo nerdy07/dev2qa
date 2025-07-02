@@ -87,6 +87,7 @@ export default function RequestDetailsPage() {
             requesterName: request.requesterName,
             qaTesterName: user.name,
             approvalDate: serverTimestamp(),
+            status: 'valid',
         });
 
         // 2. Update Request
@@ -97,6 +98,7 @@ export default function RequestDetailsPage() {
             qaTesterName: user.name,
             updatedAt: serverTimestamp(),
             certificateId: certDocRef.id,
+            certificateStatus: 'valid',
         });
 
         toast({

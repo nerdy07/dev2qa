@@ -82,18 +82,29 @@ export default function DashboardPage() {
     
         myRequests.forEach(newRequest => {
           const oldRequest = prevRequestsRef.current?.find(r => r.id === newRequest.id);
-          if (oldRequest && oldRequest.status === 'pending' && newRequest.status !== 'pending') {
-            if (newRequest.status === 'approved') {
-              toast({
-                title: "Request Approved!",
-                description: `Your request "${newRequest.taskTitle}" has been approved.`,
-              });
-            } else if (newRequest.status === 'rejected') {
-              toast({
-                title: "Request Rejected",
-                description: `Your request "${newRequest.taskTitle}" has been rejected.`,
-                variant: "destructive"
-              });
+          if (oldRequest) {
+            // Status change from pending
+            if (oldRequest.status === 'pending' && newRequest.status !== 'pending') {
+              if (newRequest.status === 'approved') {
+                toast({
+                  title: "Request Approved!",
+                  description: `Your request "${newRequest.taskTitle}" has been approved.`,
+                });
+              } else if (newRequest.status === 'rejected') {
+                toast({
+                  title: "Request Rejected",
+                  description: `Your request "${newRequest.taskTitle}" has been rejected.`,
+                  variant: "destructive"
+                });
+              }
+            }
+            // Certificate revoked
+            if (oldRequest.certificateStatus !== 'revoked' && newRequest.certificateStatus === 'revoked') {
+                toast({
+                  title: "Certificate Revoked",
+                  description: `The certificate for "${newRequest.taskTitle}" has been revoked.`,
+                  variant: "destructive",
+                });
             }
           }
         });
