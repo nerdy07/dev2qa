@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
 import { PageHeader } from '@/components/common/page-header';
 import { StatCard } from '@/components/dashboard/stat-card';
@@ -13,6 +14,7 @@ import { collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DashboardLoading from './loading';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -65,6 +67,40 @@ export default function DashboardPage() {
         'requests',
         query(collection(db!, 'requests'), where('requesterId', '==', user?.id || ''))
     );
+    const { toast } = useToast();
+    const prevRequestsRef = React.useRef<CertificateRequest[] | null>(null);
+
+    React.useEffect(() => {
+        if (loading || !myRequests) {
+          return;
+        }
+    
+        if (prevRequestsRef.current === null) {
+          prevRequestsRef.current = myRequests;
+          return;
+        }
+    
+        myRequests.forEach(newRequest => {
+          const oldRequest = prevRequestsRef.current?.find(r => r.id === newRequest.id);
+          if (oldRequest && oldRequest.status === 'pending' && newRequest.status !== 'pending') {
+            if (newRequest.status === 'approved') {
+              toast({
+                title: "Request Approved!",
+                description: `Your request "${newRequest.taskTitle}" has been approved.`,
+              });
+            } else if (newRequest.status === 'rejected') {
+              toast({
+                title: "Request Rejected",
+                description: `Your request "${newRequest.taskTitle}" has been rejected.`,
+                variant: "destructive"
+              });
+            }
+          }
+        });
+    
+        prevRequestsRef.current = myRequests;
+    
+    }, [myRequests, loading, toast]);
 
     if (error) {
         return (

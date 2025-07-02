@@ -67,7 +67,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
-        // User is signed in
         const userDocRef = doc(db!, 'users', authUser.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
@@ -80,23 +79,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: authUser.photoURL || undefined
           });
         } else {
-            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Checking if this is the first user.");
+            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating one.");
             
-            // Check if any other users exist in the database.
-            const usersCollectionRef = collection(db!, 'users');
-            const q = query(usersCollectionRef, limit(1));
-            const querySnapshot = await getDocs(q);
-            
-            const isFirstUser = querySnapshot.empty;
-            const role: User['role'] = isFirstUser ? 'admin' : 'requester';
+            const superAdminEmail = 'sshuaibu@gmail.com';
+            let role: User['role'] = 'requester';
 
-            if (isFirstUser) {
-              console.log("This is the first user. Assigning admin role.");
+            if (authUser.email?.toLowerCase() === superAdminEmail) {
+                role = 'admin';
             } else {
-              console.log("Other users exist. Assigning requester role.");
+                const usersCollectionRef = collection(db!, 'users');
+                const q = query(usersCollectionRef, limit(1));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    role = 'admin';
+                }
             }
-
-            // This is a failsafe for when an Auth user exists without a DB record.
+            
             const userToCreate: Omit<User, 'id'> = {
               name: authUser.displayName || 'New User',
               email: authUser.email!,
@@ -106,7 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser({ id: authUser.uid, ...userToCreate });
         }
       } else {
-        // User is signed out
         setUser(null);
       }
       setLoading(false);
@@ -140,7 +138,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createUser = async (name: string, email: string, pass: string, role: User['role']) => {
     if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     
-    // This function can be called by an admin to create any type of user.
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(userCredential.user, { displayName: name });
     
@@ -151,7 +148,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role,
     });
 
-    // We don't sign in as the new user, the admin stays logged in.
     return userCredential;
   };
   
