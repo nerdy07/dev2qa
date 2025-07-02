@@ -27,7 +27,7 @@ import { useAuth } from '@/providers/auth-provider';
 const formSchemaBase = z.object({
     name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
     email: z.string().email({ message: 'Invalid email address.' }),
-    role: z.enum(['requester', 'qa_tester'], { required_error: 'Please select a role.' }),
+    role: z.enum(['requester', 'qa_tester', 'admin'], { required_error: 'Please select a role.' }),
   });
   
 const createFormSchema = formSchemaBase.extend({
@@ -53,7 +53,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      role: user?.role === 'admin' ? 'requester' : user?.role || 'requester', // Can't edit to/from admin
+      role: user?.role || 'requester',
       password: '',
     },
   });
@@ -75,7 +75,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             await createUser(createValues.name, createValues.email, createValues.password, createValues.role);
             toast({
                 title: 'User Created',
-                description: `${values.name} has been successfully created.`,
+                description: `${values.name} has been successfully created. You can now send them a password reset link from the user list.`,
             });
         }
         onSuccess();
@@ -128,7 +128,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 name="password"
                 render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>Temporary Password</FormLabel>
                     <FormControl>
                     <Input type="password" placeholder="••••••••" {...field} />
                     </FormControl>
@@ -143,7 +143,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={user?.role === 'admin'}>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
@@ -152,6 +152,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 <SelectContent>
                   <SelectItem value="requester">Requester</SelectItem>
                   <SelectItem value="qa_tester">QA Tester</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
               <FormMessage />

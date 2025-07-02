@@ -51,7 +51,7 @@ import { useAuth } from '@/providers/auth-provider';
 
 export default function UsersPage() {
   const { data: users, loading, error } = useCollection<User>('users');
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, sendPasswordReset } = useAuth();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
@@ -67,11 +67,21 @@ export default function UsersPage() {
     setIsAlertOpen(true);
   }
 
-  const handleResetPassword = (user: User) => {
-    toast({
-        title: 'Password Reset',
-        description: `(Simulated) A password reset link has been sent to ${user.email}.`,
-    });
+  const handleResetPassword = async (user: User) => {
+    try {
+        await sendPasswordReset(user.email);
+        toast({
+            title: 'Password Reset Email Sent',
+            description: `A password reset link has been sent to ${user.email}.`,
+        });
+    } catch (err) {
+        console.error("Error sending password reset email:", err);
+        toast({
+            title: 'Error',
+            description: 'Failed to send password reset email.',
+            variant: 'destructive',
+        });
+    }
   }
   
   const confirmDelete = async () => {
@@ -163,7 +173,7 @@ export default function UsersPage() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleResetPassword(user)}>Reset Password</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(user)}>Delete User</DropdownMenuItem>
                 </DropdownMenuContent>

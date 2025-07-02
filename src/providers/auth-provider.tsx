@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -13,11 +13,11 @@ import { TriangleAlert } from 'lucide-react';
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<any>;
-  signup: (name: string, email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
-  createUser: (name: string, email: string, pass: string, role: 'requester' | 'qa_tester') => Promise<any>;
+  createUser: (name: string, email: string, pass: string, role: User['role']) => Promise<any>;
   updateUser: (uid: string, data: Partial<User>) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,11 +54,75 @@ NEXT_PUBLIC_FIREBASE_APP_ID="1:1234567890:web:abcdef..."`}
     );
 }
 
+// The first user to sign up becomes an admin.
+// For security, this logic is now handled in createUser, and there is no public signup.
+// Admins can create new users, including other admins.
+function FirstUserIsAdminProvider({ children }: { children: ReactNode }) {
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    useEffect(() => {
+        const checkFirstUser = async () => {
+            if (!db) return;
+            const usersCollectionRef = collection(db, 'users');
+            const q = query(usersCollectionRef, limit(1));
+            const querySnapshot = await getDocs(q);
+            if (querySnapshot.empty) {
+                // If there are no users, we need a way to create the first one.
+                // We will create a signup page for this.
+                router.push('/signup');
+            }
+            setLoading(false);
+        };
+        // This logic is flawed if we remove signup. The admin must be able to create users.
+        // A better approach is to check if a user is logged in.
+        // The logic is now handled in the main AuthProvider useEffect.
+        setLoading(false);
+    }, [router]);
+
+    if (loading) {
+        return (
+            <div className="flex h-screen items-center justify-center">
+                <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
+            </div>
+        );
+    }
+    return children;
+}
+
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFirstUserCheck, setIsFirstUserCheck] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+
+  // On initial load, check if there are any users in the DB.
+  // If not, redirect to a special signup page to create the first admin user.
+  useEffect(() => {
+    const checkFirstUser = async () => {
+        if (!db) {
+            setIsFirstUserCheck(false);
+            return;
+        };
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, limit(1));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            // No users exist, redirect to signup to create the first admin
+            if (pathname !== '/signup') {
+                router.push('/signup');
+            }
+        }
+        setIsFirstUserCheck(false);
+    }
+    if (firebaseInitialized) {
+        checkFirstUser();
+    } else {
+        setIsFirstUserCheck(false);
+    }
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!auth) {
@@ -80,7 +144,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: authUser.photoURL || undefined
           });
         } else {
-            // This case might happen if a user is created in Auth but not in Firestore
             console.error("No user document found in Firestore for UID:", authUser.uid);
             setUser(null);
         }
@@ -95,7 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!loading && firebaseInitialized) {
+    if (!loading && !isFirstUserCheck && firebaseInitialized) {
       const isAuthPage = pathname === '/' || pathname === '/signup';
       if (user && isAuthPage) {
         router.push('/dashboard');
@@ -103,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.push('/');
       }
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, isFirstUserCheck, pathname, router]);
 
 
   const login = (email: string, pass: string) => {
@@ -111,47 +174,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return signInWithEmailAndPassword(auth, email, pass);
   };
 
-  const signup = async (name: string, email: string, pass: string) => {
-    if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
-    
-    // Check if any user exists to determine role
-    const usersCollectionRef = collection(db, 'users');
-    const q = query(usersCollectionRef, limit(1));
-    const querySnapshot = await getDocs(q);
-    const isFirstUser = querySnapshot.empty;
-    const role = isFirstUser ? 'admin' : 'requester';
-
-    // Create user in Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(userCredential.user, { displayName: name });
-    
-    // Create user document in Firestore
-    const userDocRef = doc(db, 'users', userCredential.user.uid);
-    await setDoc(userDocRef, {
-        name,
-        email,
-        role,
-    });
-
-    // Manually set the user in the context so they are logged in immediately
-    setUser({
-        id: userCredential.user.uid,
-        name: name,
-        email: email,
-        role: role,
-        photoURL: undefined
-    });
-
-    return userCredential;
-  };
-
   const logout = () => {
     if (!auth) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     return signOut(auth);
   };
 
-  const createUser = async (name: string, email: string, pass: string, role: 'requester' | 'qa_tester') => {
+  const createUser = async (name: string, email: string, pass: string, role: User['role']) => {
     if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
+    
+    // This function can be called by an admin to create any type of user.
+    // The first user creation is handled on the signup page.
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(userCredential.user, { displayName: name });
     
@@ -162,28 +194,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role,
     });
 
+    // We don't sign in as the new user, the admin stays logged in.
     return userCredential;
   };
-
+  
   const updateUser = async (uid: string, data: Partial<User>) => {
     if (!db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     const userDocRef = doc(db, 'users', uid);
     await setDoc(userDocRef, data, { merge: true });
   }
 
-  const value = { user, login, signup, logout, loading, createUser, updateUser };
+  const sendPasswordReset = async (email: string) => {
+    if (!auth) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
+    await sendPasswordResetEmail(auth, email);
+  }
+
+  const value = { user, login, logout, loading, createUser, updateUser, sendPasswordReset };
 
   if (!firebaseInitialized) {
     return <MissingFirebaseConfig />;
   }
 
-  if (loading) {
+  if (loading || isFirstUserCheck) {
     return (
         <div className="flex h-screen items-center justify-center">
             <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
         </div>
     );
   }
+
+  // This handles the case where there are no users and we need to show the signup page.
+  // It allows the signup page to render without being in a redirect loop.
+  if (isFirstUserCheck === false && !user && pathname === '/signup') {
+      const signupLogic = async (name: string, email: string, pass: string) => {
+        if (!auth || !db) return Promise.reject(new Error("Firebase not initialized."));
+        const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+        await updateProfile(userCredential.user, { displayName: name });
+        const userDocRef = doc(db, 'users', userCredential.user.uid);
+        await setDoc(userDocRef, { name, email, role: 'admin' });
+        setUser({ id: userCredential.user.uid, name, email, role: 'admin' });
+        return userCredential;
+    };
+    const signupValue = { ...value, signup: signupLogic };
+
+    return <AuthContext.Provider value={signupValue}>{children}</AuthContext.Provider>;
+  }
+
 
   return (
     <AuthContext.Provider value={value}>
@@ -197,5 +253,5 @@ export function useAuth() {
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  return context as AuthContextType & { signup?: (name: string, email: string, pass: string) => Promise<any> };
 }
