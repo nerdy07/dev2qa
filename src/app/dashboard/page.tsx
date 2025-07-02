@@ -14,6 +14,11 @@ import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DashboardLoading from './loading';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import type { DateRange } from 'react-day-picker';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -177,10 +182,57 @@ export default function DashboardPage() {
   };
 
   const QATesterDashboard = () => {
-    const { data: pendingRequests, loading, error } = useCollection<CertificateRequest>(
+    const { user } = useAuth();
+    
+    // Data for Pending Requests tab
+    const { data: pendingRequests, loading: pendingLoading, error: pendingError } = useCollection<CertificateRequest>(
         'requests',
         query(collection(db!, 'requests'), where('status', '==', 'pending'))
     );
+
+    // Data for My Approvals tab
+    const myApprovalsQuery = React.useMemo(() => {
+        if (!user?.id) return undefined;
+        return query(
+            collection(db!, 'requests'), 
+            where('qaTesterId', '==', user.id), 
+            where('status', '==', 'approved'),
+            orderBy('updatedAt', 'desc')
+        );
+    }, [user?.id]);
+
+    const { data: myApprovedRequests, loading: approvedLoading, error: approvedError } = useCollection<CertificateRequest>(
+        'requests',
+        myApprovalsQuery
+    );
+
+    // State for filters
+    const [searchTerm, setSearchTerm] = React.useState('');
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
+
+    const loading = pendingLoading || approvedLoading;
+    const error = pendingError || approvedError;
+
+    const filteredApprovedRequests = React.useMemo(() => {
+        if (!myApprovedRequests) return [];
+
+        return myApprovedRequests.filter(req => {
+            const approvalDate = (req.updatedAt as any)?.toDate();
+            
+            const matchesSearch = searchTerm.trim() === '' || 
+                                  req.taskTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  req.requesterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  req.associatedProject.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesDate = !dateRange || !dateRange.from || !approvalDate || (
+                approvalDate >= dateRange.from && 
+                (!dateRange.to || approvalDate <= new Date(dateRange.to.setHours(23, 59, 59, 999))) // Include the whole end day
+            );
+            
+            return matchesSearch && matchesDate;
+        });
+    }, [myApprovedRequests, searchTerm, dateRange]);
+
 
     if (loading) return <DashboardLoading />;
 
@@ -189,20 +241,57 @@ export default function DashboardPage() {
             <Alert variant="destructive">
                 <TriangleAlert className="h-4 w-4" />
                 <AlertTitle>Error</AlertTitle>
-                <AlertDescription>Failed to load pending requests. Please try again later.</AlertDescription>
+                <AlertDescription>
+                    Failed to load dashboard data. If this persists, you may need to create a Firestore index. Check the browser console for a link.
+                </AlertDescription>
             </Alert>
         )
     }
 
      return (
         <>
-        <PageHeader title="Pending QA Review" description="Approve or reject these certificate requests." />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Pending Requests" value={pendingRequests?.length.toString() || '0'} icon={Clock} description="Awaiting your review" />
-        </div>
-        <div className="mt-8">
-            <CertificateRequestsTable requests={pendingRequests || []} isLoading={loading} />
-        </div>
+        <PageHeader title="QA Dashboard" description="Review pending requests and manage your approvals." />
+        <Tabs defaultValue="pending" className="w-full">
+            <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
+                <TabsTrigger value="pending">
+                    <Clock className="mr-2 h-4 w-4" /> Pending Review ({pendingRequests?.length || 0})
+                </TabsTrigger>
+                <TabsTrigger value="approvals">
+                    <CheckCircle className="mr-2 h-4 w-4" /> My Approvals ({myApprovedRequests?.length || 0})
+                </TabsTrigger>
+            </TabsList>
+            <TabsContent value="pending" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Pending Requests</CardTitle>
+                        <CardDescription>These requests are awaiting your review and action.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                         <CertificateRequestsTable requests={pendingRequests || []} isLoading={pendingLoading} />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="approvals" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>My Approved Certificates</CardTitle>
+                        <CardDescription>A history of all the certificate requests you have approved. You can filter by title, requester, project, or date.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
+                            <Input 
+                                placeholder="Filter by title, requester, project..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full md:max-w-sm"
+                            />
+                            <DateRangePicker date={dateRange} setDate={setDateRange} className="w-full md:w-auto" />
+                        </div>
+                        <CertificateRequestsTable requests={filteredApprovedRequests} isLoading={approvedLoading} />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
         </>
     )
   };
