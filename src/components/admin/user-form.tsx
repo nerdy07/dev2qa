@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/providers/auth-provider';
@@ -28,7 +30,8 @@ const formSchemaBase = z.object({
     name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
     email: z.string().email({ message: 'Invalid email address.' }),
     role: z.enum(['requester', 'qa_tester', 'admin'], { required_error: 'Please select a role.' }),
-  });
+    expertise: z.string().optional(),
+});
   
 const createFormSchema = formSchemaBase.extend({
     password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
@@ -55,24 +58,29 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
       email: user?.email || '',
       role: user?.role || 'requester',
       password: '',
+      expertise: user?.expertise || '',
     },
   });
+
+  const role = form.watch('role');
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
         if (isEditing && user) {
-            await updateUser(user.id, {
+            const dataToUpdate: Partial<User> = {
                 name: values.name,
                 email: values.email,
                 role: values.role,
-            });
+                expertise: values.role === 'qa_tester' ? values.expertise : '',
+            };
+            await updateUser(user.id, dataToUpdate);
             toast({
                 title: 'User Updated',
                 description: `${values.name} has been successfully updated.`,
             });
         } else if (!isEditing) {
             const createValues = values as z.infer<typeof createFormSchema>;
-            await createUser(createValues.name, createValues.email, createValues.password, createValues.role);
+            await createUser(createValues.name, createValues.email, createValues.password, createValues.role, createValues.expertise);
             toast({
                 title: 'User Created',
                 description: `${values.name} has been successfully created. You can now send them a password reset link from the user list.`,
@@ -159,6 +167,27 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             </FormItem>
           )}
         />
+        {role === 'qa_tester' && (
+            <FormField
+                control={form.control}
+                name="expertise"
+                render={({ field }) => (
+                <FormItem>
+                    <FormLabel>QA Tester Expertise</FormLabel>
+                    <FormControl>
+                    <Textarea
+                        placeholder="e.g., Frontend testing, E2E automation, Mobile (iOS/Android), API validation..."
+                        {...field}
+                    />
+                    </FormControl>
+                    <FormDescription>
+                        Describe this tester's skills. This helps the AI suggest the best person for a request.
+                    </FormDescription>
+                    <FormMessage />
+                </FormItem>
+                )}
+            />
+        )}
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onSuccess}>
             Cancel

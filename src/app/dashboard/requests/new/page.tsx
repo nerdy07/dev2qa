@@ -90,7 +90,7 @@ export default function NewRequestPage() {
     setIsSuggesting(true);
     setSuggestion(null);
 
-    const qaTesterList = qaUsers.map(u => u.name);
+    const qaTesterList = qaUsers.map(u => ({ name: u.name, expertise: u.expertise }));
 
     const result = await getQATesterSuggestion({
       taskTitle,

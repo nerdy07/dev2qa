@@ -12,12 +12,17 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+const QATesterExpertiseSchema = z.object({
+  name: z.string().describe('The name of the QA tester.'),
+  expertise: z.string().optional().describe("A description of the QA tester's skills and experience."),
+});
+
 const SuggestQATesterInputSchema = z.object({
   taskTitle: z.string().describe('The title of the task for which a certificate is requested.'),
   taskDescription: z.string().describe('A brief description of the task.'),
   associatedTeam: z.string().describe('The team associated with the task.'),
   associatedProject: z.string().describe('The project associated with the task.'),
-  qaTesterList: z.array(z.string()).describe('A list of available QA testers.'),
+  qaTesterList: z.array(QATesterExpertiseSchema).describe('A list of available QA testers and their expertise.'),
 });
 export type SuggestQATesterInput = z.infer<typeof SuggestQATesterInputSchema>;
 
@@ -35,20 +40,24 @@ const suggestQATesterPrompt = ai.definePrompt({
   name: 'suggestQATesterPrompt',
   input: {schema: SuggestQATesterInputSchema},
   output: {schema: SuggestQATesterOutputSchema},
-  prompt: `Given the following task details and a list of QA testers, suggest the most relevant QA tester to review the certificate request.
+  prompt: `Given the following task details and a list of QA testers with their expertise, suggest the most relevant QA tester to review the certificate request.
 
 Task Title: {{{taskTitle}}}
 Task Description: {{{taskDescription}}}
 Associated Team: {{{associatedTeam}}}
 Associated Project: {{{associatedProject}}}
 
-Available QA Testers: {{#each qaTesterList}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
+Available QA Testers and their expertise:
+{{#each qaTesterList}}
+- Tester: {{{this.name}}}
+  Expertise: {{#if this.expertise}}{{{this.expertise}}}{{else}}Not specified{{/if}}
+{{/each}}
 
-Consider the task details and each QA tester's expertise and experience to determine the best match.
+Analyze the task details and match them against each QA tester's expertise to determine the best fit. For example, if the task is about a 'UI bug on Android', a tester with 'Mobile (iOS/Android)' expertise would be a great match.
 
 Output the suggested QA tester and a brief reason for the suggestion.
 
-Ensure the suggestedQATester value is one of the available QA testers.
+Ensure the suggestedQATester value is one of the names from the provided list.
 `,
 });
 

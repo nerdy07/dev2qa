@@ -4,6 +4,7 @@ export type User = {
   email: string;
   role: 'admin' | 'requester' | 'qa_tester';
   photoURL?: string;
+  expertise?: string;
 };
 
 export type Team = {

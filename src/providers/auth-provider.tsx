@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
@@ -15,7 +15,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
-  createUser: (name: string, email: string, pass: string, role: User['role']) => Promise<any>;
+  createUser: (name: string, email: string, pass: string, role: User['role'], expertise?: string) => Promise<any>;
   updateUser: (uid: string, data: Partial<User>) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
 }
@@ -76,7 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name: authUser.displayName || userData.name,
             email: authUser.email!,
             role: userData.role,
-            photoURL: authUser.photoURL || undefined
+            photoURL: authUser.photoURL || undefined,
+            expertise: userData.expertise
           });
         } else {
             console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating one.");
@@ -135,18 +136,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return signOut(auth);
   };
 
-  const createUser = async (name: string, email: string, pass: string, role: User['role']) => {
+  const createUser = async (name: string, email: string, pass: string, role: User['role'], expertise?: string) => {
     if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(userCredential.user, { displayName: name });
     
     const userDocRef = doc(db, 'users', userCredential.user.uid);
-    await setDoc(userDocRef, {
+    
+    const userData: Partial<User> = {
         name,
         email,
         role,
-    });
+    };
+    if (role === 'qa_tester' && expertise) {
+      userData.expertise = expertise;
+    }
+
+    await setDoc(userDocRef, userData);
 
     return userCredential;
   };
