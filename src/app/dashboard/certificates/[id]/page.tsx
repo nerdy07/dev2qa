@@ -19,25 +19,20 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
 const EchobitLogo = () => (
-    <div className="flex items-center gap-2">
-        <div className="w-12 h-12">
+    <div className="flex items-center gap-3 font-sans">
+        <div className="w-9 h-9">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="50" fill="#4B8678"/>
-                <path d="M40 50C40 55.5228 44.4772 60 50 60C55.5228 60 60 55.5228 60 50C60 44.4772 55.5228 40 50 40C47.2386 40 44.7386 41.1193 42.9289 42.9289L39.0711 39.0711C41.9772 36.165 45.7893 34 50 34C58.8365 34 66 41.1635 66 50C66 58.8365 58.8365 66 50 66C41.1635 66 34 58.8365 34 50H40Z" fill="white"/>
-                <path d="M50 56C53.3137 56 56 53.3137 56 50C56 46.6863 53.3137 44 50 44C48.4193 44 46.9696 44.6286 45.8787 45.7196L43.0503 42.8912C44.7196 41.2219 47.2196 40 50 40C55.5228 40 60 44.4772 60 50C60 55.5228 55.5228 60 50 60C44.4772 60 40 55.5228 40 50H43C43 53.3137 46.1634 56 50 56Z" fill="hsl(var(--gold))"/>
+                <circle cx="50" cy="50" r="50" fill="hsl(var(--accent))" />
+                <path d="M75 50C75 63.8071 63.8071 75 50 75C36.1929 75 25 63.8071 25 50C25 36.1929 36.1929 25 50 25" stroke="white" strokeWidth="12" strokeLinecap="round" />
             </svg>
         </div>
-        <div>
-            <p className="font-semibold tracking-[0.2em] text-accent text-xs">ECHOBITSTECH</p>
-        </div>
+        <p className="font-semibold tracking-[0.2em] text-accent">ECHOBITSTECH</p>
     </div>
 );
 
 const SignaturePlaceholder = () => (
     <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" className="h-12 w-48 text-foreground/80 mx-auto">
-        <path d="M 20 40 C 30 20, 50 25, 60 40 C 70 55, 90 50, 100 40 C 110 30, 130 35, 140 45 C 150 55, 170 50, 180 40" stroke="currentColor" fill="none" strokeWidth="2.5" strokeLinecap="round" />
-        <path d="M 50 35 Q 60 45 70 35" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round"/>
-        <path d="M 110 38 L 130 48" stroke="currentColor" fill="none" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M 10 40 C 30 10, 50 15, 70 40 C 90 65, 110 60, 130 40 C 150 20, 170 25, 190 50" stroke="currentColor" fill="none" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
 );
 
@@ -45,15 +40,18 @@ const CertificateFrame = () => (
     <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 1191 842">
         <defs>
             <pattern id="p" width="20" height="20" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <path d="M0 0h10v20H0z" fill="hsla(var(--accent), 0.1)"/>
+                <path d="M0 0h10v20H0z" fill="hsla(var(--accent), 0.05)" />
             </pattern>
         </defs>
         <rect width="1191" height="842" fill="url(#p)" />
-        <rect x="3.5" y="3.5" width="1184" height="835" stroke="hsl(var(--accent))" strokeOpacity="0.8" strokeWidth="7"/>
-        <rect x="15.5" y="15.5" width="1160" height="811" stroke="hsl(var(--gold))" strokeOpacity="0.8" strokeWidth="3"/>
-        <rect x="19.5" y="19.5" width="1152" height="803" stroke="hsl(var(--accent))" strokeOpacity="0.8" strokeWidth="1"/>
-        <g stroke="hsl(var(--gold))" strokeWidth="2">
-            <path d="M30 30l20-20H30v20zm1131 0l-20-20h20v20zm0 782l-20 20h20v-20zM30 812l20 20H30v-20z"/>
+        <rect x="25.5" y="25.5" width="1140" height="791" stroke="hsl(var(--gold))" strokeWidth="1"/>
+        <rect x="29.5" y="29.5" width="1132" height="783" stroke="hsl(var(--accent))" strokeWidth="3"/>
+        <rect x="35.5" y="35.5" width="1120" height="771" stroke="hsl(var(--gold))" strokeWidth="1"/>
+        <g fill="hsl(var(--accent))">
+            <path d="M25.5 55.5 L55.5 25.5 L48.5 25.5 L25.5 48.5 z" />
+            <path d="M1165.5 55.5 L1135.5 25.5 L1142.5 25.5 L1165.5 48.5 z" />
+            <path d="M25.5 786.5 L55.5 816.5 L48.5 816.5 L25.5 793.5 z" />
+            <path d="M1165.5 786.5 L1135.5 816.5 L1142.5 816.5 L1165.5 793.5 z" />
         </g>
     </svg>
 );
@@ -228,47 +226,47 @@ export default function CertificatePage() {
                     
                     {isRevoked && <RevokedStamp />}
 
-                    <div className="absolute inset-0 flex flex-col p-20 z-10">
+                    <div className="absolute inset-0 flex flex-col p-16 z-10">
                         <header className="flex justify-between items-start mb-8">
                             <EchobitLogo />
-                            <div className="text-right">
-                                <p className="font-semibold">{format(approvalDate, 'MMMM do, yyyy')}</p>
-                                <p className="text-xs text-muted-foreground font-sans">Date of Issue</p>
+                            <div className="text-right font-sans">
+                                <p className="font-semibold text-lg">{format(approvalDate, 'MMMM do, yyyy')}</p>
+                                <p className="text-xs text-muted-foreground">Date of Issue</p>
                             </div>
                         </header>
 
-                        <main className="flex-grow flex flex-col items-center text-center">
+                        <main className="flex-grow flex flex-col items-center justify-center text-center">
                             
-                            <p className="text-xl font-sans font-light tracking-[0.3em] text-gold uppercase mt-8">Certificate of Completion</p>
+                            <p className="font-sans text-2xl font-light tracking-[0.3em] text-gold uppercase">Certificate of Completion</p>
                             <div className="w-24 h-px bg-gold/50 my-6 mx-auto"></div>
                             
                             <p className="font-sans text-lg">This certificate is proudly presented to</p>
-                            <p className="text-4xl font-semibold mt-2 tracking-wide">{certificate.requesterName}</p>
+                            <p className="text-5xl font-serif font-bold mt-2 tracking-wide">{certificate.requesterName}</p>
                             
-                            <p className="font-sans text-lg mt-8">for successfully completing the task</p>
-                            <p className="text-3xl font-semibold mt-2 tracking-wide">{certificate.taskTitle}</p>
+                            <p className="font-sans text-lg mt-10">for successfully completing the task</p>
+                            <p className="text-3xl font-serif font-semibold mt-2 tracking-wide">{certificate.taskTitle}</p>
                             
-                            <p className="font-sans text-lg mt-8">for the project</p>
-                            <p className="text-3xl font-semibold mt-2 tracking-wide">{certificate.associatedProject}</p>
+                            <p className="font-sans text-lg mt-10">for the project</p>
+                            <p className="text-3xl font-serif font-semibold mt-2 tracking-wide">{certificate.associatedProject}</p>
                             
                             <p className="text-xs text-muted-foreground font-sans max-w-lg mx-auto mt-12">
                                 This document certifies that the aforementioned task/feature has been reviewed and approved by the Quality Assurance department, meeting all required specifications and standards of excellence.
                             </p>
                         </main>
 
-                        <footer className="mt-auto flex justify-between items-end">
-                            <div className="text-center w-56">
+                        <footer className="mt-auto flex justify-between items-end font-sans">
+                            <div className="text-center w-60">
                                 <SignaturePlaceholder />
                                 <div className="w-full h-px bg-border/50 mx-auto mt-1"></div>
-                                <p className="text-xs text-muted-foreground font-sans mt-1.5">{certificate.qaTesterName}, QA Sign-off</p>
+                                <p className="text-sm text-muted-foreground mt-2">{certificate.qaTesterName}, QA Sign-off</p>
                             </div>
                             
                             <QualitySeal />
 
-                            <div className="text-center w-56">
+                            <div className="text-center w-60">
                                 <div className="font-semibold text-lg pb-1">ID: {certificate.id.substring(0, 10)}...</div>
                                 <div className="w-full h-px bg-border/50 mx-auto mt-1"></div>
-                                <p className="text-xs text-muted-foreground font-sans mt-1.5">Certificate ID</p>
+                                <p className="text-sm text-muted-foreground mt-2">Certificate ID</p>
                             </div>
                         </footer>
                     </div>
