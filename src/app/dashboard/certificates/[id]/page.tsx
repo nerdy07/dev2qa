@@ -16,34 +16,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const EchobitLogo = () => (
-    <div className="flex items-center gap-3">
-        <div className="w-16 h-16">
+    <div className="flex items-center gap-2">
+        <div className="w-12 h-12">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="50" cy="50" r="50" fill="hsl(var(--accent))"/>
-                <circle cx="50" cy="50" r="42" fill="#4B8678"/>
+                <circle cx="50" cy="50" r="50" fill="#4B8678"/>
                 <path d="M40 50C40 55.5228 44.4772 60 50 60C55.5228 60 60 55.5228 60 50C60 44.4772 55.5228 40 50 40C47.2386 40 44.7386 41.1193 42.9289 42.9289L39.0711 39.0711C41.9772 36.165 45.7893 34 50 34C58.8365 34 66 41.1635 66 50C66 58.8365 58.8365 66 50 66C41.1635 66 34 58.8365 34 50H40Z" fill="white"/>
-                <path d="M50 56C53.3137 56 56 53.3137 56 50C56 46.6863 53.3137 44 50 44C48.4193 44 46.9696 44.6286 45.8787 45.7196L43.0503 42.8912C44.7196 41.2219 47.2196 40 50 40C55.5228 40 60 44.4772 60 50C60 55.5228 55.5228 60 50 60C44.4772 60 40 55.5228 40 50H43C43 53.3137 46.1634 56 50 56Z" fill="hsl(var(--gold))"/>
+                <path d="M50 56C53.3137 56 56 53.3137 56 50C56 46.6863 53.3137 44 50 44C48.4193 44 46.9696 44.6286 45.8787 45.7196L43.0503 42.8912C44.7196 41.2219 47.2196 40 50 40C55.5228 40 60 44.4772 60 50C60 55.5228 55.5228 60 50 60C44.4772 60 40 55.5228 40 50H43C43 53.3137 46.1634 56 50 56Z" fill="#D4AF37"/>
             </svg>
         </div>
         <div>
-            <p className="font-semibold tracking-[0.2em] text-accent text-sm">ECHOBITSTECH</p>
-            <p className="text-[10px] tracking-wider text-muted-foreground">GROUP OF COMPANIES</p>
+            <p className="font-semibold tracking-[0.2em] text-accent text-xs">ECHOBITSTECH</p>
         </div>
     </div>
 );
 
 const SignaturePlaceholder = () => (
-    <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" className="h-12 w-40 text-foreground/80 mx-auto">
-      <path d="M 10 40 C 20 20, 40 20, 50 40 C 60 60, 80 60, 90 40 C 100 20, 120 20, 130 40 S 150 60, 160 40" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" />
-      <path d="M 70 35 C 80 45, 90 45, 100 35" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" />
-      <path d="M 150 35 L 170 45" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" className="h-12 w-48 text-foreground/80 mx-auto">
+        <path d="M 20 40 C 30 20, 50 25, 60 40 C 70 55, 90 50, 100 40 C 110 30, 130 35, 140 45 C 150 55, 170 50, 180 40" stroke="currentColor" fill="none" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M 50 35 Q 60 45 70 35" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round"/>
+        <path d="M 110 38 L 130 48" stroke="currentColor" fill="none" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
 );
 
 const CertificateLoadingSkeleton = () => (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4 font-serif">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4">
         <div className="w-full max-w-5xl bg-white shadow-2xl aspect-[1.414] p-8">
             <div className="w-full h-full p-2 border-2 border-border/20">
                 <div className="w-full h-full flex flex-col p-10 border border-border/60">
@@ -137,9 +136,23 @@ export default function CertificatePage() {
     const isRevoked = certificate.status === 'revoked';
     const canRevoke = user?.role === 'admin' || user?.role === 'qa_tester';
 
+    const BorderCorner = ({ className }: { className: string }) => (
+        <div className={cn("absolute w-12 h-12", className)}>
+            <div className="relative w-full h-full">
+                <div className="absolute w-full h-1 bg-border/80"></div>
+                <div className="absolute w-1 h-full bg-border/80"></div>
+                <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-border/80"></div>
+            </div>
+        </div>
+    );
+
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-gray-100 p-4 font-serif print:bg-white print:p-0">
-            <div className="w-full max-w-5xl flex justify-end gap-2 mb-4 print:hidden">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-accent/90 p-4 font-sans print:bg-white print:p-0 relative overflow-hidden">
+             {/* Background decorative elements */}
+             <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-gold/30 -translate-y-1/4 translate-x-1/4 rotate-45 opacity-50 print:hidden"></div>
+             <div className="absolute bottom-0 left-0 w-1/3 h-1/3 bg-gold/30 translate-y-1/4 -translate-x-1/4 rotate-45 opacity-50 print:hidden"></div>
+
+            <div className="w-full max-w-5xl flex justify-end gap-2 mb-4 print:hidden z-10">
                 {canRevoke && !isRevoked && (
                     <Dialog open={isRevokeDialogOpen} onOpenChange={setIsRevokeDialogOpen}>
                         <DialogTrigger asChild>
@@ -175,71 +188,87 @@ export default function CertificatePage() {
                 )}
             </div>
 
-            <div className="w-full max-w-5xl bg-white shadow-2xl print:shadow-none aspect-[1.414] p-8 relative overflow-hidden">
-                <div className="absolute inset-0 bg-repeat bg-[length:40px_40px] opacity-5" style={{backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23a0aec0\' fill-opacity=\'0.2\' fill-rule=\'evenodd\'%3E%3Cpath d=\'M0 40L40 0H20L0 20M40 40V20L20 40\'/%3E%3C/g%3E%3C/svg%3E")'}}></div>
-
-                <div className="w-full h-full p-2 border-2 border-gold/50 relative">
-                    <div className="w-full h-full flex flex-col p-10 border-2 border-accent/80 relative">
-                        {/* Corner ornaments */}
-                        <div className="absolute -top-1 -left-1 w-16 h-16 border-t-4 border-l-4 border-gold"></div>
-                        <div className="absolute -top-1 -right-1 w-16 h-16 border-t-4 border-r-4 border-gold"></div>
-                        <div className="absolute -bottom-1 -left-1 w-16 h-16 border-b-4 border-l-4 border-gold"></div>
-                        <div className="absolute -bottom-1 -right-1 w-16 h-16 border-b-4 border-r-4 border-gold"></div>
-
-                        {isRevoked && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-destructive/10 backdrop-blur-[2px] print:bg-transparent print:backdrop-blur-none">
-                                <div className="text-center transform -rotate-[20deg]">
-                                    <h2 className="text-8xl font-black text-destructive/80 print:text-destructive/60 border-4 border-destructive/80 print:border-destructive/60 px-8 py-4 uppercase">Revoked</h2>
-                                    <p className="text-destructive/90 print:text-destructive/70 font-semibold mt-2">on {format(revocationDate!, 'do MMMM yyyy')}</p>
-                                    <p className="text-destructive/80 print:text-destructive/60 text-sm mt-1 max-w-sm">Reason: {certificate.revocationReason}</p>
-                                </div>
+            <div className="w-full max-w-5xl bg-white shadow-2xl print:shadow-none aspect-[1.414/1] p-4 relative z-10">
+                <div className="w-full h-full p-8 border-2 border-border/60 relative font-serif">
+                    
+                    {/* Decorative Border */}
+                    <BorderCorner className="top-2 left-2" />
+                    <BorderCorner className="top-2 right-2 transform rotate-90" />
+                    <BorderCorner className="bottom-2 left-2 transform -rotate-90" />
+                    <BorderCorner className="bottom-2 right-2 transform rotate-180" />
+                    
+                    {isRevoked && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-destructive/10 backdrop-blur-[2px] print:bg-transparent print:backdrop-blur-none z-20">
+                            <div className="text-center transform -rotate-[20deg]">
+                                <h2 className="text-8xl font-black text-destructive/80 print:text-destructive/60 border-4 border-destructive/80 print:border-destructive/60 px-8 py-4 uppercase">Revoked</h2>
+                                <p className="text-destructive/90 print:text-destructive/70 font-semibold mt-2">on {format(revocationDate!, 'do MMMM yyyy')}</p>
+                                <p className="text-destructive/80 print:text-destructive/60 text-sm mt-1 max-w-sm">Reason: {certificate.revocationReason}</p>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        <header className="flex justify-between items-start mb-10">
-                            <EchobitLogo />
-                            <div className='text-right'>
-                                <p className='font-semibold text-muted-foreground'>Certificate ID</p>
-                                <p className='text-xs font-mono text-foreground/80'>{certificate.id}</p>
+                    <header className="flex justify-between items-start mb-8">
+                        <EchobitLogo />
+                    </header>
+
+                    <main className="flex-grow flex flex-col items-center text-center text-gray-800">
+                        
+                        <div className="mb-10">
+                            <p className="text-xl font-sans font-light tracking-[0.2em] text-gold uppercase">Completion</p>
+                            <h1 className="text-5xl font-bold tracking-wider uppercase mt-1">Certificate</h1>
+                        </div>
+                        
+                        <div className="w-24 h-px bg-border/50 my-6"></div>
+
+                        <div className="space-y-8 w-full">
+                             <div>
+                                <p className="text-sm font-sans tracking-[0.2em] text-muted-foreground uppercase">Product Name</p>
+                                <p className="text-2xl font-semibold mt-1 tracking-wide">{certificate.associatedProject}</p>
                             </div>
-                        </header>
-
-                        <main className="flex-grow flex flex-col justify-center text-center">
-                            
-                            <div className="mb-8">
-                                <p className="text-xl tracking-[0.3em] text-gold uppercase">Certificate of Achievement</p>
-                                <h1 className="text-5xl font-bold tracking-tight text-foreground/90 uppercase mt-2">{certificate.associatedProject}</h1>
+                            <div>
+                                <p className="text-sm font-sans tracking-[0.2em] text-muted-foreground uppercase">Task/Feature</p>
+                                <p className="text-2xl font-semibold mt-1 tracking-wide">{certificate.taskTitle}</p>
                             </div>
-                            
-                            <p className="text-muted-foreground text-lg">This certificate is proudly presented to</p>
-                            <p className="text-4xl font-semibold my-2 text-primary">{certificate.requesterName}</p>
-                            
-                            <p className="text-muted-foreground mt-4 text-lg">for successfully completing the task</p>
-                            <p className="text-2xl font-bold mt-2 uppercase tracking-wider">{certificate.taskTitle}</p>
-                            
+                        </div>
+                        
+                        <div className="w-full h-px bg-border/50 my-12"></div>
 
-                            <div className="mt-16 w-full max-w-3xl mx-auto flex justify-between items-end">
+                        <div className="grid grid-cols-3 gap-8 w-full max-w-4xl mx-auto text-sm">
+                            <div className="text-center">
+                                <p className="font-semibold">{format(approvalDate, 'dd MMM yyyy').toUpperCase()}</p>
+                                <div className="w-2/3 h-px bg-border/50 mx-auto my-1.5"></div>
+                                <p className="text-xs text-muted-foreground font-sans">Completion Date</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="font-semibold">{certificate.qaTesterName.toUpperCase()}</p>
+                                <div className="w-2/3 h-px bg-border/50 mx-auto my-1.5"></div>
+                                <p className="text-xs text-muted-foreground font-sans">QA Sign-off</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="font-semibold">{certificate.requesterName.toUpperCase()}</p>
+                                <div className="w-2/3 h-px bg-border/50 mx-auto my-1.5"></div>
+                                <p className="text-xs text-muted-foreground font-sans">Developer/Team</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-16 text-center w-full">
+                            <p className="text-xs text-muted-foreground font-sans max-w-lg mx-auto">
+                            VERIFICATION: THE TASK/FEATURE HAS BEEN COMPLETED SATISFACTORILY, MEETING THE REQUIREMENTS/SPECIFICATIONS.
+                            </p>
+                            <div className="flex justify-between items-end mt-8 w-full max-w-lg mx-auto">
                                 <div className="text-center w-48">
                                     <SignaturePlaceholder />
-                                    <div className="w-full h-px bg-border mx-auto mt-1"></div>
-                                    <p className="text-xs uppercase tracking-widest text-muted-foreground mt-1.5 font-semibold">{certificate.qaTesterName}</p>
-                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">QA Sign-off</p>
+                                    <div className="w-full h-px bg-border/50 mx-auto mt-1"></div>
+                                    <p className="text-xs text-muted-foreground font-sans mt-1.5">Signature</p>
                                 </div>
-                                
                                 <div className="text-center w-48">
-                                <p className="font-semibold uppercase tracking-wider pb-1 text-lg">{format(approvalDate, 'do MMMM yyyy')}</p>
-                                    <div className="w-full h-px bg-border mx-auto"></div>
-                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1.5">Date of Issue</p>
+                                    <p className="font-semibold pb-1">{format(approvalDate, 'dd MMM yyyy').toUpperCase()}</p>
+                                    <div className="w-full h-px bg-border/50 mx-auto mt-1"></div>
+                                    <p className="text-xs text-muted-foreground font-sans mt-1.5">Date</p>
                                 </div>
                             </div>
-                            
-                            <div className="mt-auto pt-12">
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider max-w-lg mx-auto">
-                                This certificate confirms that the task/feature has been completed satisfactorily, meeting all specified requirements and quality assurance standards.
-                                </p>
-                            </div>
-                        </main>
-                    </div>
+                        </div>
+                    </main>
                 </div>
             </div>
         </div>
