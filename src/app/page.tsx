@@ -76,6 +76,10 @@ export default function LoginPage() {
                 case 'auth/too-many-requests':
                     errorMessage = 'Too many failed login attempts. Please try again later.';
                     break;
+                case 'auth/configuration-not-found':
+                case 'auth/invalid-api-key':
+                    errorMessage = 'Firebase is not configured correctly. Please check your environment variables.';
+                    break;
                 default:
                     errorMessage = 'Failed to sign in. Please check your credentials.';
             }
