@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
             console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating one.");
             
-            const superAdminEmail = 'sshuaibu@gmail.com';
+            const superAdminEmail = 'sshuaibu@echobitstech.com';
             let role: User['role'] = 'requester';
 
             if (authUser.email?.toLowerCase() === superAdminEmail) {
