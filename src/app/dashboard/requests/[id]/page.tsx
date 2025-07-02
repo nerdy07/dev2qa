@@ -52,9 +52,14 @@ export default function RequestDetailsPage() {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
 
 
+  const commentsQuery = React.useMemo(() => {
+    if (!id) return undefined;
+    return query(collection(db!, 'comments'), where('requestId', '==', id as string), orderBy('createdAt', 'asc'));
+  }, [id]);
+
   const { data: comments, loading: commentsLoading } = useCollection<Comment>(
     'comments',
-    id ? query(collection(db!, 'comments'), where('requestId', '==', id), orderBy('createdAt', 'asc')) : undefined
+    commentsQuery
   );
 
   React.useEffect(() => {
