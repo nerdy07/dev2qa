@@ -1,6 +1,4 @@
 import { Sidebar } from '@/components/common/sidebar';
-import { useAuth } from '@/providers/auth-provider';
-import { redirect } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
@@ -8,9 +6,9 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen w-full bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {children}
       </main>
     </div>
