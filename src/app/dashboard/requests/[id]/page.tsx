@@ -8,7 +8,7 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -26,10 +26,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { CertificateRequest, Comment, User } from '@/lib/types';
+import { CertificateRequest, Comment } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -45,6 +46,12 @@ export default function RequestDetailsPage() {
   const [newComment, setNewComment] = React.useState('');
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
 
+  const [submissionRating, setSubmissionRating] = React.useState(0);
+  const [qaProcessRating, setQaProcessRating] = React.useState(0);
+  const [qaProcessFeedback, setQaProcessFeedback] = React.useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
+
+
   const { data: comments, loading: commentsLoading } = useCollection<Comment>(
     'comments',
     id ? query(collection(db!, 'comments'), where('requestId', '==', id), orderBy('createdAt', 'asc')) : undefined
@@ -59,7 +66,11 @@ export default function RequestDetailsPage() {
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
-                setRequest({ id: docSnap.id, ...docSnap.data() } as CertificateRequest);
+                const reqData = { id: docSnap.id, ...docSnap.data() } as CertificateRequest
+                setRequest(reqData);
+                setSubmissionRating(reqData.submissionRating || 0);
+                setQaProcessRating(reqData.qaProcessRating || 0);
+                setQaProcessFeedback(reqData.qaProcessFeedback || '');
             } else {
                 setError("Request not found.");
             }
@@ -172,6 +183,49 @@ export default function RequestDetailsPage() {
     }
   };
 
+  const handleSetSubmissionRating = async (rating: number) => {
+    if (!request || rating === request.submissionRating) return;
+    try {
+        const requestRef = doc(db!, 'requests', request.id);
+        await updateDoc(requestRef, { submissionRating: rating });
+        // Optimistically update local state
+        setRequest(prev => prev ? {...prev, submissionRating: rating} : null);
+        toast({
+            title: 'Rating Submitted',
+            description: 'Thank you for rating the submission quality.',
+        });
+    } catch (e) {
+        console.error("Error setting submission rating: ", e);
+        toast({ title: 'Rating Failed', variant: 'destructive', description: 'Could not save the rating.' });
+    }
+  };
+
+  const handlePostQAFeedback = async () => {
+    if (!request || !user || qaProcessRating === 0) {
+        toast({ title: 'Rating Required', description: 'Please select a star rating before submitting.', variant: 'destructive' });
+        return;
+    }
+    setIsSubmittingFeedback(true);
+    try {
+        const requestRef = doc(db!, 'requests', request.id);
+        await updateDoc(requestRef, { 
+            qaProcessRating: qaProcessRating,
+            qaProcessFeedback: qaProcessFeedback 
+        });
+        // Optimistically update local state
+        setRequest(prev => prev ? {...prev, qaProcessRating, qaProcessFeedback} : null);
+        toast({
+            title: 'Feedback Submitted',
+            description: 'Thank you for your feedback!',
+        });
+    } catch (e) {
+        console.error("Error submitting QA feedback: ", e);
+        toast({ title: 'Feedback Failed', variant: 'destructive', description: 'Could not save your feedback.' });
+    } finally {
+        setIsSubmittingFeedback(false);
+    }
+  };
+
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
       case 'approved':
@@ -225,6 +279,28 @@ export default function RequestDetailsPage() {
   const isActionable = user?.role === 'qa_tester' && request.status === 'pending';
   const createdAtDate = (request.createdAt as any)?.toDate() || new Date();
   const updatedAtDate = (request.updatedAt as any)?.toDate() || new Date();
+
+  const StarRating = ({ rating, setRating, disabled = false }: { rating: number, setRating?: (r: number) => void, disabled?: boolean }) => {
+    return (
+        <div className="flex items-center gap-1">
+            {[...Array(5)].map((_, index) => {
+                const starValue = index + 1;
+                return (
+                    <Star
+                        key={starValue}
+                        className={cn(
+                            'h-6 w-6 transition-colors',
+                            starValue <= rating ? 'text-gold fill-gold' : 'text-muted-foreground',
+                            !disabled && 'cursor-pointer hover:text-gold'
+                        )}
+                        onClick={() => !disabled && setRating?.(starValue)}
+                    />
+                );
+            })}
+        </div>
+    );
+  };
+
 
   return (
     <>
@@ -334,6 +410,18 @@ export default function RequestDetailsPage() {
                 </div>
                 )}
             </div>
+            {request.submissionRating && user?.id === request.requesterId ? (
+                <>
+                <Separator />
+                    <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Submission Quality Rating</span>
+                        <div className="flex items-center gap-2">
+                            <StarRating rating={request.submissionRating} disabled />
+                            <span className="text-sm font-medium">({request.submissionRating}/5)</span>
+                        </div>
+                    </div>
+                </>
+            ) : null}
             <Separator />
             <div>
                 <h4 className="font-semibold mb-2">Description</h4>
@@ -391,6 +479,73 @@ export default function RequestDetailsPage() {
                 </div>
             </CardFooter>
         </Card>
+
+        {/* QA Submission Rating */}
+        {user?.id === request.qaTesterId && request.status === 'approved' && (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Rate Submission Quality</CardTitle>
+                    <CardDescription>Optionally, rate the clarity and completeness of this request to help the requester improve.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {request.submissionRating ? (
+                        <div>
+                            <p className="text-sm font-medium mb-2">You rated this submission:</p>
+                            <StarRating rating={request.submissionRating} disabled />
+                        </div>
+                    ) : (
+                        <StarRating rating={submissionRating} setRating={handleSetSubmissionRating} />
+                    )}
+                </CardContent>
+            </Card>
+        )}
+
+        {/* Requester QA Process Feedback */}
+        {user?.id === request.requesterId && request.status !== 'pending' && (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Feedback on the QA Process</CardTitle>
+                    <CardDescription>Your anonymous feedback helps our QA team improve.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {request.qaProcessRating ? (
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-sm font-medium mb-2">Your rating:</p>
+                                <StarRating rating={request.qaProcessRating} disabled />
+                            </div>
+                            {request.qaProcessFeedback && (
+                                <div>
+                                    <p className="text-sm font-medium mb-2">Your feedback:</p>
+                                    <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md whitespace-pre-wrap">{request.qaProcessFeedback}</p>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div>
+                                <Label>How would you rate the review process?</Label>
+                                <StarRating rating={qaProcessRating} setRating={setQaProcessRating} />
+                            </div>
+                            <div>
+                                <Label htmlFor="qa-feedback-comment">Any additional comments? (Optional)</Label>
+                                <Textarea 
+                                    id="qa-feedback-comment"
+                                    placeholder="e.g., The rejection reason was very clear, thank you!"
+                                    value={qaProcessFeedback}
+                                    onChange={(e) => setQaProcessFeedback(e.target.value)}
+                                    className="min-h-[100px]"
+                                />
+                            </div>
+                            <Button onClick={handlePostQAFeedback} disabled={isSubmittingFeedback || qaProcessRating === 0}>
+                                {isSubmittingFeedback ? "Submitting..." : "Submit Feedback"}
+                            </Button>
+                            {qaProcessRating === 0 && <p className="text-xs text-muted-foreground">Please provide a star rating to submit feedback.</p>}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        )}
       </div>
     </>
   );

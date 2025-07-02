@@ -34,6 +34,9 @@ export type CertificateRequest = {
   rejectionReason?: string;
   certificateId?: string;
   certificateStatus?: 'valid' | 'revoked';
+  submissionRating?: number; // From QA to Requester
+  qaProcessRating?: number; // From Requester to QA
+  qaProcessFeedback?: string; // From Requester to QA
 };
 
 export type Certificate = {
