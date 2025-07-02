@@ -9,13 +9,14 @@ import { useRouter, usePathname } from 'next/navigation';
 import type { User } from '@/lib/types';
 import { auth, db, firebaseInitialized } from '@/lib/firebase';
 import { TriangleAlert } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
-  createUser: (name: string, email: string, pass: string, role: User['role'], expertise?: string) => Promise<any>;
+  createUser: (name: string, email: string, pass:string, role: User['role'], expertise?: string) => Promise<any>;
   updateUser: (uid: string, data: Partial<User>) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
 }
@@ -54,6 +55,73 @@ NEXT_PUBLIC_FIREBASE_APP_ID="1:1234567890:web:abcdef..."`}
     );
 }
 
+const FullPageSkeleton = () => (
+    <div className="flex min-h-screen w-full bg-background">
+        <div className="hidden h-screen w-64 flex-col border-r bg-card shadow-sm md:flex">
+            <div className="flex h-16 items-center border-b px-6">
+                <Skeleton className="h-8 w-32" />
+            </div>
+            <div className="flex-1 overflow-y-auto">
+                <nav className="grid items-start gap-1 px-4 py-4 text-sm font-medium">
+                    {[...Array(5)].map((_, i) => (
+                        <Skeleton key={i} className="h-9 w-full" />
+                    ))}
+                </nav>
+            </div>
+            <div className="mt-auto border-t p-4">
+                <Skeleton className="h-12 w-full" />
+            </div>
+        </div>
+        <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8">
+            <div className="flex-1 space-y-4">
+                <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
+                    <div className="grid gap-1">
+                        <Skeleton className="h-9 w-64" />
+                        <Skeleton className="h-5 w-80" />
+                    </div>
+                </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Skeleton className="h-[109px] w-full" />
+                <Skeleton className="h-[109px] w-full" />
+                <Skeleton className="h-[109px] w-full" />
+                <Skeleton className="h-[109px] w-full" />
+              </div>
+              <div className="mt-8">
+                <Skeleton className="h-8 w-48 mb-4" />
+                <div className="rounded-lg border shadow-sm">
+                    <div className="relative w-full overflow-auto">
+                        <table className="w-full caption-bottom text-sm">
+                            <thead className="[&_tr]:border-b">
+                                <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-32" /></th>
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell"><Skeleton className="h-5 w-24" /></th>
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell"><Skeleton className="h-5 w-24" /></th>
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden sm:table-cell"><Skeleton className="h-5 w-20" /></th>
+                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-16" /></th>
+                                    <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-16" /></th>
+                                </tr>
+                            </thead>
+                            <tbody className="[&_tr:last-child]:border-0">
+                                {[...Array(5)].map((_, i) => (
+                                    <tr key={i} className="border-b transition-colors hover:bg-muted/50">
+                                        <td className="p-4 align-middle"><Skeleton className="h-5 w-40" /></td>
+                                        <td className="p-4 align-middle hidden md:table-cell"><Skeleton className="h-5 w-28" /></td>
+                                        <td className="p-4 align-middle hidden lg:table-cell"><Skeleton className="h-5 w-28" /></td>
+                                        <td className="p-4 align-middle hidden sm:table-cell"><Skeleton className="h-5 w-24" /></td>
+                                        <td className="p-4 align-middle"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                        <td className="p-4 align-middle text-right"><Skeleton className="h-8 w-8 ml-auto" /></td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+              </div>
+            </div>
+        </main>
+    </div>
+);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,14 +153,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const superAdminEmail = 'sshuaibu@echobitstech.com';
             let role: User['role'] = 'requester';
 
-            if (authUser.email?.toLowerCase() === superAdminEmail) {
+            // Check if the current user is the super admin email
+            if (authUser.email?.toLowerCase() === superAdminEmail.toLowerCase()) {
                 role = 'admin';
             } else {
+                // Check if this is the very first user in the system
                 const usersCollectionRef = collection(db!, 'users');
                 const q = query(usersCollectionRef, limit(1));
                 const querySnapshot = await getDocs(q);
                 
                 if (querySnapshot.empty) {
+                    // If no users exist, make this first user an admin
                     role = 'admin';
                 }
             }
@@ -103,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               role: role,
             };
             await setDoc(userDocRef, userToCreate);
-            setUser({ id: authUser.uid, ...userToCreate });
+            setUser({ id: authUser.uid, ...userToCreate, name: userToCreate.name, role: userToCreate.role });
         }
       } else {
         setUser(null);
@@ -176,11 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   if (loading) {
-    return (
-        <div className="flex h-screen items-center justify-center">
-            <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-primary border-t-transparent"></div>
-        </div>
-    );
+    return <FullPageSkeleton />;
   }
 
   return (
