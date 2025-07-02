@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
@@ -80,12 +80,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: authUser.photoURL || undefined
           });
         } else {
-            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating a new one.");
+            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Checking if this is the first user.");
+            
+            // Check if any other users exist in the database.
+            const usersCollectionRef = collection(db!, 'users');
+            const q = query(usersCollectionRef, limit(1));
+            const querySnapshot = await getDocs(q);
+            
+            const isFirstUser = querySnapshot.empty;
+            const role: User['role'] = isFirstUser ? 'admin' : 'requester';
+
+            if (isFirstUser) {
+              console.log("This is the first user. Assigning admin role.");
+            } else {
+              console.log("Other users exist. Assigning requester role.");
+            }
+
             // This is a failsafe for when an Auth user exists without a DB record.
             const userToCreate: Omit<User, 'id'> = {
               name: authUser.displayName || 'New User',
               email: authUser.email!,
-              role: 'requester', // Default to least privileged role
+              role: role,
             };
             await setDoc(userDocRef, userToCreate);
             setUser({ id: authUser.uid, ...userToCreate });
