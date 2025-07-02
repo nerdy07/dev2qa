@@ -8,6 +8,7 @@ import {
   LogOut,
   Settings,
   Shield,
+  Trophy,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -34,6 +35,7 @@ export function Sidebar() {
   const navItems = {
     admin: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
       { href: '/dashboard/admin/users', icon: Users, label: 'Users' },
       { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams' },
       { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects' },
@@ -41,9 +43,11 @@ export function Sidebar() {
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
       { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request' },
+      { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
     ],
     qa_tester: [
         { href: '/dashboard', icon: LayoutDashboard, label: 'Pending Requests' },
+        { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
     ],
   };
 
