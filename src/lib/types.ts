@@ -62,3 +62,28 @@ export type Comment = {
   text: string;
   createdAt: any; // Firestore Timestamp
 };
+
+export type Infraction = {
+  id: string;
+  userId: string;
+  userName: string;
+  infractionType: string;
+  description: string;
+  deductionPercentage: number;
+  dateIssued: any; // Firestore Timestamp
+  issuedById: string;
+  issuedByName: string;
+};
+
+export type Bonus = {
+  id: string;
+  userId: string;
+  userName: string;
+  bonusType: string;
+  description: string;
+  amount: number;
+  currency: 'NGN' | 'PERCENTAGE';
+  dateIssued: any; // Firestore Timestamp
+  issuedById: string;
+  issuedByName: string;
+};

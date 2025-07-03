@@ -1,6 +1,7 @@
 'use client';
 import {
   Award,
+  BookUser,
   ChevronDown,
   FilePlus2,
   FolderKanban,
@@ -8,6 +9,8 @@ import {
   LogOut,
   Settings,
   Shield,
+  ShieldX,
+  Sparkles,
   Trophy,
   Users,
 } from 'lucide-react';
@@ -39,15 +42,19 @@ export function Sidebar() {
       { href: '/dashboard/admin/users', icon: Users, label: 'Users' },
       { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams' },
       { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects' },
+      { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions' },
+      { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
     ],
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
       { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request' },
       { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+      { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
     ],
     qa_tester: [
         { href: '/dashboard', icon: LayoutDashboard, label: 'Pending Requests' },
         { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+        { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
     ],
   };
 
