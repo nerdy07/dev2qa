@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { approveRequestAndSendEmail, rejectRequest } from '@/app/requests/actions';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -92,40 +93,18 @@ export default function RequestDetailsPage() {
 
   const handleApprove = async () => {
     if (!request || !user) return;
-    try {
-        // 1. Create Certificate
-        const certCollection = collection(db!, 'certificates');
-        const certDocRef = await addDoc(certCollection, {
-            requestId: request.id,
-            taskTitle: request.taskTitle,
-            associatedTeam: request.associatedTeam,
-            associatedProject: request.associatedProject,
-            requesterName: request.requesterName,
-            qaTesterName: user.name,
-            approvalDate: serverTimestamp(),
-            status: 'valid',
-        });
+    
+    const result = await approveRequestAndSendEmail(request, user);
 
-        // 2. Update Request
-        const requestRef = doc(db!, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'approved',
-            qaTesterId: user.id,
-            qaTesterName: user.name,
-            updatedAt: serverTimestamp(),
-            certificateId: certDocRef.id,
-            certificateStatus: 'valid',
-        });
-
+    if (result.success) {
         toast({
             title: 'Request Approved',
             description: `Certificate for "${request.taskTitle}" has been generated.`,
         });
         router.push('/dashboard');
-
-    } catch (e) {
-        console.error("Error approving request: ", e);
-        toast({ title: 'Approval Failed', variant: 'destructive' });
+    } else {
+        console.error("Error approving request: ", result.error);
+        toast({ title: 'Approval Failed', variant: 'destructive', description: result.error });
     }
   }
   
@@ -141,24 +120,18 @@ export default function RequestDetailsPage() {
         return;
     }
 
-    try {
-        const requestRef = doc(db!, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'rejected',
-            rejectionReason: rejectionReason,
-            qaTesterId: user.id,
-            qaTesterName: user.name,
-            updatedAt: serverTimestamp(),
-        });
+    const result = await rejectRequest(request, user, rejectionReason);
+
+    if (result.success) {
         toast({
             title: 'Request Rejected',
             description: `Request for "${request.taskTitle}" has been rejected.`,
             variant: 'destructive'
         });
         router.push('/dashboard');
-    } catch(e) {
-        console.error("Error rejecting request: ", e);
-        toast({ title: 'Rejection Failed', variant: 'destructive' });
+    } else {
+        console.error("Error rejecting request: ", result.error);
+        toast({ title: 'Rejection Failed', variant: 'destructive', description: result.error });
     }
   }
 

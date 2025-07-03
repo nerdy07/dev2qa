@@ -124,6 +124,7 @@ export default function NewRequestPage() {
             ...values,
             requesterId: user.id,
             requesterName: user.name,
+            requesterEmail: user.email,
             status: 'pending',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),

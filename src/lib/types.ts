@@ -28,6 +28,7 @@ export type CertificateRequest = {
   taskLink?: string;
   requesterId: string;
   requesterName: string;
+  requesterEmail: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: any; // Firestore Timestamp
   updatedAt: any; // Firestore Timestamp
