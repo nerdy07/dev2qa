@@ -198,9 +198,9 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
         if (comment.userRole === 'requester' && request.qaTesterId) {
             // Requester commented, notify the assigned QA tester
             const userRef = doc(db!, 'users', request.qaTesterId);
-            const userSnap = await getDocs(query(collection(db!, 'users'), where('__name__', '==', request.qaTesterId)));
-            if (!userSnap.empty) {
-                const qaTester = userSnap.docs[0].data() as User;
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                const qaTester = userSnap.data() as User;
                 recipientEmail = qaTester.email;
                 recipientName = qaTester.name;
             }
@@ -280,9 +280,11 @@ export async function approveLeaveRequestAndNotify(requestId: string, approver: 
             reviewedAt: serverTimestamp(),
         });
 
-        const userSnap = await getDocs(query(collection(db!, 'users'), where('__name__', '==', request.userId)));
-        if (!userSnap.empty) {
-            const user = userSnap.docs[0].data() as User;
+        const userRef = doc(db!, 'users', request.userId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+            const user = userSnap.data() as User;
             await sendEmail({
                 to: user.email,
                 subject: `Your Leave Request has been Approved`,
@@ -319,9 +321,11 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejector: U
             reviewedAt: serverTimestamp(),
         });
 
-        const userSnap = await getDocs(query(collection(db!, 'users'), where('__name__', '==', request.userId)));
-        if (!userSnap.empty) {
-            const user = userSnap.docs[0].data() as User;
+        const userRef = doc(db!, 'users', request.userId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+            const user = userSnap.data() as User;
             await sendEmail({
                 to: user.email,
                 subject: `Your Leave Request has been Rejected`,
