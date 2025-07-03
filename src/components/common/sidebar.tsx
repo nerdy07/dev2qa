@@ -5,6 +5,7 @@ import {
   CalendarCheck,
   DollarSign,
   FilePlus2,
+  Fingerprint,
   FolderKanban,
   LayoutDashboard,
   Shield,
@@ -42,6 +43,8 @@ const navItems: { [key in User['role']]: NavItemOrSeparator[] } = {
       { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
       { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll' },
       { href: '/dashboard/admin/leave', icon: CalendarCheck, label: 'Leave Management' },
+      { type: 'separator' },
+      { href: '/dashboard/admin/diagnostics', icon: Fingerprint, label: 'Diagnostics' },
     ],
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
