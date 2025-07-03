@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'CertiTrack Pro',
-  description: 'Universal Task Completion Certificate System',
+  title: 'Dev2QA',
+  description: 'Universal Task Completion Certificate System by echobitstech',
 };
 
 export default function RootLayout({
