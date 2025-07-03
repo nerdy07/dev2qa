@@ -28,6 +28,7 @@ import { useCollection } from '@/hooks/use-collection';
 import { INFRACTION_TYPES } from '@/lib/constants';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { sendInfractionNotification } from '@/app/requests/actions';
 
 const formSchema = z.object({
   userId: z.string({ required_error: 'Please select a user.' }),
@@ -70,7 +71,7 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
     }
 
     try {
-      await addDoc(collection(db!, 'infractions'), {
+      const infractionData = {
         userId: selectedUser.id,
         userName: selectedUser.name,
         infractionType: values.infractionType,
@@ -79,7 +80,13 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
         dateIssued: serverTimestamp(),
         issuedById: currentUser.id,
         issuedByName: currentUser.name,
-      });
+      };
+
+      await addDoc(collection(db!, 'infractions'), infractionData);
+      
+      const infractionWithEmail = { ...infractionData, userName: selectedUser.email };
+      await sendInfractionNotification(infractionWithEmail);
+
 
       toast({
         title: 'Infraction Issued',

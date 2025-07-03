@@ -16,6 +16,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { LEAVE_TYPES } from '@/lib/constants';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { notifyAdminsOnLeaveRequest } from '@/app/requests/actions';
 
 const formSchema = z.object({
   leaveType: z.string({ required_error: 'Please select a leave type.' }),
@@ -61,7 +62,7 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
     }
 
     try {
-      await addDoc(collection(db!, 'leaveRequests'), {
+      const leaveData = {
         userId: currentUser.id,
         userName: currentUser.name,
         leaveType: values.leaveType,
@@ -69,9 +70,13 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         endDate: values.dates.to,
         reason: values.reason,
         daysCount: daysCount,
-        status: 'pending',
+        status: 'pending' as const,
         requestedAt: serverTimestamp(),
-      });
+      };
+      
+      const docRef = await addDoc(collection(db!, 'leaveRequests'), leaveData);
+      
+      await notifyAdminsOnLeaveRequest({ id: docRef.id, ...leaveData });
 
       toast({
         title: 'Leave Request Submitted',

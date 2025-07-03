@@ -31,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { approveRequestAndSendEmail, rejectRequest, sendTestEmail } from '@/app/requests/actions';
+import { approveRequestAndSendEmail, rejectRequest, sendTestEmail, notifyOnNewComment } from '@/app/requests/actions';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -141,14 +141,19 @@ export default function RequestDetailsPage() {
 
     setIsSubmittingComment(true);
     try {
-      await addDoc(collection(db!, 'comments'), {
+      const commentData = {
         requestId: request.id,
         userId: user.id,
         userName: user.name,
         userRole: user.role,
         text: newComment,
         createdAt: serverTimestamp(),
-      });
+      }
+      await addDoc(collection(db!, 'comments'), commentData);
+      
+      // Send notification email
+      await notifyOnNewComment(request, {id: '', ...commentData});
+
       setNewComment('');
     } catch (error) {
       console.error("Error posting comment: ", error);

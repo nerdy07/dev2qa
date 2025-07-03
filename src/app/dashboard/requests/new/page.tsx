@@ -36,6 +36,7 @@ import { Team, Project, User } from '@/lib/types';
 import { query, where, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
+import { notifyOnNewRequest } from '@/app/requests/actions';
 
 const formSchema = z.object({
   taskTitle: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -120,15 +121,18 @@ export default function NewRequestPage() {
     }
 
     try {
-        await addDoc(collection(db!, 'requests'), {
+        const requestData = {
             ...values,
             requesterId: user.id,
             requesterName: user.name,
             requesterEmail: user.email,
-            status: 'pending',
+            status: 'pending' as const,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-        });
+        };
+        const docRef = await addDoc(collection(db!, 'requests'), requestData);
+        
+        await notifyOnNewRequest({ id: docRef.id, ...requestData });
 
         toast({
           title: 'Request Submitted!',

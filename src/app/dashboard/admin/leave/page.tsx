@@ -14,14 +14,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/providers/auth-provider';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { approveLeaveRequestAndNotify, rejectLeaveRequestAndNotify } from '@/app/requests/actions';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -53,18 +51,12 @@ export default function LeaveManagementPage() {
 
   const handleApprove = async (request: LeaveRequest) => {
     if (!currentUser) return;
-    try {
-      const requestRef = doc(db, 'leaveRequests', request.id);
-      await updateDoc(requestRef, {
-        status: 'approved',
-        reviewedById: currentUser.id,
-        reviewedByName: currentUser.name,
-        reviewedAt: serverTimestamp(),
-      });
+    const result = await approveLeaveRequestAndNotify(request, currentUser);
+    if (result.success) {
       toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
-    } catch (e) {
-      console.error("Error approving leave:", e);
-      toast({ title: 'Approval Failed', variant: 'destructive' });
+    } else {
+      console.error("Error approving leave:", result.error);
+      toast({ title: 'Approval Failed', variant: 'destructive', description: result.error });
     }
   };
 
@@ -78,22 +70,17 @@ export default function LeaveManagementPage() {
       toast({ title: 'Reason Required', description: 'Please provide a reason of at least 10 characters.', variant: 'destructive' });
       return;
     }
-    try {
-      const requestRef = doc(db, 'leaveRequests', selectedRequest.id);
-      await updateDoc(requestRef, {
-        status: 'rejected',
-        rejectionReason: rejectionReason,
-        reviewedById: currentUser.id,
-        reviewedByName: currentUser.name,
-        reviewedAt: serverTimestamp(),
-      });
-      toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });
-      setIsRejectionDialogOpen(false);
-      setRejectionReason('');
-      setSelectedRequest(null);
-    } catch (e) {
-      console.error("Error rejecting leave:", e);
-      toast({ title: 'Rejection Failed', variant: 'destructive' });
+    
+    const result = await rejectLeaveRequestAndNotify(selectedRequest, currentUser, rejectionReason);
+
+    if (result.success) {
+        toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });
+        setIsRejectionDialogOpen(false);
+        setRejectionReason('');
+        setSelectedRequest(null);
+    } else {
+        console.error("Error rejecting leave:", result.error);
+        toast({ title: 'Rejection Failed', variant: 'destructive', description: result.error });
     }
   };
 

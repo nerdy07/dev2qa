@@ -29,6 +29,7 @@ import { BONUS_TYPES } from '@/lib/constants';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from '../ui/input';
+import { sendBonusNotification } from '@/app/requests/actions';
 
 const formSchema = z.object({
   userId: z.string({ required_error: 'Please select a user.' }),
@@ -75,17 +76,24 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
     }
 
     try {
-      await addDoc(collection(db!, 'bonuses'), {
+      const bonusData = {
         userId: selectedUser.id,
         userName: selectedUser.name,
         bonusType: values.bonusType,
         description: values.description,
         amount: selectedBonusType.currency === 'PERCENTAGE' ? selectedBonusType.amount : values.amount,
-        currency: selectedBonusType.currency,
+        currency: selectedBonusType.currency as 'NGN' | 'PERCENTAGE',
         dateIssued: serverTimestamp(),
         issuedById: currentUser.id,
         issuedByName: currentUser.name,
-      });
+      };
+
+      await addDoc(collection(db!, 'bonuses'), bonusData);
+      
+      // We need to pass the user's email to the notification function
+      const bonusWithEmail = { ...bonusData, userName: selectedUser.email };
+      await sendBonusNotification(bonusWithEmail);
+
 
       toast({
         title: 'Bonus Issued',

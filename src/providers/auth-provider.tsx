@@ -10,6 +10,7 @@ import type { User } from '@/lib/types';
 import { auth, db, firebaseInitialized } from '@/lib/firebase';
 import { TriangleAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sendWelcomeEmail } from '@/app/requests/actions';
 
 interface AuthContextType {
   user: User | null;
@@ -229,6 +230,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await setDoc(userDocRef, userData);
+
+    // Send welcome email after creating user
+    await sendWelcomeEmail(name, email);
 
     return userCredential;
   };
