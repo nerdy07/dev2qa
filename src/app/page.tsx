@@ -33,7 +33,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/providers/auth-provider';
-import { Award, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
+import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
@@ -107,7 +108,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 dark:bg-background">
       <div className="mb-8 flex items-center gap-2 font-semibold text-primary">
-        <Award className="h-7 w-7" />
+        <Image src="/logo.png" alt="Dev2QA Logo" width={28} height={28} />
         <h1 className="text-2xl">Dev2QA</h1>
       </div>
       <Card className="w-full max-w-md shadow-lg">

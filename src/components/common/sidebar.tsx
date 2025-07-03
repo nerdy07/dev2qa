@@ -1,7 +1,6 @@
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Award,
   BookUser,
   CalendarCheck,
   DollarSign,
@@ -16,6 +15,7 @@ import {
   Menu,
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 import { Separator } from '@/components/ui/separator';
@@ -99,7 +99,7 @@ export function Sidebar() {
     <aside className="hidden h-full w-64 flex-col border-r bg-card shadow-sm md:flex">
       <div className="flex h-16 shrink-0 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary">
-          <Award className="h-6 w-6" />
+          <Image src="/logo.png" alt="Dev2QA Logo" width={24} height={24} />
           <span>Dev2QA</span>
         </Link>
       </div>
@@ -129,7 +129,7 @@ export function MobileSidebar() {
                 </SheetHeader>
                 <div className="flex h-16 shrink-0 items-center border-b px-6">
                     <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary">
-                        <Award className="h-6 w-6" />
+                        <Image src="/logo.png" alt="Dev2QA Logo" width={24} height={24} />
                         <span>Dev2QA</span>
                     </Link>
                 </div>

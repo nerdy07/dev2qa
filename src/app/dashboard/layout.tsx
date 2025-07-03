@@ -6,9 +6,9 @@ import { useAuth } from '@/providers/auth-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, ChevronDown } from 'lucide-react';
-import { Award } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function DashboardLayout({
   children,
@@ -25,7 +25,7 @@ export default function DashboardLayout({
           <div className="flex items-center gap-2">
             <MobileSidebar />
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary md:hidden">
-              <Award className="h-6 w-6" />
+              <Image src="/logo.png" alt="Dev2QA Logo" width={24} height={24} />
               <span>Dev2QA</span>
             </Link>
           </div>
