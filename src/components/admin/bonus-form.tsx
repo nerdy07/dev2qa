@@ -98,9 +98,10 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
         description: `A bonus has been recorded for ${selectedUser.name}.`,
       });
       onSuccess();
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Error issuing bonus:', error);
-      toast({ title: 'Operation Failed', description: 'Could not issue the bonus.', variant: 'destructive' });
+      toast({ title: 'Operation Failed', description: error.message, variant: 'destructive' });
     }
   }
 

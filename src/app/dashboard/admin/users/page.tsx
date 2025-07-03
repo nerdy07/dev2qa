@@ -75,10 +75,11 @@ export default function UsersPage() {
             description: `A password reset link has been sent to ${user.email}.`,
         });
     } catch (err) {
-        console.error("Error sending password reset email:", err);
+        const error = err as Error;
+        console.error("Error sending password reset email:", error);
         toast({
-            title: 'Error',
-            description: 'Failed to send password reset email.',
+            title: 'Error Sending Reset Email',
+            description: error.message,
             variant: 'destructive',
         });
     }
@@ -92,11 +93,12 @@ export default function UsersPage() {
                 title: 'User Deleted',
                 description: `${selectedUser.name}'s data has been deleted. Note: The auth account must be deleted separately using a backend function.`,
             });
-        } catch (error) {
+        } catch (err) {
+            const error = err as Error;
             console.error("Error deleting user:", error);
             toast({
-                title: 'Error',
-                description: 'Failed to delete user.',
+                title: 'Error Deleting User',
+                description: error.message,
                 variant: 'destructive',
             });
         }

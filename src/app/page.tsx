@@ -66,26 +66,7 @@ export default function LoginPage() {
       await login(values.email, values.password);
       router.push('/dashboard');
     } catch (err: any) {
-        let errorMessage = 'An unexpected error occurred.';
-        if (err.code) {
-            switch (err.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    errorMessage = 'Invalid email or password. Please try again.';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Too many failed login attempts. Please try again later.';
-                    break;
-                case 'auth/configuration-not-found':
-                case 'auth/invalid-api-key':
-                    errorMessage = 'Firebase is not configured correctly. Please check your environment variables.';
-                    break;
-                default:
-                    errorMessage = 'Failed to sign in. Please check your credentials.';
-            }
-        }
-        setError(errorMessage);
+        setError(err.message || 'An unexpected error occurred.');
         console.error(err);
     }
   }
@@ -101,7 +82,7 @@ export default function LoginPage() {
         setIsResetDialogOpen(false);
         setResetEmail('');
     } catch (error: any) {
-        toast({ title: "Error", description: "Could not send password reset email. Please try again.", variant: "destructive" });
+        toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   }
 

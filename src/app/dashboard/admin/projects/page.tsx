@@ -73,10 +73,11 @@ export default function ProjectsPage() {
                 description: `The project "${selectedProject.name}" has been deleted.`,
             });
         } catch(e) {
-            console.error("Error deleting project: ", e);
+            const error = e as Error;
+            console.error("Error deleting project: ", error);
             toast({
-                title: 'Error',
-                description: 'Failed to delete project.',
+                title: 'Error Deleting Project',
+                description: error.message,
                 variant: 'destructive',
             })
         }
@@ -104,11 +105,12 @@ export default function ProjectsPage() {
         }
         handleFormSuccess();
         return true;
-      } catch (error) {
+      } catch (e) {
+        const error = e as Error;
         console.error("Error saving project: ", error);
         toast({
-            title: 'Error',
-            description: 'Failed to save project.',
+            title: 'Error Saving Project',
+            description: error.message,
             variant: 'destructive'
         });
         return false;

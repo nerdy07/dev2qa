@@ -72,11 +72,12 @@ export default function TeamsPage() {
                 title: 'Team Deleted',
                 description: `The team "${selectedTeam.name}" has been deleted.`,
             });
-        } catch (error) {
+        } catch (e) {
+            const error = e as Error;
             console.error("Error deleting team: ", error);
             toast({
-                title: 'Error',
-                description: 'Failed to delete team.',
+                title: 'Error Deleting Team',
+                description: error.message,
                 variant: 'destructive',
             });
         }
@@ -104,11 +105,12 @@ export default function TeamsPage() {
         }
         handleFormSuccess();
         return true;
-    } catch (error) {
+    } catch (e) {
+        const error = e as Error;
         console.error("Error saving team: ", error);
         toast({
-            title: 'Error',
-            description: 'Failed to save team.',
+            title: 'Error Saving Team',
+            description: error.message,
             variant: 'destructive'
         });
         return false;

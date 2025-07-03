@@ -139,9 +139,10 @@ export default function NewRequestPage() {
           description: 'Your certificate request has been sent for QA review.',
         });
         router.push('/dashboard');
-    } catch (error) {
+    } catch (err) {
+        const error = err as Error;
         console.error("Error creating request: ", error);
-        toast({ title: "Submission Failed", description: "Could not create your request. Please try again.", variant: "destructive"});
+        toast({ title: "Submission Failed", description: error.message, variant: "destructive"});
     }
   }
 

@@ -8,7 +8,6 @@ export async function getQATesterSuggestion(input: SuggestQATesterInput): Promis
     return { success: true, data: result };
   } catch (error) {
     console.error('AI suggestion failed:', error);
-    // In a real app, you might want to log this error more formally
-    return { success: false, error: 'Failed to get an AI suggestion. Please try again.' };
+    return { success: false, error: (error as Error).message || 'An unknown error occurred during AI suggestion.' };
   }
 }

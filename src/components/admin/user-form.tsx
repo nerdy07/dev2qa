@@ -103,13 +103,9 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
         onSuccess();
     } catch (error: any) {
         console.error('User form error:', error);
-        let errorMessage = 'An unexpected error occurred.';
-        if (error.code === 'auth/email-already-in-use') {
-            errorMessage = 'This email address is already in use.';
-        }
         toast({
             title: isEditing ? 'Update Failed' : 'Creation Failed',
-            description: errorMessage,
+            description: error.message,
             variant: 'destructive'
         });
     }

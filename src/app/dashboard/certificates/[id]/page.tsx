@@ -143,8 +143,9 @@ export default function CertificatePage() {
             setIsRevokeDialogOpen(false);
             setRevocationReason('');
         } catch(e) {
-            console.error("Error revoking certificate:", e);
-            toast({ title: 'Revocation Failed', variant: 'destructive', description: 'Could not update the certificate status.' });
+            const error = e as Error;
+            console.error("Error revoking certificate:", error);
+            toast({ title: 'Revocation Failed', variant: 'destructive', description: error.message });
         }
     }
 

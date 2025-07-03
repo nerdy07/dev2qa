@@ -92,9 +92,10 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
         description: `An infraction has been recorded for ${selectedUser.name}.`,
       });
       onSuccess();
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Error issuing infraction:', error);
-      toast({ title: 'Operation Failed', description: 'Could not issue the infraction.', variant: 'destructive' });
+      toast({ title: 'Operation Failed', description: error.message, variant: 'destructive' });
     }
   }
 

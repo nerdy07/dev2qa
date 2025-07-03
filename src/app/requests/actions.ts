@@ -1,6 +1,6 @@
 'use server';
 
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where, collectionGroup } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendEmail } from '@/lib/email';
 import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment } from '@/lib/types';
@@ -13,7 +13,6 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
     }
 
     try {
-        // 1. Create Certificate
         const certCollection = collection(db!, 'certificates');
         const certDocRef = await addDoc(certCollection, {
             requestId: request.id,
@@ -26,7 +25,6 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
             status: 'valid',
         });
 
-        // 2. Update Request
         const requestRef = doc(db!, 'requests', request.id);
         await updateDoc(requestRef, {
             status: 'approved',
@@ -37,23 +35,21 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
             certificateStatus: 'valid',
         });
 
-        // 3. Send Email Notification
-        const emailResult = await sendEmail({
-            to: request.requesterEmail,
-            subject: `Your Certificate Request has been Approved!`,
-            html: `
-                <h1>Congratulations, ${request.requesterName}!</h1>
-                <p>Your request for the task "<strong>${request.taskTitle}</strong>" has been approved.</p>
-                <p>You can view your certificate by logging into the Dev2QA portal.</p>
-                <br>
-                <p>Thank you,</p>
-                <p>The Dev2QA Team</p>
-            `
-        });
-
-        if (!emailResult.success) {
-             // Log the email failure but don't fail the whole operation
-            console.warn(`Request ${request.id} was approved, but the notification email failed to send.`, emailResult.error);
+        try {
+            await sendEmail({
+                to: request.requesterEmail,
+                subject: `Your Certificate Request has been Approved!`,
+                html: `
+                    <h1>Congratulations, ${request.requesterName}!</h1>
+                    <p>Your request for the task "<strong>${request.taskTitle}</strong>" has been approved.</p>
+                    <p>You can view your certificate by logging into the Dev2QA portal.</p>
+                    <br>
+                    <p>Thank you,</p>
+                    <p>The Dev2QA Team</p>
+                `
+            });
+        } catch (emailError) {
+             console.warn(`Request ${request.id} was approved, but the notification email failed to send.`, emailError);
         }
 
         revalidatePath(`/dashboard/requests/${request.id}`);
@@ -63,7 +59,7 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
 
     } catch (error) {
         console.error('Error approving request:', error);
-        return { success: false, error: 'An unexpected error occurred during the approval process.' };
+        return { success: false, error: (error as Error).message || 'An unexpected error occurred during the approval process.' };
     }
 }
 
@@ -83,20 +79,24 @@ export async function rejectRequest(request: CertificateRequest, rejector: User,
             updatedAt: serverTimestamp(),
         });
         
-        await sendEmail({
-            to: request.requesterEmail,
-            subject: `Action Required: Your Certificate Request was Rejected`,
-            html: `
-                <h1>Hello, ${request.requesterName},</h1>
-                <p>Your certificate request for the task "<strong>${request.taskTitle}</strong>" has been rejected.</p>
-                <p><strong>Reason provided by ${rejector.name}:</strong></p>
-                <p><em>${reason}</em></p>
-                <p>Please review the feedback and make the necessary changes. You can view more details and comments by logging into the Dev2QA portal.</p>
-                <br>
-                <p>Thank you,</p>
-                <p>The Dev2QA Team</p>
-            `
-        });
+        try {
+            await sendEmail({
+                to: request.requesterEmail,
+                subject: `Action Required: Your Certificate Request was Rejected`,
+                html: `
+                    <h1>Hello, ${request.requesterName},</h1>
+                    <p>Your certificate request for the task "<strong>${request.taskTitle}</strong>" has been rejected.</p>
+                    <p><strong>Reason provided by ${rejector.name}:</strong></p>
+                    <p><em>${reason}</em></p>
+                    <p>Please review the feedback and make the necessary changes. You can view more details and comments by logging into the Dev2QA portal.</p>
+                    <br>
+                    <p>Thank you,</p>
+                    <p>The Dev2QA Team</p>
+                `
+            });
+        } catch (emailError) {
+            console.warn(`Request ${request.id} was rejected, but the email failed.`, emailError);
+        }
         
         revalidatePath(`/dashboard/requests/${request.id}`);
         revalidatePath('/dashboard');
@@ -105,7 +105,7 @@ export async function rejectRequest(request: CertificateRequest, rejector: User,
 
     } catch (error) {
         console.error('Error rejecting request:', error);
-        return { success: false, error: 'An unexpected error occurred during the rejection process.' };
+        return { success: false, error: (error as Error).message || 'An unexpected error occurred during the rejection process.' };
     }
 }
 
@@ -134,7 +134,7 @@ export async function sendTestEmail(email: string) {
         }
     } catch (error) {
         console.error('Error sending test email:', error);
-        return { success: false, error: 'An unexpected error occurred while sending the test email.' };
+        return { success: false, error: (error as Error).message || 'An unexpected error occurred while sending the test email.' };
     }
 }
 
@@ -156,7 +156,7 @@ export async function sendWelcomeEmail(name: string, email: string) {
         return { success: true };
     } catch (error) {
         console.error('Error sending welcome email:', error);
-        return { success: false, error: 'Failed to send welcome email.' };
+        return { success: false, error: (error as Error).message || 'Failed to send welcome email.' };
     }
 }
 
@@ -185,7 +185,7 @@ export async function notifyOnNewRequest(request: Omit<CertificateRequest, 'id'>
         return { success: true };
     } catch (error) {
         console.error('Error notifying QA testers:', error);
-        return { success: false, error: 'Failed to send notification to QA testers.' };
+        return { success: false, error: (error as Error).message || 'Failed to send notification to QA testers.' };
     }
 }
 
@@ -196,7 +196,6 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
         let recipientName: string | undefined;
 
         if (comment.userRole === 'requester' && request.qaTesterId) {
-            // Requester commented, notify the assigned QA tester
             const userRef = doc(db!, 'users', request.qaTesterId);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
@@ -205,7 +204,6 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
                 recipientName = qaTester.name;
             }
         } else if (comment.userRole === 'qa_tester' || comment.userRole === 'admin') {
-            // QA or Admin commented, notify the requester
             recipientEmail = request.requesterEmail;
             recipientName = request.requesterName;
         }
@@ -228,58 +226,28 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
         return { success: true };
     } catch (error) {
         console.error('Error sending comment notification:', error);
-        return { success: false, error: 'Failed to send comment notification.' };
-    }
-}
-
-// --- Leave Management Actions ---
-
-export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id'> & {id: string}) {
-    try {
-        const adminQuery = query(collection(db!, 'users'), where('role', '==', 'admin'));
-        const adminSnapshot = await getDocs(adminQuery);
-        const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
-
-        if(adminEmails.length === 0) return { success: true, message: 'No admins to notify.' };
-        
-        await sendEmail({
-            to: adminEmails.join(','),
-            subject: `New Leave Request from ${request.userName}`,
-            html: `
-                <h1>New Leave Request for Approval</h1>
-                <p><strong>${request.userName}</strong> has submitted a new leave request.</p>
-                <ul>
-                    <li><strong>Type:</strong> ${request.leaveType}</li>
-                    <li><strong>Dates:</strong> ${format(request.startDate.toDate(), 'PPP')} to ${format(request.endDate.toDate(), 'PPP')} (${request.daysCount} days)</li>
-                    <li><strong>Reason:</strong> ${request.reason}</li>
-                </ul>
-                <p>Please log in to the Dev2QA dashboard to review and approve/reject the request.</p>
-            `
-        });
-        return { success: true };
-    } catch (error) {
-        console.error('Error notifying admins of leave request:', error);
-        return { success: false, error: 'Failed to send notification to admins.' };
+        return { success: false, error: (error as Error).message || 'Failed to send comment notification.' };
     }
 }
 
 export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
     try {
-        const requestRef = doc(db!, 'leaveRequests', requestId);
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const requestRef = doc(leaveRequestsCollection, requestId);
         const requestSnap = await getDoc(requestRef);
 
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
         
-        const requestData = requestSnap.data() as LeaveRequest;
-
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approverId,
             reviewedByName: approverName,
             reviewedAt: serverTimestamp(),
         });
+
+        const requestData = requestSnap.data() as LeaveRequest;
         
         try {
             const userRef = doc(db!, 'users', requestData.userId);
@@ -306,20 +274,19 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
 
     } catch (dbError) {
         console.error("Error in approveLeaveRequestAndNotify:", dbError);
-        return { success: false, error: 'An unexpected database error occurred during the leave approval process.' };
+        return { success: false, error: (dbError as Error).message || 'An unexpected database error occurred during the leave approval process.' };
     }
 }
 
 export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
     try {
-        const requestRef = doc(db!, 'leaveRequests', requestId);
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const requestRef = doc(leaveRequestsCollection, requestId);
         const requestSnap = await getDoc(requestRef);
         
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
-
-        const requestData = requestSnap.data() as LeaveRequest;
 
         await updateDoc(requestRef, {
             status: 'rejected',
@@ -328,6 +295,8 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedByName: rejectorName,
             reviewedAt: serverTimestamp(),
         });
+
+        const requestData = requestSnap.data() as LeaveRequest;
 
         try {
             const userRef = doc(db!, 'users', requestData.userId);
@@ -355,11 +324,38 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
 
     } catch (dbError) {
         console.error("Error in rejectLeaveRequestAndNotify:", dbError);
-        return { success: false, error: 'An unexpected database error occurred during the leave rejection process.' };
+        return { success: false, error: (dbError as Error).message || 'An unexpected database error occurred during the leave rejection process.' };
     }
 }
 
-// --- HR Notifications ---
+export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id'> & {id: string}) {
+    try {
+        const adminQuery = query(collection(db!, 'users'), where('role', '==', 'admin'));
+        const adminSnapshot = await getDocs(adminQuery);
+        const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
+
+        if(adminEmails.length === 0) return { success: true, message: 'No admins to notify.' };
+        
+        await sendEmail({
+            to: adminEmails.join(','),
+            subject: `New Leave Request from ${request.userName}`,
+            html: `
+                <h1>New Leave Request for Approval</h1>
+                <p><strong>${request.userName}</strong> has submitted a new leave request.</p>
+                <ul>
+                    <li><strong>Type:</strong> ${request.leaveType}</li>
+                    <li><strong>Dates:</strong> ${format(request.startDate.toDate(), 'PPP')} to ${format(request.endDate.toDate(), 'PPP')} (${request.daysCount} days)</li>
+                    <li><strong>Reason:</strong> ${request.reason}</li>
+                </ul>
+                <p>Please log in to the Dev2QA dashboard to review and approve/reject the request.</p>
+            `
+        });
+        return { success: true };
+    } catch (error) {
+        console.error('Error notifying admins of leave request:', error);
+        return { success: false, error: (error as Error).message || 'Failed to send notification to admins.' };
+    }
+}
 
 export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientEmail: string) {
     try {
@@ -376,7 +372,7 @@ export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientE
         return { success: true };
     } catch (error) {
         console.error('Error sending bonus notification:', error);
-        return { success: false, error: 'Failed to send bonus notification.' };
+        return { success: false, error: (error as Error).message || 'Failed to send bonus notification.' };
     }
 }
 
@@ -395,6 +391,6 @@ export async function sendInfractionNotification(infraction: Omit<Infraction, 'i
         return { success: true };
     } catch (error) {
         console.error('Error sending infraction notification:', error);
-        return { success: false, error: 'Failed to send infraction notification.' };
+        return { success: false, error: (error as Error).message || 'Failed to send infraction notification.' };
     }
 }

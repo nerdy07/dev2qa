@@ -82,8 +82,9 @@ export default function RequestDetailsPage() {
                 setError("Request not found.");
             }
         } catch (err) {
-            console.error(err);
-            setError("Failed to fetch request details.");
+            const error = err as Error;
+            console.error(error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -151,15 +152,15 @@ export default function RequestDetailsPage() {
       }
       await addDoc(collection(db!, 'comments'), commentData);
       
-      // Send notification email
       await notifyOnNewComment(request, {id: '', ...commentData});
 
       setNewComment('');
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error("Error posting comment: ", error);
       toast({
         title: "Comment Failed",
-        description: "Could not post your comment. Please try again.",
+        description: error.message,
         variant: "destructive"
       });
     } finally {
@@ -172,15 +173,15 @@ export default function RequestDetailsPage() {
     try {
         const requestRef = doc(db!, 'requests', request.id);
         await updateDoc(requestRef, { submissionRating: rating });
-        // Optimistically update local state
         setRequest(prev => prev ? {...prev, submissionRating: rating} : null);
         toast({
             title: 'Rating Submitted',
             description: 'Thank you for rating the submission quality.',
         });
     } catch (e) {
+        const error = e as Error;
         console.error("Error setting submission rating: ", e);
-        toast({ title: 'Rating Failed', variant: 'destructive', description: 'Could not save the rating.' });
+        toast({ title: 'Rating Failed', variant: 'destructive', description: error.message });
     }
   };
 
@@ -196,15 +197,15 @@ export default function RequestDetailsPage() {
             qaProcessRating: qaProcessRating,
             qaProcessFeedback: qaProcessFeedback 
         });
-        // Optimistically update local state
         setRequest(prev => prev ? {...prev, qaProcessRating, qaProcessFeedback} : null);
         toast({
             title: 'Feedback Submitted',
             description: 'Thank you for your feedback!',
         });
     } catch (e) {
+        const error = e as Error;
         console.error("Error submitting QA feedback: ", e);
-        toast({ title: 'Feedback Failed', variant: 'destructive', description: 'Could not save your feedback.' });
+        toast({ title: 'Feedback Failed', variant: 'destructive', description: error.message });
     } finally {
         setIsSubmittingFeedback(false);
     }
@@ -508,7 +509,6 @@ export default function RequestDetailsPage() {
                 </Card>
             )}
 
-            {/* QA Submission Rating */}
             {user?.id === request.qaTesterId && request.status === 'approved' && (
                 <Card>
                     <CardHeader>
@@ -528,7 +528,6 @@ export default function RequestDetailsPage() {
                 </Card>
             )}
 
-            {/* Requester QA Process Feedback */}
             {user?.id === request.requesterId && request.status !== 'pending' && (
                 <Card>
                     <CardHeader>

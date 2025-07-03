@@ -83,9 +83,10 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         description: `Your request for ${daysCount} day(s) off has been sent for approval.`,
       });
       onSuccess();
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error;
       console.error('Error submitting leave request:', error);
-      toast({ title: 'Operation Failed', description: 'Could not submit your leave request.', variant: 'destructive' });
+      toast({ title: 'Operation Failed', description: error.message, variant: 'destructive' });
     }
   }
 
