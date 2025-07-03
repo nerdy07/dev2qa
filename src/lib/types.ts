@@ -6,6 +6,7 @@ export type User = {
   photoURL?: string;
   expertise?: string;
   baseSalary?: number;
+  annualLeaveEntitlement?: number;
 };
 
 export type Team = {

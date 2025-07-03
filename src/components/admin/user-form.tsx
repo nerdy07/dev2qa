@@ -32,6 +32,7 @@ const formSchemaBase = z.object({
     role: z.enum(['requester', 'qa_tester', 'admin'], { required_error: 'Please select a role.' }),
     expertise: z.string().optional(),
     baseSalary: z.coerce.number().min(0, 'Salary must be a positive number.').optional(),
+    annualLeaveEntitlement: z.coerce.number().min(0, 'Leave must be a positive number.').default(20),
 });
   
 const createFormSchema = formSchemaBase.extend({
@@ -61,6 +62,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
       password: '',
       expertise: user?.expertise || '',
       baseSalary: user?.baseSalary || 0,
+      annualLeaveEntitlement: user?.annualLeaveEntitlement ?? 20,
     },
   });
 
@@ -75,6 +77,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 role: values.role,
                 expertise: values.role === 'qa_tester' ? values.expertise : '',
                 baseSalary: values.baseSalary,
+                annualLeaveEntitlement: values.annualLeaveEntitlement,
             };
             await updateUser(user.id, dataToUpdate);
             toast({
@@ -89,7 +92,8 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 createValues.password, 
                 createValues.role, 
                 createValues.expertise, 
-                createValues.baseSalary
+                createValues.baseSalary,
+                createValues.annualLeaveEntitlement,
             );
             toast({
                 title: 'User Created',
@@ -151,6 +155,22 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 </FormControl>
                 <FormDescription>
                     Enter the user's gross monthly salary before deductions and bonuses.
+                </FormDescription>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
+        <FormField
+            control={form.control}
+            name="annualLeaveEntitlement"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Annual Leave Entitlement (Days)</FormLabel>
+                <FormControl>
+                    <Input type="number" placeholder="e.g., 20" {...field} />
+                </FormControl>
+                <FormDescription>
+                    The total number of paid annual leave days per year.
                 </FormDescription>
                 <FormMessage />
             </FormItem>

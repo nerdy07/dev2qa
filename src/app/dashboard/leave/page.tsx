@@ -3,7 +3,7 @@
 import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, TriangleAlert } from 'lucide-react';
+import { PlusCircle, TriangleAlert, CalendarDays, CalendarCheck, CalendarClock } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,8 +15,9 @@ import type { LeaveRequest } from '@/lib/types';
 import { useAuth } from '@/providers/auth-provider';
 import { query, where, collection, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { format } from 'date-fns';
+import { format, getYear } from 'date-fns';
 import { LeaveRequestForm } from '@/components/leave/leave-request-form';
+import { StatCard } from '@/components/dashboard/stat-card';
 
 export default function MyLeavePage() {
   const { user } = useAuth();
@@ -24,6 +25,9 @@ export default function MyLeavePage() {
 
   const leaveQuery = React.useMemo(() => {
     if (!user?.id) return undefined;
+    const currentYear = getYear(new Date());
+    // This query fetches all leave requests for the user, sorted by date.
+    // Filtering for the current year will happen on the client-side for the calculation.
     return query(
       collection(db!, 'leaveRequests'),
       where('userId', '==', user.id),
@@ -32,6 +36,25 @@ export default function MyLeavePage() {
   }, [user?.id]);
 
   const { data: leaveRequests, loading, error } = useCollection<LeaveRequest>('leaveRequests', leaveQuery);
+
+  const leaveStats = React.useMemo(() => {
+    const totalEntitlement = user?.annualLeaveEntitlement || 0;
+    if (!leaveRequests) {
+      return { totalEntitlement, leaveTaken: 0, leaveRemaining: totalEntitlement };
+    }
+    const currentYear = getYear(new Date());
+    const leaveTaken = leaveRequests
+      .filter(req => 
+        req.status === 'approved' && 
+        req.leaveType === 'Annual Leave' &&
+        getYear(req.startDate.toDate()) === currentYear
+      )
+      .reduce((acc, req) => acc + req.daysCount, 0);
+    
+    const leaveRemaining = totalEntitlement - leaveTaken;
+
+    return { totalEntitlement, leaveTaken, leaveRemaining };
+  }, [leaveRequests, user?.annualLeaveEntitlement]);
 
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
@@ -112,7 +135,7 @@ export default function MyLeavePage() {
     <>
       <PageHeader
         title="My Leave"
-        description="Request time off and view your leave history."
+        description="Request time off and view your leave history and balance."
       >
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogTrigger asChild>
@@ -129,6 +152,13 @@ export default function MyLeavePage() {
           </DialogContent>
         </Dialog>
       </PageHeader>
+      
+      <div className="mb-8 grid gap-4 md:grid-cols-3">
+        <StatCard title="Annual Entitlement" value={`${leaveStats.totalEntitlement} days`} icon={CalendarDays} />
+        <StatCard title="Leave Taken (This Year)" value={`${leaveStats.leaveTaken} days`} icon={CalendarCheck} />
+        <StatCard title="Leave Remaining" value={`${leaveStats.leaveRemaining} days`} icon={CalendarClock} />
+      </div>
+
       <Card>
         <CardHeader>
             <CardTitle>Leave History</CardTitle>
