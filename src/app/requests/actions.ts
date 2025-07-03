@@ -265,15 +265,14 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
 
 export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
     try {
-        const requestRef = doc(db, 'leaveRequests', requestId);
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const requestRef = doc(leaveRequestsCollection, requestId);
         const requestSnap = await getDoc(requestRef);
 
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
-        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
-
-        // Perform the core database operation
+        
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approverId,
@@ -281,9 +280,11 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
             reviewedAt: serverTimestamp(),
         });
         
-        // Decouple email notification from the main operation
+        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+
         try {
-            const userRef = doc(db!, 'users', requestData.userId);
+            const usersCollection = collection(db!, 'users');
+            const userRef = doc(usersCollection, requestData.userId);
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
@@ -299,7 +300,6 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
                 });
             }
         } catch (emailError) {
-            // Log the error for debugging but don't fail the entire transaction
             console.warn(`Leave request ${requestId} approved, but the email notification failed.`, emailError);
         }
 
@@ -307,22 +307,21 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
         return { success: true };
 
     } catch (dbError) {
-        console.error("Error approving leave (DB operation):", dbError);
-        return { success: false, error: 'An unexpected database error occurred during leave approval.' };
+        console.error("Error in approveLeaveRequestAndNotify:", dbError);
+        return { success: false, error: 'An unexpected database error occurred during the leave approval process.' };
     }
 }
 
 export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
     try {
-        const requestRef = doc(db, 'leaveRequests', requestId);
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const requestRef = doc(leaveRequestsCollection, requestId);
         const requestSnap = await getDoc(requestRef);
         
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
-        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
 
-        // Perform the core database operation
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
@@ -331,9 +330,11 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedAt: serverTimestamp(),
         });
 
-        // Decouple email notification
+        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+
         try {
-            const userRef = doc(db!, 'users', requestData.userId);
+            const usersCollection = collection(db!, 'users');
+            const userRef = doc(usersCollection, requestData.userId);
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
@@ -357,8 +358,8 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
         return { success: true };
 
     } catch (dbError) {
-        console.error("Error rejecting leave (DB operation):", dbError);
-        return { success: false, error: 'An unexpected database error occurred during leave rejection.' };
+        console.error("Error in rejectLeaveRequestAndNotify:", dbError);
+        return { success: false, error: 'An unexpected database error occurred during the leave rejection process.' };
     }
 }
 
