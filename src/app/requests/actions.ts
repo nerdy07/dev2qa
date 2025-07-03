@@ -94,3 +94,32 @@ export async function rejectRequest(request: CertificateRequest, rejector: User,
         return { success: false, error: 'An unexpected error occurred during the rejection process.' };
     }
 }
+
+export async function sendTestEmail(email: string) {
+    if (!email) {
+        return { success: false, error: 'No email address provided.' };
+    }
+
+    try {
+        const emailResult = await sendEmail({
+            to: email,
+            subject: 'Dev2QA Test Email',
+            html: `
+                <h1>This is a test email from Dev2QA.</h1>
+                <p>If you are seeing this, your Mailgun configuration is working correctly.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
+        });
+
+        if (emailResult.success) {
+            return { success: true };
+        } else {
+            return { success: false, error: emailResult.error };
+        }
+    } catch (error) {
+        console.error('Error sending test email:', error);
+        return { success: false, error: 'An unexpected error occurred while sending the test email.' };
+    }
+}

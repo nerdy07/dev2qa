@@ -8,7 +8,7 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2 } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2, Mail, Loader2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -31,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { approveRequestAndSendEmail, rejectRequest } from '@/app/requests/actions';
+import { approveRequestAndSendEmail, rejectRequest, sendTestEmail } from '@/app/requests/actions';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -51,6 +51,7 @@ export default function RequestDetailsPage() {
   const [qaProcessRating, setQaProcessRating] = React.useState(0);
   const [qaProcessFeedback, setQaProcessFeedback] = React.useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
+  const [isSendingTest, setIsSendingTest] = React.useState(false);
 
 
   const commentsQuery = React.useMemo(() => {
@@ -202,6 +203,25 @@ export default function RequestDetailsPage() {
     } finally {
         setIsSubmittingFeedback(false);
     }
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!user?.email) return;
+    setIsSendingTest(true);
+    const result = await sendTestEmail(user.email);
+    if (result.success) {
+      toast({
+        title: 'Test Email Sent!',
+        description: `An email has been sent to ${user.email}. Please check your inbox.`,
+      });
+    } else {
+      toast({
+        title: 'Test Failed',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
+    setIsSendingTest(false);
   };
 
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
@@ -425,6 +445,24 @@ export default function RequestDetailsPage() {
         </div>
 
         <div className="lg:col-span-1 space-y-6">
+            {user?.role === 'admin' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Admin Tools</CardTitle>
+                        <CardDescription>Actions available only to administrators.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button onClick={handleSendTestEmail} disabled={isSendingTest} className="w-full">
+                            {isSendingTest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                            {isSendingTest ? 'Sending...' : 'Send Test Email'}
+                        </Button>
+                    </CardContent>
+                    <CardFooter>
+                        <p className="text-xs text-muted-foreground">This will send a test email to your own email address ({user.email}) to verify the Mailgun configuration.</p>
+                    </CardFooter>
+                </Card>
+            )}
+
             {isActionable && (
                 <Card>
                     <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
