@@ -22,7 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
 import type { User } from '@/lib/types';
-import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Button } from '../ui/button';
 
 type NavItem = { href: string; icon: LucideIcon; label: string };
@@ -121,6 +121,12 @@ export function MobileSidebar() {
                 </Button>
             </SheetTrigger>
             <SheetContent side="left" className="flex flex-col p-0 w-64">
+                <SheetHeader className="sr-only">
+                    <SheetTitle>Navigation Menu</SheetTitle>
+                    <SheetDescription>
+                        A list of links to navigate the application.
+                    </SheetDescription>
+                </SheetHeader>
                 <div className="flex h-16 shrink-0 items-center border-b px-6">
                     <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary">
                         <Award className="h-6 w-6" />
