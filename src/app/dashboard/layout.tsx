@@ -25,7 +25,7 @@ export default function DashboardLayout({
           <div className="flex items-center gap-2">
             <MobileSidebar />
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary md:hidden">
-              <Image src="/logo.png" alt="Dev2QA Logo" width={24} height={24} />
+              <Image src="/logo.jpg" alt="Dev2QA Logo" width={24} height={24} />
               <span>Dev2QA</span>
             </Link>
           </div>

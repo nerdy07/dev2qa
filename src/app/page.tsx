@@ -108,7 +108,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 dark:bg-background">
       <div className="mb-8 flex items-center gap-2 font-semibold text-primary">
-        <Image src="/logo.png" alt="Dev2QA Logo" width={28} height={28} />
+        <Image src="/logo.jpg" alt="Dev2QA Logo" width={28} height={28} />
         <h1 className="text-2xl">Dev2QA</h1>
       </div>
       <Card className="w-full max-w-md shadow-lg">
