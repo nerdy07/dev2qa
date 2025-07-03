@@ -1,6 +1,6 @@
 'use server';
 
-import { doc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendEmail } from '@/lib/email';
 import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment } from '@/lib/types';
@@ -263,9 +263,16 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
     }
 }
 
-export async function approveLeaveRequestAndNotify(request: LeaveRequest, approver: User) {
+export async function approveLeaveRequestAndNotify(requestId: string, approver: User) {
     try {
-        const requestRef = doc(db, 'leaveRequests', request.id);
+        const requestRef = doc(db, 'leaveRequests', requestId);
+        const requestSnap = await getDoc(requestRef);
+
+        if (!requestSnap.exists()) {
+            return { success: false, error: 'Leave request not found.' };
+        }
+        const request = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approver.id,
@@ -294,9 +301,16 @@ export async function approveLeaveRequestAndNotify(request: LeaveRequest, approv
     }
 }
 
-export async function rejectLeaveRequestAndNotify(request: LeaveRequest, rejector: User, reason: string) {
+export async function rejectLeaveRequestAndNotify(requestId: string, rejector: User, reason: string) {
     try {
-        const requestRef = doc(db, 'leaveRequests', request.id);
+        const requestRef = doc(db, 'leaveRequests', requestId);
+        const requestSnap = await getDoc(requestRef);
+        
+        if (!requestSnap.exists()) {
+            return { success: false, error: 'Leave request not found.' };
+        }
+        const request = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
