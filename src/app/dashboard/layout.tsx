@@ -62,7 +62,7 @@ export default function DashboardLayout({
         </main>
         
         <footer className="border-t bg-card py-4 px-6 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} echobitstech. All rights reserved. Powered by Dev2QA.</p>
+          <p>© 2025 Dev2QA. All rights reserved. Powered by echobitstech.</p>
         </footer>
       </div>
     </div>
