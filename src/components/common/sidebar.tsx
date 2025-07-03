@@ -2,6 +2,7 @@
 import {
   Award,
   BookUser,
+  CalendarCheck,
   ChevronDown,
   DollarSign,
   FilePlus2,
@@ -46,17 +47,20 @@ export function Sidebar() {
       { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions' },
       { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
       { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll' },
+      { href: '/dashboard/admin/leave', icon: CalendarCheck, label: 'Leave Management' },
     ],
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
       { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request' },
       { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
       { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
+      { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
     ],
     qa_tester: [
         { href: '/dashboard', icon: LayoutDashboard, label: 'Pending Requests' },
         { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
         { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
+        { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
     ],
   };
 

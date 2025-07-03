@@ -24,3 +24,12 @@ export const BONUS_TYPES = [
     { name: 'Positive client feedback or successful demo delivery', amount: 0, currency: 'NGN' }, // Discretionary
     { name: 'Other (Specify in description)', amount: 0, currency: 'NGN' },
 ];
+
+export const LEAVE_TYPES = [
+    'Annual Leave',
+    'Sick Leave',
+    'Unpaid Leave',
+    'Maternity/Paternity Leave',
+    'Compassionate Leave',
+    'Other',
+];

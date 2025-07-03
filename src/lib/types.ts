@@ -88,3 +88,20 @@ export type Bonus = {
   issuedById: string;
   issuedByName: string;
 };
+
+export type LeaveRequest = {
+  id: string;
+  userId: string;
+  userName: string;
+  leaveType: string;
+  startDate: any; // Firestore Timestamp
+  endDate: any; // Firestore Timestamp
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  requestedAt: any; // Firestore Timestamp
+  reviewedAt?: any; // Firestore Timestamp
+  reviewedById?: string; // Admin User ID
+  reviewedByName?: string; // Admin name
+  daysCount: number;
+};
