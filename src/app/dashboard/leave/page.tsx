@@ -115,8 +115,15 @@ export default function MyLeavePage() {
               <TableCell>
                 <Badge variant={statusVariant(req.status)} className="capitalize">{req.status}</Badge>
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {req.status === 'rejected' ? `Reason: ${req.rejectionReason}` : req.reason}
+              <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
+                  {req.status === 'pending' && req.reason}
+                  {req.status === 'approved' && req.reviewedByName && `Approved by ${req.reviewedByName}`}
+                  {req.status === 'rejected' && (
+                    <span className="text-destructive">
+                      {req.rejectionReason}
+                    </span>
+                  )}
+                  {!req.reason && !req.rejectionReason && '-'}
               </TableCell>
             </TableRow>
           ))
@@ -172,7 +179,7 @@ export default function MyLeavePage() {
                 <TableHead>Dates</TableHead>
                 <TableHead>Days</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Notes</TableHead>
+                <TableHead>Details</TableHead>
                 </TableRow>
             </TableHeader>
             {renderContent()}

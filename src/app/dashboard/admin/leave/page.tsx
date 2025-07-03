@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -31,7 +32,7 @@ export default function LeaveManagementPage() {
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
 
   const searchedRequests = useMemo(() => {
     if (!leaveRequests) return [];
@@ -96,64 +97,70 @@ export default function LeaveManagementPage() {
     }
   };
 
-  const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
-    switch (status) {
-      case 'approved': return 'default';
-      case 'pending': return 'secondary';
-      case 'rejected': return 'destructive';
-      default: return 'outline';
-    }
-  };
-
-  const RequestsTable = ({ requests }: { requests: LeaveRequest[] }) => (
+  const RequestsTable = ({ requests, status }: { requests: LeaveRequest[], status: 'pending' | 'approved' | 'rejected' }) => (
     <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Employee</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Dates</TableHead>
-          <TableHead>Days</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Reason</TableHead>
-          {requests[0]?.status === 'pending' && <TableHead className="text-right">Actions</TableHead>}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {loading && [...Array(3)].map((_, i) => (
-          <TableRow key={i}>
-            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-            <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-            <TableCell><Skeleton className="h-5 w-12" /></TableCell>
-            <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-            <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-            {requests[0]?.status === 'pending' && <TableCell><div className="flex justify-end gap-2"><Skeleton className="h-8 w-8" /><Skeleton className="h-8 w-8" /></div></TableCell>}
-          </TableRow>
-        ))}
-        {!loading && requests.length === 0 && (
-          <TableRow><TableCell colSpan={7} className="h-24 text-center">No requests found.</TableCell></TableRow>
-        )}
-        {!loading && requests.map(req => (
-          <TableRow key={req.id}>
-            <TableCell className="font-medium">{req.userName}</TableCell>
-            <TableCell>{req.leaveType}</TableCell>
-            <TableCell>{format(req.startDate.toDate(), 'PPP')} - {format(req.endDate.toDate(), 'PPP')}</TableCell>
-            <TableCell>{req.daysCount}</TableCell>
-            <TableCell><Badge variant={statusVariant(req.status)} className="capitalize">{req.status}</Badge></TableCell>
-            <TableCell className="text-muted-foreground">{req.reason}</TableCell>
-            {req.status === 'pending' && (
-              <TableCell className="text-right">
-                <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleApprove(req)}>
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => openRejectionDialog(req)}>
-                  <ThumbsDown className="h-4 w-4" />
-                </Button>
-              </TableCell>
+        <TableHeader>
+            <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Dates</TableHead>
+                <TableHead>Days</TableHead>
+                {status === 'pending' && <TableHead>Reason</TableHead>}
+                {status !== 'pending' && <TableHead>Reviewed By</TableHead>}
+                {status === 'rejected' && <TableHead>Rejection Reason</TableHead>}
+                {status === 'pending' && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+        </TableHeader>
+        <TableBody>
+            {loading && [...Array(3)].map((_, i) => (
+                <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-12" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                    {status === 'pending' && <TableCell><div className="flex justify-end gap-2"><Skeleton className="h-8 w-8" /><Skeleton className="h-8 w-8" /></div></TableCell>}
+                </TableRow>
+            ))}
+            {!loading && requests.length === 0 && (
+                <TableRow><TableCell colSpan={status === 'pending' ? 6 : 5} className="h-24 text-center">No requests found in this category.</TableCell></TableRow>
             )}
-          </TableRow>
-        ))}
-      </TableBody>
+            {!loading && requests.map(req => (
+                <TableRow key={req.id}>
+                    <TableCell className="font-medium">{req.userName}</TableCell>
+                    <TableCell>{req.leaveType}</TableCell>
+                    <TableCell>{format(req.startDate.toDate(), 'PPP')} - {format(req.endDate.toDate(), 'PPP')}</TableCell>
+                    <TableCell>{req.daysCount}</TableCell>
+
+                    {status === 'pending' && <TableCell className="text-muted-foreground text-sm max-w-xs truncate">{req.reason}</TableCell>}
+                    {status !== 'pending' && <TableCell>{req.reviewedByName}</TableCell>}
+                    {status === 'rejected' && <TableCell className="text-destructive text-sm max-w-xs truncate">{req.rejectionReason}</TableCell>}
+                    
+                    {status === 'pending' && (
+                        <TableCell className="text-right">
+                          <TooltipProvider delayDuration={0}>
+                              <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleApprove(req)}>
+                                          <Check className="h-4 w-4" />
+                                      </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Approve</p></TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                  <TooltipTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => openRejectionDialog(req)}>
+                                          <ThumbsDown className="h-4 w-4" />
+                                      </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Reject</p></TooltipContent>
+                              </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                    )}
+                </TableRow>
+            ))}
+        </TableBody>
     </Table>
   );
 
@@ -172,12 +179,12 @@ export default function LeaveManagementPage() {
           </Alert>
       )}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'pending' | 'approved' | 'rejected')} className="w-full">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <TabsList>
-            <TabsTrigger value="pending">Pending ({filteredRequests.pending.length})</TabsTrigger>
-            <TabsTrigger value="approved">Approved ({filteredRequests.approved.length})</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected ({filteredRequests.rejected.length})</TabsTrigger>
+                <TabsTrigger value="pending">Pending ({filteredRequests.pending.length})</TabsTrigger>
+                <TabsTrigger value="approved">Approved ({filteredRequests.approved.length})</TabsTrigger>
+                <TabsTrigger value="rejected">Rejected ({filteredRequests.rejected.length})</TabsTrigger>
             </TabsList>
             <div className="w-full sm:w-auto sm:max-w-xs">
                 <Input 
@@ -188,13 +195,13 @@ export default function LeaveManagementPage() {
             </div>
         </div>
         <TabsContent value="pending" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.pending} /></CardContent></Card>
+          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.pending} status="pending" /></CardContent></Card>
         </TabsContent>
         <TabsContent value="approved" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.approved} /></CardContent></Card>
+          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.approved} status="approved" /></CardContent></Card>
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.rejected} /></CardContent></Card>
+          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.rejected} status="rejected" /></CardContent></Card>
         </TabsContent>
       </Tabs>
 
