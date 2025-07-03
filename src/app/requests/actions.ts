@@ -265,14 +265,15 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
 
 export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
     try {
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const requestRef = doc(leaveRequestsCollection, requestId);
+        const requestRef = doc(db!, 'leaveRequests', requestId);
         const requestSnap = await getDoc(requestRef);
 
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
         
+        const requestData = requestSnap.data() as LeaveRequest;
+
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approverId,
@@ -280,11 +281,8 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
             reviewedAt: serverTimestamp(),
         });
         
-        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
-
         try {
-            const usersCollection = collection(db!, 'users');
-            const userRef = doc(usersCollection, requestData.userId);
+            const userRef = doc(db!, 'users', requestData.userId);
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
@@ -314,13 +312,14 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
 
 export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
     try {
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const requestRef = doc(leaveRequestsCollection, requestId);
+        const requestRef = doc(db!, 'leaveRequests', requestId);
         const requestSnap = await getDoc(requestRef);
         
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
+
+        const requestData = requestSnap.data() as LeaveRequest;
 
         await updateDoc(requestRef, {
             status: 'rejected',
@@ -330,11 +329,8 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedAt: serverTimestamp(),
         });
 
-        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
-
         try {
-            const usersCollection = collection(db!, 'users');
-            const userRef = doc(usersCollection, requestData.userId);
+            const userRef = doc(db!, 'users', requestData.userId);
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
