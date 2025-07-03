@@ -254,10 +254,10 @@ export default function DashboardPage() {
         <Tabs defaultValue="pending" className="w-full">
             <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
                 <TabsTrigger value="pending">
-                    <Clock className="mr-2 h-4 w-4" /> Pending Review ({pendingRequests?.length || 0})
+                    <Clock /> Pending Review ({pendingRequests?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approvals">
-                    <CheckCircle className="mr-2 h-4 w-4" /> My Approvals ({myApprovedRequests?.length || 0})
+                    <CheckCircle /> My Approvals ({myApprovedRequests?.length || 0})
                 </TabsTrigger>
             </TabsList>
             <TabsContent value="pending" className="mt-6">

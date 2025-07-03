@@ -1,4 +1,5 @@
 'use client';
+import type { LucideIcon } from 'lucide-react';
 import {
   Award,
   BookUser,
@@ -9,7 +10,6 @@ import {
   FolderKanban,
   LayoutDashboard,
   LogOut,
-  Settings,
   Shield,
   ShieldX,
   Sparkles,
@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -33,17 +33,23 @@ import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
 
+type NavItem = { href: string; icon: LucideIcon; label: string };
+type NavSeparator = { type: 'separator' };
+type NavItemOrSeparator = NavItem | NavSeparator;
+
 export function Sidebar() {
   const { user, logout } = useAuth();
   const pathname = usePathname();
 
-  const navItems = {
+  const navItems: { [key in User['role']]: NavItemOrSeparator[] } = {
     admin: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+      { type: 'separator' },
       { href: '/dashboard/admin/users', icon: Users, label: 'Users' },
       { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams' },
       { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects' },
+      { type: 'separator' },
       { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions' },
       { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
       { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll' },
@@ -52,13 +58,16 @@ export function Sidebar() {
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
       { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request' },
+      { type: 'separator' },
       { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+      { type: 'separator' },
       { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
       { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
     ],
     qa_tester: [
         { href: '/dashboard', icon: LayoutDashboard, label: 'Pending Requests' },
         { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+        { type: 'separator' },
         { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
         { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
     ],
@@ -79,18 +88,22 @@ export function Sidebar() {
       </div>
       <div className="flex-1 overflow-y-auto">
         <nav className="grid items-start gap-1 px-4 py-4 text-sm font-medium">
-          {getRoleNavItems().map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary',
-                pathname === item.href && 'bg-secondary text-primary'
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
+          {getRoleNavItems().map((item, index) => (
+            'type' in item ? (
+              <Separator key={`sep-${index}`} className="my-1" />
+            ) : (
+                <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary',
+                    pathname === item.href && 'bg-secondary text-primary'
+                )}
+                >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+                </Link>
+            )
           ))}
         </nav>
       </div>

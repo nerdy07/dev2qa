@@ -105,10 +105,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      <div className="mb-8 flex items-center gap-3 text-2xl font-bold text-primary">
-        <Award className="h-8 w-8" />
-        <h1 className="text-3xl font-bold">CertiTrack Pro</h1>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 dark:bg-background">
+      <div className="mb-8 flex items-center gap-2 font-semibold text-primary">
+        <Award className="h-7 w-7" />
+        <h1 className="text-2xl">CertiTrack Pro</h1>
       </div>
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader>
@@ -149,7 +149,7 @@ export default function LoginPage() {
                         <FormLabel>Password</FormLabel>
                         <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
                             <DialogTrigger asChild>
-                                <button type="button" className="text-sm font-medium text-primary hover:underline">Forgot Password?</button>
+                                <Button variant="link" type="button" className="p-0 h-auto text-sm font-medium">Forgot Password?</Button>
                             </DialogTrigger>
                             <DialogContent>
                                 <DialogHeader>

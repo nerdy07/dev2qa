@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -29,15 +30,25 @@ export default function LeaveManagementPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [isRejectionDialogOpen, setIsRejectionDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('pending');
 
+  const searchedRequests = useMemo(() => {
+    if (!leaveRequests) return [];
+    if (!searchTerm.trim()) return leaveRequests;
+    return leaveRequests.filter(req => 
+      req.userName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [leaveRequests, searchTerm]);
+  
   const filteredRequests = useMemo(() => {
-    if (!leaveRequests) return { pending: [], approved: [], rejected: [] };
+    if (!searchedRequests) return { pending: [], approved: [], rejected: [] };
     return {
-      pending: leaveRequests.filter(req => req.status === 'pending'),
-      approved: leaveRequests.filter(req => req.status === 'approved'),
-      rejected: leaveRequests.filter(req => req.status === 'rejected'),
+      pending: searchedRequests.filter(req => req.status === 'pending'),
+      approved: searchedRequests.filter(req => req.status === 'approved'),
+      rejected: searchedRequests.filter(req => req.status === 'rejected'),
     };
-  }, [leaveRequests]);
+  }, [searchedRequests]);
 
   const handleApprove = async (request: LeaveRequest) => {
     if (!currentUser) return;
@@ -161,12 +172,21 @@ export default function LeaveManagementPage() {
           </Alert>
       )}
 
-      <Tabs defaultValue="pending" className="w-full">
-        <TabsList>
-          <TabsTrigger value="pending">Pending ({filteredRequests.pending.length})</TabsTrigger>
-          <TabsTrigger value="approved">Approved ({filteredRequests.approved.length})</TabsTrigger>
-          <TabsTrigger value="rejected">Rejected ({filteredRequests.rejected.length})</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <TabsList>
+            <TabsTrigger value="pending">Pending ({filteredRequests.pending.length})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({filteredRequests.approved.length})</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected ({filteredRequests.rejected.length})</TabsTrigger>
+            </TabsList>
+            <div className="w-full sm:w-auto sm:max-w-xs">
+                <Input 
+                    placeholder="Search by employee name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
         <TabsContent value="pending" className="mt-4">
           <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.pending} /></CardContent></Card>
         </TabsContent>

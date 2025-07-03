@@ -65,10 +65,10 @@ export default function MyRecordsPage() {
             <Tabs defaultValue="infractions" className="w-full">
                 <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
                     <TabsTrigger value="infractions">
-                        <ShieldX className="mr-2 h-4 w-4" /> Infractions ({loading ? '...' : infractions?.length || 0})
+                        <ShieldX /> Infractions ({loading ? '...' : infractions?.length || 0})
                     </TabsTrigger>
                     <TabsTrigger value="bonuses">
-                        <Sparkles className="mr-2 h-4 w-4" /> Bonuses ({loading ? '...' : bonuses?.length || 0})
+                        <Sparkles /> Bonuses ({loading ? '...' : bonuses?.length || 0})
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent value="infractions" className="mt-6">

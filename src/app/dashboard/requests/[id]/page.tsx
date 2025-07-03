@@ -8,7 +8,7 @@ import { format, formatDistanceToNowStrict } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -248,27 +248,40 @@ export default function RequestDetailsPage() {
     return (
         <>
             <PageHeader title=""><Skeleton className="h-9 w-64" /></PageHeader>
-            <Card>
-                <CardHeader>
-                    <CardTitle><Skeleton className="h-7 w-1/3" /></CardTitle>
-                    <CardDescription><Skeleton className="h-5 w-1/4" /></CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        {[...Array(6)].map((_, i) => (
-                            <div key={i} className="flex flex-col gap-2">
-                                <Skeleton className="h-4 w-20" />
-                                <Skeleton className="h-5 w-32" />
-                            </div>
-                        ))}
-                    </div>
-                    <Separator />
-                    <div>
-                        <Skeleton className="h-6 w-24 mb-2" />
-                        <Skeleton className="h-20 w-full" />
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-7 w-1/3" />
+                        <Skeleton className="h-5 w-1/4" />
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[...Array(4)].map((_, i) => (
+                                <div key={i} className="flex flex-col gap-2">
+                                    <Skeleton className="h-4 w-20" />
+                                    <Skeleton className="h-5 w-32" />
+                                </div>
+                            ))}
+                        </div>
+                        <Separator />
+                        <div>
+                            <Skeleton className="h-6 w-24 mb-2" />
+                            <Skeleton className="h-20 w-full" />
+                        </div>
+                    </CardContent>
+                </Card>
+              </div>
+              <div className="lg:col-span-1">
+                  <Card>
+                    <CardHeader><Skeleton className="h-7 w-32" /></CardHeader>
+                    <CardContent className="space-y-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                  </Card>
+              </div>
+            </div>
         </>
     )
   }
@@ -283,7 +296,6 @@ export default function RequestDetailsPage() {
 
   const isActionable = user?.role === 'qa_tester' && request.status === 'pending';
   const createdAtDate = (request.createdAt as any)?.toDate() || new Date();
-  const updatedAtDate = (request.updatedAt as any)?.toDate() || new Date();
 
   const StarRating = ({ rating, setRating, disabled = false }: { rating: number, setRating?: (r: number) => void, disabled?: boolean }) => {
     return (
@@ -306,47 +318,20 @@ export default function RequestDetailsPage() {
     );
   };
 
+  const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
+    <div className="flex items-start gap-3">
+        <Icon className="h-5 w-5 mt-0.5 text-muted-foreground" />
+        <div className="flex flex-col">
+            <span className="text-sm text-muted-foreground">{label}</span>
+            <span className="font-medium">{children}</span>
+        </div>
+    </div>
+  )
+
 
   return (
     <>
-      <PageHeader title={request.taskTitle}>
-        {isActionable && (
-            <div className="flex items-center gap-2">
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="destructive">
-                            <XCircle className="mr-2 h-4 w-4" /> Reject
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Reason for Rejection</DialogTitle>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <Label htmlFor="rejection-reason">Provide a mandatory reason for rejecting this request.</Label>
-                            <Textarea 
-                                id="rejection-reason"
-                                placeholder="e.g., Testing failed on mobile devices..."
-                                value={rejectionReason}
-                                onChange={(e) => setRejectionReason(e.target.value)}
-                                className="min-h-[100px]"
-                            />
-                        </div>
-                        <DialogFooterComponent>
-                            <DialogClose asChild>
-                                <Button type="button" variant="outline">Cancel</Button>
-                            </DialogClose>
-                            <Button type="submit" variant="destructive" onClick={handleReject}>Confirm Rejection</Button>
-                        </DialogFooterComponent>
-                    </DialogContent>
-                </Dialog>
-
-                <Button onClick={handleApprove}>
-                    <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                </Button>
-            </div>
-        )}
-      </PageHeader>
+      <PageHeader title={request.taskTitle} />
       
       {request.status === 'rejected' && request.rejectionReason && (
         <Alert variant="destructive" className="mb-6">
@@ -359,8 +344,8 @@ export default function RequestDetailsPage() {
       )}
 
       {request.status === 'approved' && (
-        <Alert className="mb-6 border-primary text-primary">
-            <CheckCircle className="h-4 w-4" />
+        <Alert className="mb-6 border-primary text-primary bg-primary/10">
+            <CheckCircle className="h-4 w-4 text-primary" />
             <AlertTitle>Request Approved!</AlertTitle>
             <AlertDescription className="flex items-center justify-between">
                 <span>This request was approved by {request.qaTesterName}.</span>
@@ -371,186 +356,209 @@ export default function RequestDetailsPage() {
         </Alert>
       )}
 
-      <div className="space-y-6">
-        <Card>
-            <CardHeader>
-            <CardTitle>Request Details</CardTitle>
-            <CardDescription>
-                Submitted on {format(createdAtDate, 'PPP')}
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Status</span>
-                <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
-                </div>
-                <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Requester</span>
-                <span className="font-medium">{request.requesterName}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Last Updated</span>
-                <span className="font-medium">{format(updatedAtDate, 'PPP p')}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Team</span>
-                <span className="font-medium">{request.associatedTeam}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground">Project</span>
-                <span className="font-medium">{request.associatedProject}</span>
-                </div>
-                {request.taskLink && (
-                <div className="flex flex-col gap-1">
-                    <span className="text-muted-foreground">Task Link</span>
-                    <a
-                    href={request.taskLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-primary hover:underline flex items-center gap-1"
-                    >
-                    View Task <ExternalLink className="h-3 w-3" />
-                    </a>
-                </div>
-                )}
-            </div>
-            {request.submissionRating && user?.id === request.requesterId ? (
-                <>
-                <Separator />
-                    <div className="flex flex-col gap-1">
-                        <span className="text-muted-foreground">Submission Quality Rating</span>
-                        <div className="flex items-center gap-2">
-                            <StarRating rating={request.submissionRating} disabled />
-                            <span className="text-sm font-medium">({request.submissionRating}/5)</span>
-                        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Request Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-6 text-sm">
+                        <DetailItem icon={Hash} label="Status">
+                            <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
+                        </DetailItem>
+                        <DetailItem icon={UserIcon} label="Requester">
+                            {request.requesterName}
+                        </DetailItem>
+                        <DetailItem icon={Calendar} label="Submitted">
+                            {format(createdAtDate, 'PPP p')} ({formatDistanceToNowStrict(createdAtDate, { addSuffix: true })})
+                        </DetailItem>
+                        <DetailItem icon={FolderKanban} label="Project">
+                            {request.associatedProject}
+                        </DetailItem>
+                        <DetailItem icon={UserIcon} label="Team">
+                            {request.associatedTeam}
+                        </DetailItem>
+                        {request.taskLink && (
+                             <DetailItem icon={Link2} label="Task Link">
+                                <a
+                                href={request.taskLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-primary hover:underline flex items-center gap-1"
+                                >
+                                View Task <ExternalLink className="h-3 w-3" />
+                                </a>
+                            </DetailItem>
+                        )}
                     </div>
-                </>
-            ) : null}
-            <Separator />
-            <div>
-                <h4 className="font-semibold mb-2">Description</h4>
-                <p className="text-muted-foreground whitespace-pre-wrap">{request.description}</p>
-            </div>
-            </CardContent>
-        </Card>
-
-        <Card>
-            <CardHeader>
-                <CardTitle>Comments</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="space-y-6">
-                    {commentsLoading && <p className="text-sm text-muted-foreground">Loading comments...</p>}
-                    {!commentsLoading && comments && comments.length > 0 ? (
-                    comments.map(comment => (
-                        <div key={comment.id} className="flex gap-4">
-                            <Avatar>
-                                <AvatarFallback>{comment.userName?.charAt(0) || 'U'}</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                <p className="font-semibold">{comment.userName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {comment.createdAt ? formatDistanceToNowStrict(comment.createdAt.toDate(), { addSuffix: true }) : 'just now'}
-                                </p>
-                                <Badge variant="secondary" className='capitalize text-xs'>{comment.userRole.replace('_', ' ')}</Badge>
-                                </div>
-                                <p className="text-muted-foreground whitespace-pre-wrap mt-1">{comment.text}</p>
-                            </div>
-                        </div>
-                    ))
-                    ) : (
-                    !commentsLoading && <p className="text-sm text-muted-foreground">No comments yet. Start the conversation!</p>
-                    )}
-                </div>
-            </CardContent>
-            <CardFooter className="flex gap-4 items-start border-t pt-6">
-                <Avatar>
-                    <AvatarImage src={user?.photoURL} />
-                    <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-2">
-                    <Textarea 
-                        placeholder="Add a comment..."
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        className="min-h-[80px]"
-                    />
-                    <Button onClick={handlePostComment} disabled={isSubmittingComment || !newComment.trim()}>
-                        {isSubmittingComment ? "Posting..." : "Post Comment"}
-                        <Send className="ml-2 h-4 w-4" />
-                    </Button>
-                </div>
-            </CardFooter>
-        </Card>
-
-        {/* QA Submission Rating */}
-        {user?.id === request.qaTesterId && request.status === 'approved' && (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Rate Submission Quality</CardTitle>
-                    <CardDescription>Optionally, rate the clarity and completeness of this request to help the requester improve.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {request.submissionRating ? (
-                        <div>
-                            <p className="text-sm font-medium mb-2">You rated this submission:</p>
-                            <StarRating rating={request.submissionRating} disabled />
-                        </div>
-                    ) : (
-                        <StarRating rating={submissionRating} setRating={handleSetSubmissionRating} />
-                    )}
+                    <Separator className="my-6" />
+                    <div>
+                        <h4 className="font-semibold mb-2 text-base">Description</h4>
+                        <p className="text-muted-foreground whitespace-pre-wrap">{request.description}</p>
+                    </div>
                 </CardContent>
             </Card>
-        )}
 
-        {/* Requester QA Process Feedback */}
-        {user?.id === request.requesterId && request.status !== 'pending' && (
             <Card>
                 <CardHeader>
-                    <CardTitle>Feedback on the QA Process</CardTitle>
-                    <CardDescription>Your anonymous feedback helps our QA team improve.</CardDescription>
+                    <CardTitle>Comments</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {request.qaProcessRating ? (
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-sm font-medium mb-2">Your rating:</p>
-                                <StarRating rating={request.qaProcessRating} disabled />
+                    <div className="space-y-6">
+                        {commentsLoading && <p className="text-sm text-muted-foreground">Loading comments...</p>}
+                        {!commentsLoading && comments && comments.length > 0 ? (
+                        comments.map(comment => (
+                            <div key={comment.id} className="flex gap-4">
+                                <Avatar>
+                                    <AvatarFallback>{comment.userName?.charAt(0) || 'U'}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                    <p className="font-semibold">{comment.userName}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {comment.createdAt ? formatDistanceToNowStrict(comment.createdAt.toDate(), { addSuffix: true }) : 'just now'}
+                                    </p>
+                                    <Badge variant="secondary" className='capitalize text-xs'>{comment.userRole.replace('_', ' ')}</Badge>
+                                    </div>
+                                    <p className="text-muted-foreground whitespace-pre-wrap mt-1">{comment.text}</p>
+                                </div>
                             </div>
-                            {request.qaProcessFeedback && (
+                        ))
+                        ) : (
+                        !commentsLoading && <p className="text-sm text-muted-foreground">No comments yet. Start the conversation!</p>
+                        )}
+                    </div>
+                </CardContent>
+                <CardFooter className="flex gap-4 items-start border-t pt-6">
+                    <Avatar>
+                        <AvatarImage src={user?.photoURL} />
+                        <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-2">
+                        <Textarea 
+                            placeholder="Add a comment..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            className="min-h-[80px]"
+                        />
+                        <Button onClick={handlePostComment} disabled={isSubmittingComment || !newComment.trim()}>
+                            {isSubmittingComment ? "Posting..." : "Post Comment"}
+                            <Send className="ml-2 h-4 w-4" />
+                        </Button>
+                    </div>
+                </CardFooter>
+            </Card>
+        </div>
+
+        <div className="lg:col-span-1 space-y-6">
+            {isActionable && (
+                <Card>
+                    <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
+                    <CardContent className="flex flex-col gap-2">
+                         <Dialog>
+                            <DialogTrigger asChild>
+                                <Button variant="destructive" className="w-full">
+                                    <XCircle className="mr-2 h-4 w-4" /> Reject Request
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                                <DialogHeader>
+                                    <DialogTitle>Reason for Rejection</DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <Label htmlFor="rejection-reason">Provide a mandatory reason for rejecting this request.</Label>
+                                    <Textarea 
+                                        id="rejection-reason"
+                                        placeholder="e.g., Testing failed on mobile devices..."
+                                        value={rejectionReason}
+                                        onChange={(e) => setRejectionReason(e.target.value)}
+                                        className="min-h-[100px]"
+                                    />
+                                </div>
+                                <DialogFooterComponent>
+                                    <DialogClose asChild>
+                                        <Button type="button" variant="outline">Cancel</Button>
+                                    </DialogClose>
+                                    <Button type="submit" variant="destructive" onClick={handleReject}>Confirm Rejection</Button>
+                                </DialogFooterComponent>
+                            </DialogContent>
+                        </Dialog>
+
+                        <Button onClick={handleApprove} className="w-full">
+                            <CheckCircle className="mr-2 h-4 w-4" /> Approve Request
+                        </Button>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* QA Submission Rating */}
+            {user?.id === request.qaTesterId && request.status === 'approved' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Rate Submission Quality</CardTitle>
+                        <CardDescription>Optionally, rate the clarity and completeness of this request to help the requester improve.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {request.submissionRating ? (
+                            <div>
+                                <p className="text-sm font-medium mb-2">You rated this submission:</p>
+                                <StarRating rating={request.submissionRating} disabled />
+                            </div>
+                        ) : (
+                            <StarRating rating={submissionRating} setRating={handleSetSubmissionRating} />
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Requester QA Process Feedback */}
+            {user?.id === request.requesterId && request.status !== 'pending' && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Feedback on the QA Process</CardTitle>
+                        <CardDescription>Your anonymous feedback helps our QA team improve.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {request.qaProcessRating ? (
+                            <div className="space-y-4">
                                 <div>
-                                    <p className="text-sm font-medium mb-2">Your feedback:</p>
-                                    <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md whitespace-pre-wrap">{request.qaProcessFeedback}</p>
+                                    <p className="text-sm font-medium mb-2">Your rating:</p>
+                                    <StarRating rating={request.qaProcessRating} disabled />
                                 </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div>
-                                <Label>How would you rate the review process?</Label>
-                                <StarRating rating={qaProcessRating} setRating={setQaProcessRating} />
+                                {request.qaProcessFeedback && (
+                                    <div>
+                                        <p className="text-sm font-medium mb-2">Your feedback:</p>
+                                        <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md whitespace-pre-wrap">{request.qaProcessFeedback}</p>
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <Label htmlFor="qa-feedback-comment">Any additional comments? (Optional)</Label>
-                                <Textarea 
-                                    id="qa-feedback-comment"
-                                    placeholder="e.g., The rejection reason was very clear, thank you!"
-                                    value={qaProcessFeedback}
-                                    onChange={(e) => setQaProcessFeedback(e.target.value)}
-                                    className="min-h-[100px]"
-                                />
+                        ) : (
+                            <div className="space-y-4">
+                                <div>
+                                    <Label>How would you rate the review process?</Label>
+                                    <StarRating rating={qaProcessRating} setRating={setQaProcessRating} />
+                                </div>
+                                <div>
+                                    <Label htmlFor="qa-feedback-comment">Any additional comments? (Optional)</Label>
+                                    <Textarea 
+                                        id="qa-feedback-comment"
+                                        placeholder="e.g., The rejection reason was very clear, thank you!"
+                                        value={qaProcessFeedback}
+                                        onChange={(e) => setQaProcessFeedback(e.target.value)}
+                                        className="min-h-[100px]"
+                                    />
+                                </div>
+                                <Button onClick={handlePostQAFeedback} disabled={isSubmittingFeedback || qaProcessRating === 0}>
+                                    {isSubmittingFeedback ? "Submitting..." : "Submit Feedback"}
+                                </Button>
+                                {qaProcessRating === 0 && <p className="text-xs text-muted-foreground">Please provide a star rating to submit feedback.</p>}
                             </div>
-                            <Button onClick={handlePostQAFeedback} disabled={isSubmittingFeedback || qaProcessRating === 0}>
-                                {isSubmittingFeedback ? "Submitting..." : "Submit Feedback"}
-                            </Button>
-                            {qaProcessRating === 0 && <p className="text-xs text-muted-foreground">Please provide a star rating to submit feedback.</p>}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        )}
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+        </div>
       </div>
     </>
   );
