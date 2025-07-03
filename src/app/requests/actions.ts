@@ -58,8 +58,9 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
         return { success: true, certificateId: certDocRef.id };
 
     } catch (error) {
-        console.error('Error approving request:', error);
-        return { success: false, error: (error as Error).message || 'An unexpected error occurred during the approval process.' };
+        const err = error as Error;
+        console.error('Error approving request:', err);
+        return { success: false, error: err.message || 'An unexpected error occurred during the approval process.' };
     }
 }
 
@@ -104,8 +105,9 @@ export async function rejectRequest(request: CertificateRequest, rejector: User,
         return { success: true };
 
     } catch (error) {
-        console.error('Error rejecting request:', error);
-        return { success: false, error: (error as Error).message || 'An unexpected error occurred during the rejection process.' };
+        const err = error as Error;
+        console.error('Error rejecting request:', err);
+        return { success: false, error: err.message || 'An unexpected error occurred during the rejection process.' };
     }
 }
 
@@ -133,8 +135,9 @@ export async function sendTestEmail(email: string) {
             return { success: false, error: emailResult.error };
         }
     } catch (error) {
-        console.error('Error sending test email:', error);
-        return { success: false, error: (error as Error).message || 'An unexpected error occurred while sending the test email.' };
+        const err = error as Error;
+        console.error('Error sending test email:', err);
+        return { success: false, error: err.message || 'An unexpected error occurred while sending the test email.' };
     }
 }
 
@@ -155,8 +158,9 @@ export async function sendWelcomeEmail(name: string, email: string) {
         });
         return { success: true };
     } catch (error) {
-        console.error('Error sending welcome email:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send welcome email.' };
+        const err = error as Error;
+        console.error('Error sending welcome email:', err);
+        return { success: false, error: err.message || 'Failed to send welcome email.' };
     }
 }
 
@@ -184,8 +188,9 @@ export async function notifyOnNewRequest(request: Omit<CertificateRequest, 'id'>
         });
         return { success: true };
     } catch (error) {
-        console.error('Error notifying QA testers:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send notification to QA testers.' };
+        const err = error as Error;
+        console.error('Error notifying QA testers:', err);
+        return { success: false, error: err.message || 'Failed to send notification to QA testers.' };
     }
 }
 
@@ -225,8 +230,9 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
         });
         return { success: true };
     } catch (error) {
-        console.error('Error sending comment notification:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send comment notification.' };
+        const err = error as Error;
+        console.error('Error sending comment notification:', err);
+        return { success: false, error: err.message || 'Failed to send comment notification.' };
     }
 }
 
@@ -234,11 +240,6 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
     try {
         const leaveRequestsCollection = collection(db!, 'leaveRequests');
         const requestRef = doc(leaveRequestsCollection, requestId);
-        const requestSnap = await getDoc(requestRef);
-
-        if (!requestSnap.exists()) {
-            return { success: false, error: 'Leave request not found.' };
-        }
         
         await updateDoc(requestRef, {
             status: 'approved',
@@ -246,24 +247,26 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
             reviewedByName: approverName,
             reviewedAt: serverTimestamp(),
         });
-
-        const requestData = requestSnap.data() as LeaveRequest;
         
         try {
-            const userRef = doc(db!, 'users', requestData.userId);
-            const userSnap = await getDoc(userRef);
+            const requestSnap = await getDoc(requestRef);
+            if (requestSnap.exists()) {
+                const requestData = requestSnap.data() as LeaveRequest;
+                const userRef = doc(db!, 'users', requestData.userId);
+                const userSnap = await getDoc(userRef);
 
-            if (userSnap.exists()) {
-                const user = userSnap.data() as User;
-                await sendEmail({
-                    to: user.email,
-                    subject: `Your Leave Request has been Approved`,
-                    html: `
-                        <h1>Hello, ${requestData.userName},</h1>
-                        <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
-                        <p>Your time off has been logged in the system.</p>
-                    `
-                });
+                if (userSnap.exists()) {
+                    const user = userSnap.data() as User;
+                    await sendEmail({
+                        to: user.email,
+                        subject: `Your Leave Request has been Approved`,
+                        html: `
+                            <h1>Hello, ${requestData.userName},</h1>
+                            <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
+                            <p>Your time off has been logged in the system.</p>
+                        `
+                    });
+                }
             }
         } catch (emailError) {
             console.warn(`Leave request ${requestId} approved, but the email notification failed.`, emailError);
@@ -273,8 +276,13 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
         return { success: true };
 
     } catch (dbError) {
-        console.error("Error in approveLeaveRequestAndNotify:", dbError);
-        return { success: false, error: (dbError as Error).message || 'An unexpected database error occurred during the leave approval process.' };
+        const err = dbError as Error;
+        console.error("Error in approveLeaveRequestAndNotify:", err);
+        let errorMessage = err.message || 'An unexpected database error occurred during the leave approval process.';
+        if (err.message.toLowerCase().includes('permission')) {
+            errorMessage = 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.'
+        }
+        return { success: false, error: errorMessage };
     }
 }
 
@@ -282,12 +290,7 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
     try {
         const leaveRequestsCollection = collection(db!, 'leaveRequests');
         const requestRef = doc(leaveRequestsCollection, requestId);
-        const requestSnap = await getDoc(requestRef);
         
-        if (!requestSnap.exists()) {
-            return { success: false, error: 'Leave request not found.' };
-        }
-
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
@@ -296,24 +299,26 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedAt: serverTimestamp(),
         });
 
-        const requestData = requestSnap.data() as LeaveRequest;
-
         try {
-            const userRef = doc(db!, 'users', requestData.userId);
-            const userSnap = await getDoc(userRef);
+            const requestSnap = await getDoc(requestRef);
+            if (requestSnap.exists()) {
+                const requestData = requestSnap.data() as LeaveRequest;
+                const userRef = doc(db!, 'users', requestData.userId);
+                const userSnap = await getDoc(userRef);
 
-            if (userSnap.exists()) {
-                const user = userSnap.data() as User;
-                await sendEmail({
-                    to: user.email,
-                    subject: `Your Leave Request has been Rejected`,
-                    html: `
-                        <h1>Hello, ${requestData.userName},</h1>
-                        <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
-                        <p><strong>Reason:</strong> ${reason}</p>
-                        <p>Please see your manager if you have any questions.</p>
-                    `
-                });
+                if (userSnap.exists()) {
+                    const user = userSnap.data() as User;
+                    await sendEmail({
+                        to: user.email,
+                        subject: `Your Leave Request has been Rejected`,
+                        html: `
+                            <h1>Hello, ${requestData.userName},</h1>
+                            <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
+                            <p><strong>Reason:</strong> ${reason}</p>
+                            <p>Please see your manager if you have any questions.</p>
+                        `
+                    });
+                }
             }
         } catch (emailError) {
             console.warn(`Leave request ${requestId} was rejected, but the email notification failed.`, emailError);
@@ -323,8 +328,13 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
         return { success: true };
 
     } catch (dbError) {
-        console.error("Error in rejectLeaveRequestAndNotify:", dbError);
-        return { success: false, error: (dbError as Error).message || 'An unexpected database error occurred during the leave rejection process.' };
+        const err = dbError as Error;
+        console.error("Error in rejectLeaveRequestAndNotify:", err);
+        let errorMessage = err.message || 'An unexpected database error occurred during the leave rejection process.';
+        if (err.message.toLowerCase().includes('permission')) {
+            errorMessage = 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.'
+        }
+        return { success: false, error: errorMessage };
     }
 }
 
@@ -352,8 +362,9 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
         });
         return { success: true };
     } catch (error) {
-        console.error('Error notifying admins of leave request:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send notification to admins.' };
+        const err = error as Error;
+        console.error('Error notifying admins of leave request:', err);
+        return { success: false, error: err.message || 'Failed to send notification to admins.' };
     }
 }
 
@@ -371,8 +382,9 @@ export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientE
         });
         return { success: true };
     } catch (error) {
-        console.error('Error sending bonus notification:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send bonus notification.' };
+        const err = error as Error;
+        console.error('Error sending bonus notification:', err);
+        return { success: false, error: err.message || 'Failed to send bonus notification.' };
     }
 }
 
@@ -390,7 +402,8 @@ export async function sendInfractionNotification(infraction: Omit<Infraction, 'i
         });
         return { success: true };
     } catch (error) {
-        console.error('Error sending infraction notification:', error);
-        return { success: false, error: (error as Error).message || 'Failed to send infraction notification.' };
+        const err = error as Error;
+        console.error('Error sending infraction notification:', err);
+        return { success: false, error: err.message || 'Failed to send infraction notification.' };
     }
 }
