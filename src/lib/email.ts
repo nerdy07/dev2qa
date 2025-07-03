@@ -1,13 +1,19 @@
 'use server';
 
-import sgMail from '@sendgrid/mail';
+import Mailgun from 'mailgun.js';
+import formData from 'form-data';
 
-const sendgridApiKey = process.env.SENDGRID_API_KEY;
+const mailgunApiKey = process.env.MAILGUN_API_KEY;
+const mailgunDomain = process.env.MAILGUN_DOMAIN;
 
-if (sendgridApiKey) {
-    sgMail.setApiKey(sendgridApiKey);
+let mailgun: Mailgun | null = null;
+let mg: ReturnType<Mailgun['client']> | null = null;
+
+if (mailgunApiKey && mailgunDomain) {
+    mailgun = new Mailgun(formData);
+    mg = mailgun.client({ username: 'api', key: mailgunApiKey });
 } else {
-    console.warn('SendGrid API key not found. Email notifications are disabled.');
+    console.warn('Mailgun API key or domain not found. Email notifications are disabled.');
 }
 
 interface MailOptions {
@@ -17,24 +23,23 @@ interface MailOptions {
 }
 
 export async function sendEmail({ to, subject, html }: MailOptions) {
-    if (!sendgridApiKey) {
-        console.error('Attempted to send email without an API key.');
-        // In a real app, you might want to return an error or handle this more gracefully.
+    if (!mg || !mailgunDomain) {
+        console.error('Attempted to send email without Mailgun being configured.');
         return { success: false, error: 'Email service is not configured.' };
     }
 
     const msg = {
-        to,
-        from: 'no-reply@dev2qa.app', // You will need to verify this sender address in SendGrid
+        from: `Dev2QA <mailgun@${mailgunDomain}>`,
+        to: [to],
         subject,
         html,
     };
 
     try {
-        await sgMail.send(msg);
+        await mg.messages.create(mailgunDomain, msg);
         return { success: true };
     } catch (error) {
-        console.error('Error sending email:', error);
+        console.error('Error sending email via Mailgun:', error);
         return { success: false, error: 'Failed to send email.' };
     }
 }
