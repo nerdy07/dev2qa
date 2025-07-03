@@ -271,35 +271,44 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
-        const request = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
 
+        // Perform the core database operation
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approverId,
             reviewedByName: approverName,
             reviewedAt: serverTimestamp(),
         });
+        
+        // Decouple email notification from the main operation
+        try {
+            const userRef = doc(db!, 'users', requestData.userId);
+            const userSnap = await getDoc(userRef);
 
-        const userRef = doc(db!, 'users', request.userId);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-            const user = userSnap.data() as User;
-            await sendEmail({
-                to: user.email,
-                subject: `Your Leave Request has been Approved`,
-                html: `
-                    <h1>Hello, ${request.userName},</h1>
-                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
-                    <p>Your time off has been logged in the system.</p>
-                `
-            });
+            if (userSnap.exists()) {
+                const user = userSnap.data() as User;
+                await sendEmail({
+                    to: user.email,
+                    subject: `Your Leave Request has been Approved`,
+                    html: `
+                        <h1>Hello, ${requestData.userName},</h1>
+                        <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
+                        <p>Your time off has been logged in the system.</p>
+                    `
+                });
+            }
+        } catch (emailError) {
+            // Log the error for debugging but don't fail the entire transaction
+            console.warn(`Leave request ${requestId} approved, but the email notification failed.`, emailError);
         }
+
         revalidatePath('/dashboard/admin/leave');
         return { success: true };
-    } catch (error) {
-        console.error("Error approving leave:", error);
-        return { success: false, error: 'An unexpected error occurred during leave approval.' };
+
+    } catch (dbError) {
+        console.error("Error approving leave (DB operation):", dbError);
+        return { success: false, error: 'An unexpected database error occurred during leave approval.' };
     }
 }
 
@@ -311,8 +320,9 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
         if (!requestSnap.exists()) {
             return { success: false, error: 'Leave request not found.' };
         }
-        const request = requestSnap.data() as Omit<LeaveRequest, 'id'>;
+        const requestData = requestSnap.data() as Omit<LeaveRequest, 'id'>;
 
+        // Perform the core database operation
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
@@ -321,36 +331,43 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedAt: serverTimestamp(),
         });
 
-        const userRef = doc(db!, 'users', request.userId);
-        const userSnap = await getDoc(userRef);
+        // Decouple email notification
+        try {
+            const userRef = doc(db!, 'users', requestData.userId);
+            const userSnap = await getDoc(userRef);
 
-        if (userSnap.exists()) {
-            const user = userSnap.data() as User;
-            await sendEmail({
-                to: user.email,
-                subject: `Your Leave Request has been Rejected`,
-                html: `
-                    <h1>Hello, ${request.userName},</h1>
-                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
-                    <p><strong>Reason:</strong> ${reason}</p>
-                    <p>Please see your manager if you have any questions.</p>
-                `
-            });
+            if (userSnap.exists()) {
+                const user = userSnap.data() as User;
+                await sendEmail({
+                    to: user.email,
+                    subject: `Your Leave Request has been Rejected`,
+                    html: `
+                        <h1>Hello, ${requestData.userName},</h1>
+                        <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
+                        <p><strong>Reason:</strong> ${reason}</p>
+                        <p>Please see your manager if you have any questions.</p>
+                    `
+                });
+            }
+        } catch (emailError) {
+            console.warn(`Leave request ${requestId} was rejected, but the email notification failed.`, emailError);
         }
+
         revalidatePath('/dashboard/admin/leave');
         return { success: true };
-    } catch (error) {
-        console.error("Error rejecting leave:", error);
-        return { success: false, error: 'An unexpected error occurred during leave rejection.' };
+
+    } catch (dbError) {
+        console.error("Error rejecting leave (DB operation):", dbError);
+        return { success: false, error: 'An unexpected database error occurred during leave rejection.' };
     }
 }
 
 // --- HR Notifications ---
 
-export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>) {
+export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientEmail: string) {
     try {
         await sendEmail({
-            to: bonus.userName, // Assuming userName is the email for now, needs fix
+            to: recipientEmail,
             subject: `You've Received a Bonus!`,
             html: `
                 <h1>Congratulations, ${bonus.userName}!</h1>
@@ -366,10 +383,10 @@ export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>) {
     }
 }
 
-export async function sendInfractionNotification(infraction: Omit<Infraction, 'id'>) {
+export async function sendInfractionNotification(infraction: Omit<Infraction, 'id'>, recipientEmail: string) {
     try {
         await sendEmail({
-            to: infraction.userName, // Assuming userName is the email for now, needs fix
+            to: recipientEmail,
             subject: `Notification of Recorded Infraction`,
             html: `
                 <h1>Hello, ${infraction.userName},</h1>

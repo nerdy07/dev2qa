@@ -84,8 +84,7 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
 
       await addDoc(collection(db!, 'infractions'), infractionData);
       
-      const infractionWithEmail = { ...infractionData, userName: selectedUser.email };
-      await sendInfractionNotification(infractionWithEmail);
+      await sendInfractionNotification(infractionData, selectedUser.email);
 
 
       toast({

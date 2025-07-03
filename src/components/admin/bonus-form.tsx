@@ -90,9 +90,7 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
 
       await addDoc(collection(db!, 'bonuses'), bonusData);
       
-      // We need to pass the user's email to the notification function
-      const bonusWithEmail = { ...bonusData, userName: selectedUser.email };
-      await sendBonusNotification(bonusWithEmail);
+      await sendBonusNotification(bonusData, selectedUser.email);
 
 
       toast({
