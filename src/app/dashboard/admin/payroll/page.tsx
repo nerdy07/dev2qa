@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -40,13 +40,17 @@ export default function PayrollPage() {
   const { data: infractions, loading: infractionsLoading, error: infractionsError } = useCollection<Infraction>('infractions');
   const { data: bonuses, loading: bonusesLoading, error: bonusesError } = useCollection<Bonus>('bonuses');
   
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>();
   
+  useEffect(() => {
+    setSelectedDate(new Date());
+  }, []);
+
   const loading = usersLoading || infractionsLoading || bonusesLoading;
   const error = usersError || infractionsError || bonusesError;
 
   const payrollData = useMemo<PayrollEntry[]>(() => {
-    if (loading || error || !users || !infractions || !bonuses) return [];
+    if (loading || error || !users || !infractions || !bonuses || !selectedDate) return [];
 
     const monthStart = startOfMonth(selectedDate);
     const monthEnd = endOfMonth(selectedDate);
@@ -92,19 +96,21 @@ export default function PayrollPage() {
   }, [users, infractions, bonuses, selectedDate, loading, error]);
 
   const handleMonthChange = (month: string) => {
+    if (!selectedDate) return;
     const newDate = new Date(selectedDate);
     newDate.setMonth(parseInt(month));
     setSelectedDate(newDate);
   }
 
   const handleYearChange = (year: string) => {
+    if (!selectedDate) return;
     const newDate = new Date(selectedDate);
     newDate.setFullYear(parseInt(year));
     setSelectedDate(newDate);
   }
 
   const renderContent = () => {
-    if (loading) {
+    if (loading || !selectedDate) {
       return (
         <TableBody>
           {[...Array(5)].map((_, i) => (
@@ -147,7 +153,7 @@ export default function PayrollPage() {
             <TableCell className="text-primary">{formatCurrency(entry.totalBonuses)}</TableCell>
             <TableCell className="font-semibold">{formatCurrency(entry.netSalary)}</TableCell>
             <TableCell className="text-right">
-              <PayrollDetailsDialog entry={entry} selectedDate={selectedDate} />
+              {selectedDate && <PayrollDetailsDialog entry={entry} selectedDate={selectedDate} />}
             </TableCell>
           </TableRow>
         ))}
@@ -169,22 +175,31 @@ export default function PayrollPage() {
             <CardTitle>Payroll Report</CardTitle>
             <CardDescription>Select a month and year to generate the report.</CardDescription>
             <div className="flex items-center gap-4 pt-4">
-                <Select value={getMonth(selectedDate).toString()} onValueChange={handleMonthChange}>
-                    <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select Month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                    </SelectContent>
-                </Select>
-                 <Select value={getYear(selectedDate).toString()} onValueChange={handleYearChange}>
-                    <SelectTrigger className="w-[120px]">
-                        <SelectValue placeholder="Select Year" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
-                    </SelectContent>
-                </Select>
+                {selectedDate ? (
+                  <>
+                    <Select value={getMonth(selectedDate).toString()} onValueChange={handleMonthChange}>
+                        <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select Month" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select value={getYear(selectedDate).toString()} onValueChange={handleYearChange}>
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Select Year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                  </>
+                ) : (
+                  <>
+                    <Skeleton className="h-10 w-[180px]" />
+                    <Skeleton className="h-10 w-[120px]" />
+                  </>
+                )}
             </div>
         </CardHeader>
         <CardContent>
