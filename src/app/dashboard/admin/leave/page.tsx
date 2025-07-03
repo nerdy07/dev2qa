@@ -51,7 +51,7 @@ export default function LeaveManagementPage() {
 
   const handleApprove = async (request: LeaveRequest) => {
     if (!currentUser) return;
-    const result = await approveLeaveRequestAndNotify(request.id, currentUser);
+    const result = await approveLeaveRequestAndNotify(request.id, currentUser.id, currentUser.name);
     if (result.success) {
       toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
     } else {
@@ -71,7 +71,7 @@ export default function LeaveManagementPage() {
       return;
     }
     
-    const result = await rejectLeaveRequestAndNotify(selectedRequest.id, currentUser, rejectionReason);
+    const result = await rejectLeaveRequestAndNotify(selectedRequest.id, currentUser.id, currentUser.name, rejectionReason);
 
     if (result.success) {
         toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });

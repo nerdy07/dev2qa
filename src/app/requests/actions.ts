@@ -263,7 +263,7 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
     }
 }
 
-export async function approveLeaveRequestAndNotify(requestId: string, approver: User) {
+export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
     try {
         const requestRef = doc(db, 'leaveRequests', requestId);
         const requestSnap = await getDoc(requestRef);
@@ -275,8 +275,8 @@ export async function approveLeaveRequestAndNotify(requestId: string, approver: 
 
         await updateDoc(requestRef, {
             status: 'approved',
-            reviewedById: approver.id,
-            reviewedByName: approver.name,
+            reviewedById: approverId,
+            reviewedByName: approverName,
             reviewedAt: serverTimestamp(),
         });
 
@@ -290,7 +290,7 @@ export async function approveLeaveRequestAndNotify(requestId: string, approver: 
                 subject: `Your Leave Request has been Approved`,
                 html: `
                     <h1>Hello, ${request.userName},</h1>
-                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been approved by ${approver.name}.</p>
+                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
                     <p>Your time off has been logged in the system.</p>
                 `
             });
@@ -303,7 +303,7 @@ export async function approveLeaveRequestAndNotify(requestId: string, approver: 
     }
 }
 
-export async function rejectLeaveRequestAndNotify(requestId: string, rejector: User, reason: string) {
+export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
     try {
         const requestRef = doc(db, 'leaveRequests', requestId);
         const requestSnap = await getDoc(requestRef);
@@ -316,8 +316,8 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejector: U
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
-            reviewedById: rejector.id,
-            reviewedByName: rejector.name,
+            reviewedById: rejectorId,
+            reviewedByName: rejectorName,
             reviewedAt: serverTimestamp(),
         });
 
@@ -331,7 +331,7 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejector: U
                 subject: `Your Leave Request has been Rejected`,
                 html: `
                     <h1>Hello, ${request.userName},</h1>
-                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejector.name}.</p>
+                    <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
                     <p><strong>Reason:</strong> ${reason}</p>
                     <p>Please see your manager if you have any questions.</p>
                 `
