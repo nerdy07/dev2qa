@@ -3,6 +3,7 @@ import {
   Award,
   BookUser,
   ChevronDown,
+  DollarSign,
   FilePlus2,
   FolderKanban,
   LayoutDashboard,
@@ -44,6 +45,7 @@ export function Sidebar() {
       { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects' },
       { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions' },
       { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
+      { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll' },
     ],
     requester: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },

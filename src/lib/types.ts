@@ -5,6 +5,7 @@ export type User = {
   role: 'admin' | 'requester' | 'qa_tester';
   photoURL?: string;
   expertise?: string;
+  baseSalary?: number;
 };
 
 export type Team = {

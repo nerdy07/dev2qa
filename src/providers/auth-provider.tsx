@@ -16,7 +16,7 @@ interface AuthContextType {
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
-  createUser: (name: string, email: string, pass:string, role: User['role'], expertise?: string) => Promise<any>;
+  createUser: (name: string, email: string, pass:string, role: User['role'], expertise?: string, baseSalary?: number) => Promise<any>;
   updateUser: (uid: string, data: Partial<User>) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
 }
@@ -145,7 +145,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: authUser.email!,
             role: userData.role,
             photoURL: authUser.photoURL || undefined,
-            expertise: userData.expertise
+            expertise: userData.expertise,
+            baseSalary: userData.baseSalary,
           });
         } else {
             console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating one.");
@@ -207,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return signOut(auth);
   };
 
-  const createUser = async (name: string, email: string, pass: string, role: User['role'], expertise?: string) => {
+  const createUser = async (name: string, email: string, pass: string, role: User['role'], expertise?: string, baseSalary?: number) => {
     if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
@@ -219,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name,
         email,
         role,
+        baseSalary: baseSalary || 0,
     };
     if (role === 'qa_tester' && expertise) {
       userData.expertise = expertise;

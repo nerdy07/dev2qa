@@ -31,6 +31,7 @@ const formSchemaBase = z.object({
     email: z.string().email({ message: 'Invalid email address.' }),
     role: z.enum(['requester', 'qa_tester', 'admin'], { required_error: 'Please select a role.' }),
     expertise: z.string().optional(),
+    baseSalary: z.coerce.number().min(0, 'Salary must be a positive number.').optional(),
 });
   
 const createFormSchema = formSchemaBase.extend({
@@ -59,6 +60,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
       role: user?.role || 'requester',
       password: '',
       expertise: user?.expertise || '',
+      baseSalary: user?.baseSalary || 0,
     },
   });
 
@@ -72,6 +74,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 email: values.email,
                 role: values.role,
                 expertise: values.role === 'qa_tester' ? values.expertise : '',
+                baseSalary: values.baseSalary,
             };
             await updateUser(user.id, dataToUpdate);
             toast({
@@ -80,7 +83,14 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             });
         } else if (!isEditing) {
             const createValues = values as z.infer<typeof createFormSchema>;
-            await createUser(createValues.name, createValues.email, createValues.password, createValues.role, createValues.expertise);
+            await createUser(
+                createValues.name, 
+                createValues.email, 
+                createValues.password, 
+                createValues.role, 
+                createValues.expertise, 
+                createValues.baseSalary
+            );
             toast({
                 title: 'User Created',
                 description: `${values.name} has been successfully created. You can now send them a password reset link from the user list.`,
@@ -129,6 +139,22 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
               <FormMessage />
             </FormItem>
           )}
+        />
+        <FormField
+            control={form.control}
+            name="baseSalary"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Base Monthly Salary (NGN)</FormLabel>
+                <FormControl>
+                    <Input type="number" placeholder="e.g., 150000" {...field} />
+                </FormControl>
+                <FormDescription>
+                    Enter the user's gross monthly salary before deductions and bonuses.
+                </FormDescription>
+                <FormMessage />
+            </FormItem>
+            )}
         />
         {!isEditing && (
             <FormField
