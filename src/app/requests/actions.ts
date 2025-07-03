@@ -1,6 +1,6 @@
 'use server';
 
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where, collectionGroup } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendEmail } from '@/lib/email';
 import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment } from '@/lib/types';
@@ -238,9 +238,14 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
 
 export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
     try {
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const requestRef = doc(leaveRequestsCollection, requestId);
-        
+        const approverRef = doc(db!, 'users', approverId);
+        const approverSnap = await getDoc(approverRef);
+
+        if (!approverSnap.exists() || approverSnap.data()?.role !== 'admin') {
+            throw new Error(`Action denied. The user '${approverName}' does not have admin privileges.`);
+        }
+
+        const requestRef = doc(db!, 'leaveRequests', requestId);
         await updateDoc(requestRef, {
             status: 'approved',
             reviewedById: approverId,
@@ -248,15 +253,15 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
             reviewedAt: serverTimestamp(),
         });
         
-        try {
-            const requestSnap = await getDoc(requestRef);
-            if (requestSnap.exists()) {
-                const requestData = requestSnap.data() as LeaveRequest;
-                const userRef = doc(db!, 'users', requestData.userId);
-                const userSnap = await getDoc(userRef);
+        const requestSnap = await getDoc(requestRef);
+        if (requestSnap.exists()) {
+            const requestData = requestSnap.data() as LeaveRequest;
+            const userRef = doc(db!, 'users', requestData.userId);
+            const userSnap = await getDoc(userRef);
 
-                if (userSnap.exists()) {
-                    const user = userSnap.data() as User;
+            if (userSnap.exists()) {
+                const user = userSnap.data() as User;
+                try {
                     await sendEmail({
                         to: user.email,
                         subject: `Your Leave Request has been Approved`,
@@ -266,31 +271,32 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
                             <p>Your time off has been logged in the system.</p>
                         `
                     });
+                } catch (emailError) {
+                    console.warn(`Leave request ${requestId} approved, but the email notification failed.`, emailError);
                 }
             }
-        } catch (emailError) {
-            console.warn(`Leave request ${requestId} approved, but the email notification failed.`, emailError);
         }
 
         revalidatePath('/dashboard/admin/leave');
         return { success: true };
 
-    } catch (dbError) {
-        const err = dbError as Error;
+    } catch (error) {
+        const err = error as Error;
         console.error("Error in approveLeaveRequestAndNotify:", err);
-        let errorMessage = err.message || 'An unexpected database error occurred during the leave approval process.';
-        if (err.message.toLowerCase().includes('permission')) {
-            errorMessage = 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.'
-        }
-        return { success: false, error: errorMessage };
+        return { success: false, error: err.message };
     }
 }
 
 export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
     try {
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const requestRef = doc(leaveRequestsCollection, requestId);
-        
+        const rejectorRef = doc(db!, 'users', rejectorId);
+        const rejectorSnap = await getDoc(rejectorRef);
+
+        if (!rejectorSnap.exists() || rejectorSnap.data()?.role !== 'admin') {
+             throw new Error(`Action denied. The user '${rejectorName}' does not have admin privileges.`);
+        }
+
+        const requestRef = doc(db!, 'leaveRequests', requestId);
         await updateDoc(requestRef, {
             status: 'rejected',
             rejectionReason: reason,
@@ -299,15 +305,15 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
             reviewedAt: serverTimestamp(),
         });
 
-        try {
-            const requestSnap = await getDoc(requestRef);
-            if (requestSnap.exists()) {
-                const requestData = requestSnap.data() as LeaveRequest;
-                const userRef = doc(db!, 'users', requestData.userId);
-                const userSnap = await getDoc(userRef);
+        const requestSnap = await getDoc(requestRef);
+        if (requestSnap.exists()) {
+            const requestData = requestSnap.data() as LeaveRequest;
+            const userRef = doc(db!, 'users', requestData.userId);
+            const userSnap = await getDoc(userRef);
 
-                if (userSnap.exists()) {
-                    const user = userSnap.data() as User;
+            if (userSnap.exists()) {
+                const user = userSnap.data() as User;
+                 try {
                     await sendEmail({
                         to: user.email,
                         subject: `Your Leave Request has been Rejected`,
@@ -318,23 +324,19 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
                             <p>Please see your manager if you have any questions.</p>
                         `
                     });
+                } catch (emailError) {
+                    console.warn(`Leave request ${requestId} was rejected, but the email notification failed.`, emailError);
                 }
             }
-        } catch (emailError) {
-            console.warn(`Leave request ${requestId} was rejected, but the email notification failed.`, emailError);
         }
 
         revalidatePath('/dashboard/admin/leave');
         return { success: true };
 
-    } catch (dbError) {
-        const err = dbError as Error;
+    } catch (error) {
+        const err = error as Error;
         console.error("Error in rejectLeaveRequestAndNotify:", err);
-        let errorMessage = err.message || 'An unexpected database error occurred during the leave rejection process.';
-        if (err.message.toLowerCase().includes('permission')) {
-            errorMessage = 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.'
-        }
-        return { success: false, error: errorMessage };
+        return { success: false, error: err.message };
     }
 }
 
