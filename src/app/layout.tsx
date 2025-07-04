@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Inter } from 'next/font/google';
-import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from '@/providers/auth-provider';
+import { Providers } from '@/providers/providers';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,10 +21,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body suppressHydrationWarning={true} className={`${inter.variable} font-body antialiased h-full`}>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
