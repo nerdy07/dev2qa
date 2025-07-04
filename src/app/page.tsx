@@ -66,7 +66,11 @@ export default function LoginPage() {
       await login(values.email, values.password);
       router.push('/dashboard');
     } catch (err: any) {
-        setError(err.message || 'An unexpected error occurred.');
+        if (err.code === 'auth/user-disabled') {
+            setError('This account has been deactivated. Please contact an administrator.');
+        } else {
+            setError(err.message || 'An unexpected error occurred.');
+        }
         console.error(err);
     }
   }

@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       email: email,
       password: password,
       displayName: name,
+      disabled: false,
     });
 
     // Create user document in Firestore
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
         baseSalary: baseSalary || 0,
         annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
         expertise: role === 'qa_tester' ? expertise : '',
+        disabled: false,
     };
     await userDocRef.set(userData);
 
