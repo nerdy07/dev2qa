@@ -78,7 +78,7 @@ export default function BonusesPage() {
             <TableCell className="font-medium">{bonus.userName}</TableCell>
             <TableCell>{bonus.bonusType}</TableCell>
             <TableCell className="text-primary font-semibold">{formatAmount(bonus.amount, bonus.currency)}</TableCell>
-            <TableCell>{format(bonus.dateIssued.toDate(), 'PPP')}</TableCell>
+            <TableCell>{bonus.dateIssued ? format(bonus.dateIssued.toDate(), 'PPP') : 'Processing...'}</TableCell>
             <TableCell>{bonus.issuedByName}</TableCell>
           </TableRow>
         ))}

@@ -100,7 +100,7 @@ export default function MyRecordsPage() {
                                     ))}
                                     {!loading && infractions?.map(infraction => (
                                         <TableRow key={infraction.id}>
-                                            <TableCell>{format(infraction.dateIssued.toDate(), 'PPP')}</TableCell>
+                                            <TableCell>{infraction.dateIssued ? format(infraction.dateIssued.toDate(), 'PPP') : 'Processing...'}</TableCell>
                                             <TableCell className="font-medium">{infraction.infractionType}</TableCell>
                                             <TableCell className="text-destructive font-semibold">{infraction.deductionPercentage > 0 ? `${infraction.deductionPercentage}%` : 'N/A'}</TableCell>
                                             <TableCell>{infraction.issuedByName}</TableCell>
@@ -144,7 +144,7 @@ export default function MyRecordsPage() {
                                     ))}
                                     {!loading && bonuses?.map(bonus => (
                                         <TableRow key={bonus.id}>
-                                            <TableCell>{format(bonus.dateIssued.toDate(), 'PPP')}</TableCell>
+                                            <TableCell>{bonus.dateIssued ? format(bonus.dateIssued.toDate(), 'PPP') : 'Processing...'}</TableCell>
                                             <TableCell className="font-medium">{bonus.bonusType}</TableCell>
                                             <TableCell className="text-primary font-semibold">{formatAmount(bonus.amount, bonus.currency)}</TableCell>
                                             <TableCell>{bonus.issuedByName}</TableCell>

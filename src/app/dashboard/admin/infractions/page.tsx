@@ -71,7 +71,7 @@ export default function InfractionsPage() {
             <TableCell className="font-medium">{infraction.userName}</TableCell>
             <TableCell>{infraction.infractionType}</TableCell>
             <TableCell className="text-destructive font-semibold">{infraction.deductionPercentage > 0 ? `${infraction.deductionPercentage}%` : 'N/A'}</TableCell>
-            <TableCell>{format(infraction.dateIssued.toDate(), 'PPP')}</TableCell>
+            <TableCell>{infraction.dateIssued ? format(infraction.dateIssued.toDate(), 'PPP') : 'Processing...'}</TableCell>
             <TableCell>{infraction.issuedByName}</TableCell>
           </TableRow>
         ))}

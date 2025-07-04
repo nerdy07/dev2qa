@@ -60,12 +60,14 @@ export default function PayrollPage() {
       
       const userInfractions = infractions.filter(i => 
         i.userId === user.id &&
+        i.dateIssued &&
         i.dateIssued.toDate() >= monthStart &&
         i.dateIssued.toDate() <= monthEnd
       );
 
       const userBonuses = bonuses.filter(b =>
         b.userId === user.id &&
+        b.dateIssued &&
         b.dateIssued.toDate() >= monthStart &&
         b.dateIssued.toDate() <= monthEnd
       );
