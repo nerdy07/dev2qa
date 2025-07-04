@@ -24,8 +24,7 @@ interface MailOptions {
 
 export async function sendEmail({ to, subject, html }: MailOptions) {
     if (!mg || !mailgunDomain) {
-        console.error('Attempted to send email without Mailgun being configured.');
-        return { success: false, error: 'Email service is not configured.' };
+        return { success: false, error: 'Email service is not configured. Please check your MAILGUN_API_KEY and MAILGUN_DOMAIN environment variables in the .env file.' };
     }
 
     const msg = {
@@ -38,8 +37,20 @@ export async function sendEmail({ to, subject, html }: MailOptions) {
     try {
         await mg.messages.create(mailgunDomain, msg);
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error sending email via Mailgun:', error);
-        return { success: false, error: 'Failed to send email.' };
+        
+        // Provide specific, actionable error messages
+        if (error.status === 401) {
+            return { success: false, error: 'Mailgun authentication failed (401). Please check if your MAILGUN_API_KEY is correct in the .env file.' };
+        }
+        
+        const errorMessage = error.details || error.message || 'An unknown error occurred during the API call to Mailgun.';
+        
+        if (typeof errorMessage === 'string' && errorMessage.includes('Sandbox subdomains are for test purposes only')) {
+            return { success: false, error: 'Mailgun Sandbox Error: You must add the recipient email address to the authorized recipients list in your Mailgun account before sending.' };
+        }
+        
+        return { success: false, error: `Mailgun API Error: ${errorMessage}` };
     }
 }
