@@ -1,3 +1,4 @@
+
 'use client';
 import React from 'react';
 import { useAuth } from '@/providers/auth-provider';
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useCollection } from '@/hooks/use-collection';
 import { Team, Project, CertificateRequest, User } from '@/lib/types';
-import { query, where, limit, collection, orderBy } from 'firebase/firestore';
+import { query, where, limit, collection, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import DashboardLoading from './loading';
@@ -27,24 +28,58 @@ export default function DashboardPage() {
     const { data: users, loading: usersLoading } = useCollection<User>('users');
     const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
     const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
-    const { data: requests, loading: requestsLoading, error } = useCollection<CertificateRequest>('requests');
     
-    // For Recent Requests Table
-    const { data: recentRequests, loading: recentRequestsLoading } = useCollection<CertificateRequest>(
+    // For Recent Requests Table - this is already optimized with limit(5)
+    const { data: recentRequests, loading: recentRequestsLoading, error: recentRequestsError } = useCollection<CertificateRequest>(
         'requests',
         query(collection(db!, 'requests'), orderBy('createdAt', 'desc'), limit(5))
     );
 
-    const loading = usersLoading || teamsLoading || projectsLoading || requestsLoading || recentRequestsLoading;
+    // State for our new stats, fetched efficiently
+    const [stats, setStats] = React.useState({ total: 0, approved: 0, pending: 0, rejected: 0 });
+    const [statsLoading, setStatsLoading] = React.useState(true);
+    const [statsError, setStatsError] = React.useState<string | null>(null);
 
-    const stats = React.useMemo(() => {
-        if (!requests) return { approved: 0, pending: 0, rejected: 0 };
-        return {
-            approved: requests.filter(r => r.status === 'approved').length,
-            pending: requests.filter(r => r.status === 'pending').length,
-            rejected: requests.filter(r => r.status === 'rejected').length,
-        }
-    }, [requests]);
+    // Fetch counts efficiently on component mount
+    React.useEffect(() => {
+        const fetchCounts = async () => {
+            if (!db) return;
+            try {
+                const requestsCollection = collection(db, 'requests');
+                
+                const approvedQuery = query(requestsCollection, where('status', '==', 'approved'));
+                const pendingQuery = query(requestsCollection, where('status', '==', 'pending'));
+                const rejectedQuery = query(requestsCollection, where('status', '==', 'rejected'));
+
+                // Get counts from server
+                const [totalSnapshot, approvedSnapshot, pendingSnapshot, rejectedSnapshot] = await Promise.all([
+                    getCountFromServer(requestsCollection),
+                    getCountFromServer(approvedQuery),
+                    getCountFromServer(pendingQuery),
+                    getCountFromServer(rejectedQuery),
+                ]);
+
+                setStats({
+                    total: totalSnapshot.data().count,
+                    approved: approvedSnapshot.data().count,
+                    pending: pendingSnapshot.data().count,
+                    rejected: rejectedSnapshot.data().count,
+                });
+
+            } catch (err) {
+                const error = err as Error;
+                console.error("Failed to fetch dashboard stats:", error);
+                setStatsError(error.message);
+            } finally {
+                setStatsLoading(false);
+            }
+        };
+
+        fetchCounts();
+    }, []);
+
+    const loading = usersLoading || teamsLoading || projectsLoading || recentRequestsLoading || statsLoading;
+    const error = statsError || recentRequestsError;
 
     if (loading) return <DashboardLoading />;
 
@@ -52,8 +87,8 @@ export default function DashboardPage() {
         return (
             <Alert variant="destructive">
                 <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>Failed to load dashboard data. Please try again later.</AlertDescription>
+                <AlertTitle>Error Loading Dashboard</AlertTitle>
+                <AlertDescription>{typeof error === 'string' ? error : (error as Error)?.message}</AlertDescription>
             </Alert>
         )
     }
@@ -68,7 +103,7 @@ export default function DashboardPage() {
           <StatCard title="Total Users" value={users?.length.toString() || '0'} icon={Users} />
           <StatCard title="Total Teams" value={teams?.length.toString() || '0'} icon={Shield} />
           <StatCard title="Total Projects" value={projects?.length.toString() || '0'} icon={FolderKanban} />
-          <StatCard title="Total Requests" value={requests?.length.toString() || '0'} icon={FileText} />
+          <StatCard title="Total Requests" value={stats.total.toString()} icon={FileText} />
         </div>
         <div className="grid gap-4 md:grid-cols-3 mt-4">
             <StatCard title="Approved Certificates" value={stats.approved.toString()} icon={CheckCircle} />
