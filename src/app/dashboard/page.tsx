@@ -232,7 +232,8 @@ export default function DashboardPage() {
             collection(db!, 'requests'), 
             where('qaTesterId', '==', user.id), 
             where('status', '==', 'approved'),
-            orderBy('updatedAt', 'desc')
+            orderBy('updatedAt', 'desc'),
+            limit(50)
         );
     }, [user?.id]);
 
@@ -310,7 +311,7 @@ export default function DashboardPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>My Approved Certificates</CardTitle>
-                        <CardDescription>A history of all the certificate requests you have approved. You can filter by title, requester, project, or date.</CardDescription>
+                        <CardDescription>A history of the last 50 certificate requests you have approved. You can filter by title, requester, project, or date.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-col md:flex-row items-center gap-4 mb-6">

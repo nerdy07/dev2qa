@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
-const EchobitLogo = () => (
+const CertiTrackLogo = () => (
     <div className="flex items-center gap-3 font-sans">
         <div className="w-9 h-9">
             <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -26,7 +26,7 @@ const EchobitLogo = () => (
                 <path d="M75 50C75 63.8071 63.8071 75 50 75C36.1929 75 25 63.8071 25 50C25 36.1929 36.1929 25 50 25" stroke="white" strokeWidth="12" strokeLinecap="round" />
             </svg>
         </div>
-        <p className="font-semibold tracking-[0.2em] text-accent">ECHOBITSTECH</p>
+        <p className="font-semibold tracking-[0.2em] text-accent">CERTITRACK</p>
     </div>
 );
 
@@ -66,7 +66,7 @@ const QualitySeal = () => (
             <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="1.5" />
             <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="0.5" />
             <g className="text-accent/90 font-sans font-semibold text-[9px] tracking-wider" fill="currentColor">
-                <text><textPath href="#circlePath" startOffset="50%" textAnchor="middle">ECHOBITSTECH • QUALITY ASSURANCE</textPath></text>
+                <text><textPath href="#circlePath" startOffset="50%" textAnchor="middle">CERTITRACK • QUALITY ASSURANCE</textPath></text>
             </g>
             <path d="M50 25 l5 10 l10 5 l-10 5 l-5 10 l-5 -10 l-10 -5 l10 -5 Z" fill="hsl(var(--gold))" stroke="currentColor" strokeWidth="1" />
         </g>
@@ -229,7 +229,7 @@ export default function CertificatePage() {
 
                     <div className="absolute inset-0 flex flex-col p-16 z-10">
                         <header className="flex justify-between items-start mb-8">
-                            <EchobitLogo />
+                            <CertiTrackLogo />
                             <div className="text-right font-sans">
                                 <p className="font-semibold text-lg">{format(approvalDate, 'MMMM do, yyyy')}</p>
                                 <p className="text-xs text-muted-foreground">Date of Issue</p>
