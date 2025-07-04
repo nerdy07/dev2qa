@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { checkMyRole } from '@/app/requests/actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Fingerprint, Loader2, TriangleAlert } from 'lucide-react';
+import { useAuth } from '@/providers/auth-provider';
+import { useToast } from '@/hooks/use-toast';
 
 type CheckResult = {
   success: boolean;
@@ -15,13 +17,23 @@ type CheckResult = {
 };
 
 export default function DiagnosticsPage() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
 
   const handleCheckRole = async () => {
+    if (!user) {
+      toast({
+        title: "Not Logged In",
+        description: "Cannot perform check because user is not logged in.",
+        variant: "destructive",
+      });
+      return;
+    }
     setLoading(true);
     setResult(null);
-    const checkResult = await checkMyRole();
+    const checkResult = await checkMyRole(user.id);
     setResult(checkResult);
     setLoading(false);
   };
@@ -41,7 +53,7 @@ export default function DiagnosticsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Button onClick={handleCheckRole} disabled={loading}>
+          <Button onClick={handleCheckRole} disabled={loading || !user}>
             {loading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -67,7 +79,7 @@ export default function DiagnosticsPage() {
                   <AlertDescription>
                     <p>The server could not verify your role. Here is the error message:</p>
                     <p className="font-mono bg-destructive/20 p-2 rounded-md mt-2">{result.error}</p>
-                    <p className="mt-2">This almost always means there is a "Missing or insufficient permissions" error on the `/users` collection in your Firestore security rules.</p>
+                    <p className="mt-2">This most likely means there is a "Missing or insufficient permissions" error. Check that your security rules for the `/users` collection allow you to read your own document.</p>
                   </AlertDescription>
                 </Alert>
               )}

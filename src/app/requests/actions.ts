@@ -6,17 +6,11 @@ import { sendEmail } from '@/lib/email';
 import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
-import { getAuth } from 'firebase-admin/auth';
-import { headers } from 'next/headers';
-import { auth } from '@/lib/firebase';
-import { getApps } from 'firebase/app';
 
-
-export async function checkMyRole(): Promise<{ success: boolean; role?: string; error?: string; }> {
-    if (!auth?.currentUser) {
-        return { success: false, error: "Not authenticated. Could not get current user." };
+export async function checkMyRole(userId: string): Promise<{ success: boolean; role?: string; error?: string; }> {
+    if (!userId) {
+        return { success: false, error: "Not authenticated on the client. Could not get current user ID." };
     }
-    const userId = auth.currentUser.uid;
 
     try {
         const userRef = doc(db!, 'users', userId);
@@ -32,6 +26,9 @@ export async function checkMyRole(): Promise<{ success: boolean; role?: string; 
     } catch (error) {
         const err = error as Error;
         console.error("Diagnostic check failed:", err);
+        if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
+             return { success: false, error: 'Database permission denied. This means your security rules are blocking you from reading your own user document. Check the rules for the `/users/{userId}` path.' };
+        }
         return { success: false, error: err.message || "An unknown error occurred." };
     }
 }
@@ -270,12 +267,13 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
     try {
         const approverRef = doc(db!, 'users', approverId);
         const approverSnap = await getDoc(approverRef);
-
         if (!approverSnap.exists() || approverSnap.data()?.role !== 'admin') {
             throw new Error(`Action denied. The user '${approverName}' does not have admin privileges.`);
         }
-
-        const leaveRequestRef = doc(db!, 'leaveRequests', requestId);
+        
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const leaveRequestRef = doc(leaveRequestsCollection, requestId);
+        
         await updateDoc(leaveRequestRef, {
             status: 'approved',
             reviewedById: approverId,
@@ -284,10 +282,16 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
         });
         
         const requestSnap = await getDoc(leaveRequestRef);
+        if (!requestSnap.exists()) {
+            throw new Error("Could not find the leave request after approving it.");
+        }
         const requestData = requestSnap.data() as LeaveRequest;
         
         const userRef = doc(db!, 'users', requestData.userId);
         const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            throw new Error("Could not find the user associated with the leave request.");
+        }
         const user = userSnap.data() as User;
 
         await sendEmail({
@@ -306,11 +310,9 @@ export async function approveLeaveRequestAndNotify(requestId: string, approverId
     } catch (error) {
         const err = error as Error;
         console.error("Error in approveLeaveRequestAndNotify:", err);
-
         if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
              return { success: false, error: 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.' };
         }
-        
         return { success: false, error: err.message };
     }
 }
@@ -319,12 +321,13 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
     try {
         const rejectorRef = doc(db!, 'users', rejectorId);
         const rejectorSnap = await getDoc(rejectorRef);
-
         if (!rejectorSnap.exists() || rejectorSnap.data()?.role !== 'admin') {
-             throw new Error(`Action denied. The user '${rejectorName}' does not have admin privileges.`);
+            throw new Error(`Action denied. The user '${rejectorName}' does not have admin privileges.`);
         }
 
-        const leaveRequestRef = doc(db!, 'leaveRequests', requestId);
+        const leaveRequestsCollection = collection(db!, 'leaveRequests');
+        const leaveRequestRef = doc(leaveRequestsCollection, requestId);
+
         await updateDoc(leaveRequestRef, {
             status: 'rejected',
             rejectionReason: reason,
@@ -334,10 +337,16 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
         });
 
         const requestSnap = await getDoc(leaveRequestRef);
+        if (!requestSnap.exists()) {
+            throw new Error("Could not find the leave request after rejecting it.");
+        }
         const requestData = requestSnap.data() as LeaveRequest;
        
         const userRef = doc(db!, 'users', requestData.userId);
         const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            throw new Error("Could not find the user associated with the leave request.");
+        }
         const user = userSnap.data() as User;
 
         await sendEmail({
@@ -357,6 +366,9 @@ export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId:
     } catch (error) {
         const err = error as Error;
         console.error("Error in rejectLeaveRequestAndNotify:", err);
+        if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
+            return { success: false, error: 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.' };
+       }
         return { success: false, error: err.message };
     }
 }
@@ -396,7 +408,7 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
 
 export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientEmail: string) {
     try {
-        await sendEmail({
+        const emailResult = await sendEmail({
             to: recipientEmail,
             subject: `You've Received a Bonus!`,
             html: `
@@ -406,17 +418,17 @@ export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientE
                 <p>This will be reflected in your next payroll. Keep up the great work!</p>
             `
         });
-        return { success: true };
+        if (!emailResult.success) {
+            console.warn(`Bonus for ${bonus.userName} was issued, but notification failed: ${emailResult.error}`);
+        }
     } catch (emailError) {
         console.warn(`Bonus for ${bonus.userName} was issued, but the notification email failed to send.`, emailError);
-        // Do not rethrow; the primary action (issuing bonus) succeeded.
-        return { success: true, message: "Bonus issued, but notification failed." };
     }
 }
 
 export async function sendInfractionNotification(infraction: Omit<Infraction, 'id'>, recipientEmail: string) {
     try {
-        await sendEmail({
+        const emailResult = await sendEmail({
             to: recipientEmail,
             subject: `Notification of Recorded Infraction`,
             html: `
@@ -426,10 +438,10 @@ export async function sendInfractionNotification(infraction: Omit<Infraction, 'i
                 <p>Please log in to the Dev2QA portal to view your full performance record. If you have any questions, please speak with your manager.</p>
             `
         });
-        return { success: true };
+        if (!emailResult.success) {
+             console.warn(`Infraction for ${infraction.userName} was issued, but notification failed: ${emailResult.error}`);
+        }
     } catch (emailError) {
         console.warn(`Infraction for ${infraction.userName} was issued, but the notification email failed to send.`, emailError);
-        // Do not rethrow; the primary action (issuing infraction) succeeded.
-        return { success: true, message: "Infraction issued, but notification failed." };
     }
 }
