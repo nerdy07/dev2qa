@@ -1,19 +1,20 @@
 'use server';
 
-import Mailgun from 'mailgun.js';
-import formData from 'form-data';
+import * as Brevo from '@getbrevo/brevo';
 
-const mailgunApiKey = process.env.MAILGUN_API_KEY;
-const mailgunDomain = process.env.MAILGUN_DOMAIN;
+const brevoApiKey = process.env.BREVO_API_KEY;
+const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL;
+// Making sender name optional and providing a default.
+const brevoSenderName = process.env.BREVO_SENDER_NAME || 'Dev2QA';
 
-let mailgun: Mailgun | null = null;
-let mg: ReturnType<Mailgun['client']> | null = null;
+let brevoClient: Brevo.TransactionalEmailsApi | null = null;
+const isBrevoConfigured = brevoApiKey && brevoSenderEmail;
 
-if (mailgunApiKey && mailgunDomain) {
-    mailgun = new Mailgun(formData);
-    mg = mailgun.client({ username: 'api', key: mailgunApiKey });
+if (isBrevoConfigured) {
+    brevoClient = new Brevo.TransactionalEmailsApi();
+    brevoClient.setApiKey(Brevo.TransactionalEmailsApiApiKeys.apiKey, brevoApiKey);
 } else {
-    console.warn('Mailgun API key or domain not found. Email notifications are disabled.');
+    console.warn('Brevo API key or sender email not found. Email notifications are disabled. Please check .env file.');
 }
 
 interface MailOptions {
@@ -22,35 +23,34 @@ interface MailOptions {
     html: string;
 }
 
-export async function sendEmail({ to, subject, html }: MailOptions) {
-    if (!mg || !mailgunDomain) {
-        return { success: false, error: 'Email service is not configured. Please check your MAILGUN_API_KEY and MAILGUN_DOMAIN environment variables in the .env file.' };
+export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ success: boolean; error?: string }> {
+    if (!isBrevoConfigured || !brevoClient) {
+        return { success: false, error: 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.' };
     }
 
-    const msg = {
-        from: `Dev2QA <mailgun@${mailgunDomain}>`,
-        to: [to],
-        subject,
-        html,
-    };
+    const sendSmtpEmail = new Brevo.SendSmtpEmail();
+    
+    sendSmtpEmail.to = to.split(',').map(email => ({ email: email.trim() }));
+    sendSmtpEmail.sender = { email: brevoSenderEmail!, name: brevoSenderName };
+    sendSmtpEmail.subject = subject;
+    sendSmtpEmail.htmlContent = html;
 
     try {
-        await mg.messages.create(mailgunDomain, msg);
+        await brevoClient.sendTransacEmail(sendSmtpEmail);
         return { success: true };
     } catch (error: any) {
-        console.error('Error sending email via Mailgun:', error);
+        console.error('Error sending email via Brevo:', JSON.stringify(error, null, 2));
         
-        // Provide specific, actionable error messages
-        if (error.status === 401) {
-            return { success: false, error: 'Mailgun authentication failed (401). Please check if your MAILGUN_API_KEY is correct in the .env file.' };
+        const errorMessage = error.response?.body?.message || error.message || 'An unknown error occurred during the API call to Brevo.';
+        
+        if (error.response?.statusCode === 401 || (typeof errorMessage === 'string' && errorMessage.includes('Key not found'))) {
+             return { success: false, error: 'Brevo authentication failed (401). Please check if your BREVO_API_KEY is correct in the .env file.' };
         }
         
-        const errorMessage = error.details || error.message || 'An unknown error occurred during the API call to Mailgun.';
-        
-        if (typeof errorMessage === 'string' && errorMessage.includes('Sandbox subdomains are for test purposes only')) {
-            return { success: false, error: 'Mailgun Sandbox Error: You must add the recipient email address to the authorized recipients list in your Mailgun account before sending.' };
+        if (typeof errorMessage === 'string' && errorMessage.includes('sender is not valid')) {
+            return { success: false, error: 'Brevo Error: The sender email address is not valid or not authorized in your Brevo account.' };
         }
-        
-        return { success: false, error: `Mailgun API Error: ${errorMessage}` };
+
+        return { success: false, error: `Brevo API Error: ${errorMessage}` };
     }
 }

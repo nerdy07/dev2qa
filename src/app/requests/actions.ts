@@ -174,7 +174,7 @@ export async function sendTestEmail(email: string) {
             subject: 'Dev2QA Test Email',
             html: `
                 <h1>This is a test email from Dev2QA.</h1>
-                <p>If you are seeing this, your Mailgun configuration is working correctly.</p>
+                <p>If you are seeing this, your email configuration is working correctly.</p>
                 <br>
                 <p>Thank you,</p>
                 <p>The Dev2QA Team</p>
