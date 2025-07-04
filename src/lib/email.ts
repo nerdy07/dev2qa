@@ -1,22 +1,10 @@
 'use server';
 
-import * as SibApiV3Sdk from 'sib-api-v3-sdk';
-
 const brevoApiKey = process.env.BREVO_API_KEY;
 const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL;
 const brevoSenderName = process.env.BREVO_SENDER_NAME || 'Dev2QA';
 
-let apiInstance: SibApiV3Sdk.TransactionalEmailsApi | null = null;
 const isBrevoConfigured = brevoApiKey && brevoSenderEmail;
-
-if (isBrevoConfigured) {
-    let defaultClient = SibApiV3Sdk.ApiClient.instance;
-    let apiKey = defaultClient.authentications['api-key'];
-    apiKey.apiKey = brevoApiKey;
-    apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-} else {
-    console.warn('Brevo API key or sender email not found. Email notifications are disabled. Please check .env file.');
-}
 
 interface MailOptions {
     to: string;
@@ -25,33 +13,58 @@ interface MailOptions {
 }
 
 export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ success: boolean; error?: string }> {
-    if (!isBrevoConfigured || !apiInstance) {
-        return { success: false, error: 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.' };
+    if (!isBrevoConfigured) {
+        const errorMessage = 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.';
+        console.warn(errorMessage);
+        return { success: false, error: errorMessage };
     }
 
-    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-    
-    sendSmtpEmail.to = to.split(',').map(email => ({ email: email.trim() }));
-    sendSmtpEmail.sender = { email: brevoSenderEmail!, name: brevoSenderName };
-    sendSmtpEmail.subject = subject;
-    sendSmtpEmail.htmlContent = html;
+    const emailRecipients = to.split(',').map(email => ({ email: email.trim() }));
+
+    const payload = {
+        sender: {
+            name: brevoSenderName,
+            email: brevoSenderEmail,
+        },
+        to: emailRecipients,
+        subject: subject,
+        htmlContent: html,
+    };
 
     try {
-        await apiInstance.sendTransacEmail(sendSmtpEmail);
-        return { success: true };
-    } catch (error: any) {
-        console.error('Error sending email via Brevo:', JSON.stringify(error, null, 2));
-        
-        const errorMessage = error.body?.message || error.message || 'An unknown error occurred during the API call to Brevo.';
-        
-        if (error.status === 401 || (typeof errorMessage === 'string' && errorMessage.includes('Key not found'))) {
-             return { success: false, error: 'Brevo authentication failed (401). Please check if your BREVO_API_KEY is correct in the .env file.' };
-        }
-        
-        if (typeof errorMessage === 'string' && (errorMessage.includes('sender is not valid') || errorMessage.includes('Sender not found'))) {
-            return { success: false, error: 'Brevo Error: The sender email address is not valid or not authorized in your Brevo account.' };
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': brevoApiKey,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            const errorMessage = errorBody.message || `Brevo API Error: Status ${response.status}`;
+            console.error('Error sending email via Brevo:', errorBody);
+
+            if (response.status === 401) {
+                return { success: false, error: 'Brevo authentication failed (401). Please check if your BREVO_API_KEY is correct in the .env file.' };
+            }
+            if (errorMessage.includes('Sender not found') || errorMessage.includes('sender is not valid')) {
+                return { success: false, error: 'Brevo Error: The sender email address is not valid or not authorized in your Brevo account.' };
+            }
+             if (errorMessage.includes("Invalid recipient email address")) {
+                return { success: false, error: `Brevo Error: One of the recipient emails is invalid.` };
+            }
+
+            return { success: false, error: errorMessage };
         }
 
-        return { success: false, error: `Brevo API Error: ${errorMessage}` };
+        // Brevo API returns 201 for success
+        return { success: true };
+
+    } catch (error: any) {
+        console.error('Failed to send email:', error);
+        return { success: false, error: 'A network or unknown error occurred while trying to send the email.' };
     }
 }
