@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -33,7 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2 } from 'lucide-react';
 import { useCollection } from '@/hooks/use-collection';
 import { Team, Project, User } from '@/lib/types';
-import { query, where, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { query, where, collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
 import { notifyOnNewRequest } from '@/app/requests/actions';
@@ -115,8 +116,8 @@ export default function NewRequestPage() {
   };
   
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) {
-        toast({ title: "Not Authenticated", description: "You must be logged in to create a request.", variant: "destructive"});
+    if (!user || !db) {
+        toast({ title: "Not Authenticated or DB not available", description: "You must be logged in to create a request.", variant: "destructive"});
         return;
     }
 
@@ -130,14 +131,30 @@ export default function NewRequestPage() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
-        const docRef = await addDoc(collection(db!, 'requests'), requestData);
+        const docRef = await addDoc(collection(db, 'requests'), requestData);
         
-        await notifyOnNewRequest({ id: docRef.id, ...requestData });
+        // Notify QA Testers
+        const qaQuery = query(collection(db, 'users'), where('role', '==', 'qa_tester'));
+        const qaSnapshot = await getDocs(qaQuery);
+        const qaEmails = qaSnapshot.docs.map(doc => (doc.data() as User).email);
+
+        const emailResult = await notifyOnNewRequest({ 
+            qaEmails: qaEmails,
+            taskTitle: values.taskTitle,
+            requesterName: user.name,
+            associatedProject: values.associatedProject,
+            associatedTeam: values.associatedTeam
+        });
 
         toast({
           title: 'Request Submitted!',
           description: 'Your certificate request has been sent for QA review.',
         });
+
+        if (!emailResult.success) {
+            toast({ title: 'QA Notification Failed', description: emailResult.error, variant: 'destructive' });
+        }
+
         router.push('/dashboard');
     } catch (err) {
         const error = err as Error;
@@ -289,3 +306,5 @@ export default function NewRequestPage() {
     </>
   );
 }
+
+    

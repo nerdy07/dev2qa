@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -14,9 +15,10 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
 import { LEAVE_TYPES } from '@/lib/constants';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { notifyAdminsOnLeaveRequest } from '@/app/requests/actions';
+import { User } from '@/lib/types';
 
 const formSchema = z.object({
   leaveType: z.string({ required_error: 'Please select a leave type.' }),
@@ -50,8 +52,8 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!currentUser) {
-      toast({ title: 'Not Authenticated', variant: 'destructive' });
+    if (!currentUser || !db) {
+      toast({ title: 'Not Authenticated or Database not available', variant: 'destructive' });
       return;
     }
 
@@ -74,14 +76,31 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         requestedAt: serverTimestamp(),
       };
       
-      const docRef = await addDoc(collection(db!, 'leaveRequests'), leaveData);
+      await addDoc(collection(db, 'leaveRequests'), leaveData);
+
+      // Notify Admins
+      const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
+      const adminSnapshot = await getDocs(adminQuery);
+      const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
       
-      await notifyAdminsOnLeaveRequest({ id: docRef.id, ...leaveData });
+      const emailResult = await notifyAdminsOnLeaveRequest({ 
+        adminEmails,
+        userName: currentUser.name,
+        leaveType: values.leaveType,
+        startDate: values.dates.from.toISOString(),
+        endDate: values.dates.to.toISOString(),
+        daysCount,
+        reason: values.reason,
+      });
 
       toast({
         title: 'Leave Request Submitted',
         description: `Your request for ${daysCount} day(s) off has been sent for approval.`,
       });
+      if (!emailResult.success) {
+        toast({ title: 'Admin Notification Failed', description: emailResult.error, variant: 'destructive' });
+      }
+
       onSuccess();
     } catch (err) {
       const error = err as Error;
@@ -160,3 +179,5 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
     </Form>
   );
 }
+
+    

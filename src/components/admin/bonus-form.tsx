@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -59,8 +60,8 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
   const selectedBonusType = BONUS_TYPES.find(b => b.name === selectedBonusTypeName);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!currentUser) {
-      toast({ title: 'Not Authenticated', variant: 'destructive' });
+    if (!currentUser || !db) {
+      toast({ title: 'Not Authenticated or Database not available', variant: 'destructive' });
       return;
     }
 
@@ -88,15 +89,23 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
         issuedByName: currentUser.name,
       };
 
-      await addDoc(collection(db!, 'bonuses'), bonusData);
+      await addDoc(collection(db, 'bonuses'), bonusData);
       
-      await sendBonusNotification(bonusData, selectedUser.email);
-
+      const emailResult = await sendBonusNotification({
+        recipientEmail: selectedUser.email,
+        userName: selectedUser.name,
+        bonusType: values.bonusType,
+        description: values.description
+      });
 
       toast({
         title: 'Bonus Issued',
         description: `A bonus has been recorded for ${selectedUser.name}.`,
       });
+      if (!emailResult.success) {
+        toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+      }
+
       onSuccess();
     } catch (err) {
       const error = err as Error;
@@ -210,3 +219,5 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
     </Form>
   );
 }
+
+    

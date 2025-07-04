@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -53,8 +54,8 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!currentUser) {
-      toast({ title: 'Not Authenticated', variant: 'destructive' });
+    if (!currentUser || !db) {
+      toast({ title: 'Not Authenticated or Database not available', variant: 'destructive' });
       return;
     }
 
@@ -82,15 +83,23 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
         issuedByName: currentUser.name,
       };
 
-      await addDoc(collection(db!, 'infractions'), infractionData);
+      await addDoc(collection(db, 'infractions'), infractionData);
       
-      await sendInfractionNotification(infractionData, selectedUser.email);
+      const emailResult = await sendInfractionNotification({
+          recipientEmail: selectedUser.email,
+          userName: selectedUser.name,
+          infractionType: values.infractionType,
+          description: values.description
+      });
 
 
       toast({
         title: 'Infraction Issued',
         description: `An infraction has been recorded for ${selectedUser.name}.`,
       });
+      if (!emailResult.success) {
+          toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+      }
       onSuccess();
     } catch (err) {
       const error = err as Error;
@@ -177,3 +186,5 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
     </Form>
   );
 }
+
+    

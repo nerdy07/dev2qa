@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
@@ -24,14 +25,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { CertificateRequest, Comment } from '@/lib/types';
+import { CertificateRequest, Comment, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { approveRequestAndSendEmail, rejectRequest, sendTestEmail, notifyOnNewComment } from '@/app/requests/actions';
+import { sendRequestApprovedEmail, sendRequestRejectedEmail, sendTestEmail, notifyOnNewComment } from '@/app/requests/actions';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
@@ -66,10 +67,15 @@ export default function RequestDetailsPage() {
 
   React.useEffect(() => {
     if (!id) return;
+    if (!db) {
+        setError("Database not available.");
+        setLoading(false);
+        return;
+    }
 
     const fetchRequest = async () => {
         try {
-            const docRef = doc(db!, 'requests', id as string);
+            const docRef = doc(db, 'requests', id as string);
             const docSnap = await getDoc(docRef);
 
             if (docSnap.exists()) {
@@ -94,24 +100,55 @@ export default function RequestDetailsPage() {
   }, [id]);
 
   const handleApprove = async () => {
-    if (!request || !user) return;
-    
-    const result = await approveRequestAndSendEmail(request, user);
+    if (!request || !user || !db) return;
 
-    if (result.success) {
+    try {
+        const certCollection = collection(db, 'certificates');
+        const certDocRef = await addDoc(certCollection, {
+            requestId: request.id,
+            taskTitle: request.taskTitle,
+            associatedTeam: request.associatedTeam,
+            associatedProject: request.associatedProject,
+            requesterName: request.requesterName,
+            qaTesterName: user.name,
+            approvalDate: serverTimestamp(),
+            status: 'valid',
+        });
+
+        const requestRef = doc(db, 'requests', request.id);
+        await updateDoc(requestRef, {
+            status: 'approved',
+            qaTesterId: user.id,
+            qaTesterName: user.name,
+            updatedAt: serverTimestamp(),
+            certificateId: certDocRef.id,
+            certificateStatus: 'valid',
+        });
+
+        const emailResult = await sendRequestApprovedEmail({
+            recipientEmail: request.requesterEmail,
+            requesterName: request.requesterName,
+            taskTitle: request.taskTitle,
+        });
+
         toast({
             title: 'Request Approved',
             description: `Certificate for "${request.taskTitle}" has been generated.`,
         });
+        if (!emailResult.success) {
+            toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+        }
+
         router.push('/dashboard');
-    } else {
-        console.error("Error approving request: ", result.error);
-        toast({ title: 'Approval Failed', variant: 'destructive', description: result.error });
+    } catch (e) {
+        const error = e as Error;
+        console.error("Error approving request: ", error);
+        toast({ title: 'Approval Failed', variant: 'destructive', description: error.message });
     }
   }
   
   const handleReject = async () => {
-    if (!request || !user) return;
+    if (!request || !user || !db) return;
 
     if (rejectionReason.trim().length < 10) {
         toast({
@@ -122,38 +159,76 @@ export default function RequestDetailsPage() {
         return;
     }
 
-    const result = await rejectRequest(request, user, rejectionReason);
+    try {
+        const requestRef = doc(db, 'requests', request.id);
+        await updateDoc(requestRef, {
+            status: 'rejected',
+            rejectionReason: rejectionReason,
+            qaTesterId: user.id,
+            qaTesterName: user.name,
+            updatedAt: serverTimestamp(),
+        });
 
-    if (result.success) {
+        const emailResult = await sendRequestRejectedEmail({
+            recipientEmail: request.requesterEmail,
+            requesterName: request.requesterName,
+            taskTitle: request.taskTitle,
+            reason: rejectionReason,
+            rejectorName: user.name,
+        });
+        
         toast({
             title: 'Request Rejected',
             description: `Request for "${request.taskTitle}" has been rejected.`,
             variant: 'destructive'
         });
+        if (!emailResult.success) {
+            toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+        }
         router.push('/dashboard');
-    } else {
-        console.error("Error rejecting request: ", result.error);
-        toast({ title: 'Rejection Failed', variant: 'destructive', description: result.error });
+    } catch (e) {
+        const error = e as Error;
+        console.error("Error rejecting request: ", error);
+        toast({ title: 'Rejection Failed', variant: 'destructive', description: error.message });
     }
   }
 
   const handlePostComment = async () => {
-    if (!newComment.trim() || !user || !request) return;
+    if (!newComment.trim() || !user || !request || !db) return;
 
     setIsSubmittingComment(true);
     try {
-      const commentData = {
-        requestId: request.id,
-        userId: user.id,
-        userName: user.name,
-        userRole: user.role,
-        text: newComment,
-        createdAt: serverTimestamp(),
-      }
-      await addDoc(collection(db!, 'comments'), commentData);
-      
-      await notifyOnNewComment(request, {id: '', ...commentData});
+        const commentData = {
+            requestId: request.id,
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            text: newComment,
+            createdAt: serverTimestamp(),
+        };
+        await addDoc(collection(db, 'comments'), commentData);
 
+        let recipientEmail: string | undefined;
+
+        if (user.role === 'requester' && request.qaTesterId) {
+            const userRef = doc(db, 'users', request.qaTesterId);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                recipientEmail = userSnap.data().email;
+            }
+        } else if (user.role === 'qa_tester' || user.role === 'admin') {
+            recipientEmail = request.requesterEmail;
+        }
+
+        if (recipientEmail) {
+            await notifyOnNewComment({
+                recipientEmail,
+                commenterName: user.name,
+                taskTitle: request.taskTitle,
+                commentText: newComment,
+            });
+        }
+      
       setNewComment('');
     } catch (err) {
       const error = err as Error;
@@ -169,9 +244,9 @@ export default function RequestDetailsPage() {
   };
 
   const handleSetSubmissionRating = async (rating: number) => {
-    if (!request || rating === request.submissionRating) return;
+    if (!request || rating === request.submissionRating || !db) return;
     try {
-        const requestRef = doc(db!, 'requests', request.id);
+        const requestRef = doc(db, 'requests', request.id);
         await updateDoc(requestRef, { submissionRating: rating });
         setRequest(prev => prev ? {...prev, submissionRating: rating} : null);
         toast({
@@ -186,13 +261,13 @@ export default function RequestDetailsPage() {
   };
 
   const handlePostQAFeedback = async () => {
-    if (!request || !user || qaProcessRating === 0) {
+    if (!request || !user || !db || qaProcessRating === 0) {
         toast({ title: 'Rating Required', description: 'Please select a star rating before submitting.', variant: 'destructive' });
         return;
     }
     setIsSubmittingFeedback(true);
     try {
-        const requestRef = doc(db!, 'requests', request.id);
+        const requestRef = doc(db, 'requests', request.id);
         await updateDoc(requestRef, { 
             qaProcessRating: qaProcessRating,
             qaProcessFeedback: qaProcessFeedback 
@@ -464,7 +539,7 @@ export default function RequestDetailsPage() {
                         </Button>
                     </CardContent>
                     <CardFooter>
-                        <p className="text-xs text-muted-foreground">This will send a test email to your own email address ({user.email}) to verify the Mailgun configuration.</p>
+                        <p className="text-xs text-muted-foreground">This will send a test email to your own email address ({user.email}) to verify the Brevo configuration.</p>
                     </CardFooter>
                 </Card>
             )}
@@ -578,3 +653,5 @@ export default function RequestDetailsPage() {
     </>
   );
 }
+
+    

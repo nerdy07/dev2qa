@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -52,9 +53,9 @@ export default function LeaveManagementPage() {
   }, [searchedRequests]);
 
   const handleApprove = async (request: LeaveRequest) => {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
-        const leaveRequestRef = doc(db!, 'leaveRequests', request.id);
+        const leaveRequestRef = doc(db, 'leaveRequests', request.id);
         
         await updateDoc(leaveRequestRef, {
             status: 'approved',
@@ -63,12 +64,12 @@ export default function LeaveManagementPage() {
             reviewedAt: serverTimestamp(),
         });
         
-        const userRef = doc(db!, 'users', request.userId);
+        const userRef = doc(db, 'users', request.userId);
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
         const requesterEmail = userSnap.data().email;
         
-        await sendLeaveApprovalEmail({
+        const emailResult = await sendLeaveApprovalEmail({
             userName: request.userName,
             startDate: request.startDate.toDate().toISOString(),
             endDate: request.endDate.toDate().toISOString(),
@@ -77,6 +78,11 @@ export default function LeaveManagementPage() {
         });
 
         toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
+
+        if (!emailResult.success) {
+            toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+        }
+
     } catch (e) {
         const error = e as Error;
         console.error("Error approving leave:", error);
@@ -90,13 +96,13 @@ export default function LeaveManagementPage() {
   };
 
   const handleReject = async () => {
-    if (!selectedRequest || !currentUser || rejectionReason.trim().length < 10) {
+    if (!selectedRequest || !currentUser || !db || rejectionReason.trim().length < 10) {
       toast({ title: 'Reason Required', description: 'Please provide a reason of at least 10 characters.', variant: 'destructive' });
       return;
     }
     
     try {
-        const leaveRequestRef = doc(db!, 'leaveRequests', selectedRequest.id);
+        const leaveRequestRef = doc(db, 'leaveRequests', selectedRequest.id);
 
         await updateDoc(leaveRequestRef, {
             status: 'rejected',
@@ -106,12 +112,12 @@ export default function LeaveManagementPage() {
             reviewedAt: serverTimestamp(),
         });
 
-        const userRef = doc(db!, 'users', selectedRequest.userId);
+        const userRef = doc(db, 'users', selectedRequest.userId);
         const userSnap = await getDoc(userRef);
         if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
         const requesterEmail = userSnap.data().email;
 
-        await sendLeaveRejectionEmail({
+        const emailResult = await sendLeaveRejectionEmail({
             userName: selectedRequest.userName,
             startDate: selectedRequest.startDate.toDate().toISOString(),
             endDate: selectedRequest.endDate.toDate().toISOString(),
@@ -121,6 +127,11 @@ export default function LeaveManagementPage() {
         });
 
         toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });
+        
+        if (!emailResult.success) {
+            toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+        }
+
         setIsRejectionDialogOpen(false);
         setRejectionReason('');
         setSelectedRequest(null);
@@ -258,3 +269,5 @@ export default function LeaveManagementPage() {
     </>
   );
 }
+
+    

@@ -1,11 +1,7 @@
 
 'use server';
 
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { sendEmail } from '@/lib/email';
-import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment } from '@/lib/types';
-import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
 
 export async function sendLeaveApprovalEmail(data: {
@@ -59,107 +55,48 @@ export async function sendLeaveRejectionEmail(data: {
 }
 
 
-export async function approveRequestAndSendEmail(request: CertificateRequest, approver: User) {
-    if (!request || !approver) {
-        return { success: false, error: 'Invalid request or user data.' };
-    }
-
+export async function sendRequestApprovedEmail(data: { recipientEmail: string; requesterName: string; taskTitle: string }) {
     try {
-        const certCollection = collection(db!, 'certificates');
-        const certDocRef = await addDoc(certCollection, {
-            requestId: request.id,
-            taskTitle: request.taskTitle,
-            associatedTeam: request.associatedTeam,
-            associatedProject: request.associatedProject,
-            requesterName: request.requesterName,
-            qaTesterName: approver.name,
-            approvalDate: serverTimestamp(),
-            status: 'valid',
+        await sendEmail({
+            to: data.recipientEmail,
+            subject: `Your Certificate Request has been Approved!`,
+            html: `
+                <h1>Congratulations, ${data.requesterName}!</h1>
+                <p>Your request for the task "<strong>${data.taskTitle}</strong>" has been approved.</p>
+                <p>You can view your certificate by logging into the Dev2QA portal.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
         });
-
-        const requestRef = doc(db!, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'approved',
-            qaTesterId: approver.id,
-            qaTesterName: approver.name,
-            updatedAt: serverTimestamp(),
-            certificateId: certDocRef.id,
-            certificateStatus: 'valid',
-        });
-
-        try {
-            await sendEmail({
-                to: request.requesterEmail,
-                subject: `Your Certificate Request has been Approved!`,
-                html: `
-                    <h1>Congratulations, ${request.requesterName}!</h1>
-                    <p>Your request for the task "<strong>${request.taskTitle}</strong>" has been approved.</p>
-                    <p>You can view your certificate by logging into the Dev2QA portal.</p>
-                    <br>
-                    <p>Thank you,</p>
-                    <p>The Dev2QA Team</p>
-                `
-            });
-        } catch (emailError) {
-             console.warn(`Request ${request.id} was approved, but the notification email failed to send.`, emailError);
-        }
-
-        revalidatePath(`/dashboard/requests/${request.id}`);
-        revalidatePath('/dashboard');
-        
-        return { success: true, certificateId: certDocRef.id };
-
-    } catch (error) {
-        const err = error as Error;
-        console.error('Error approving request:', err);
-        return { success: false, error: err.message };
+        return { success: true };
+    } catch (emailError) {
+         console.warn(`Request approval notification email failed to send to ${data.recipientEmail}.`, emailError);
+         return { success: false, error: "Database updated, but email notification failed."};
     }
 }
 
 
-export async function rejectRequest(request: CertificateRequest, rejector: User, reason: string) {
-    if (!request || !rejector || !reason) {
-        return { success: false, error: 'Invalid request, user, or reason provided.' };
-    }
-
+export async function sendRequestRejectedEmail(data: { recipientEmail: string; requesterName: string; taskTitle: string; reason: string; rejectorName: string; }) {
     try {
-        const requestRef = doc(db!, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'rejected',
-            rejectionReason: reason,
-            qaTesterId: rejector.id,
-            qaTesterName: rejector.name,
-            updatedAt: serverTimestamp(),
+        await sendEmail({
+            to: data.recipientEmail,
+            subject: `Action Required: Your Certificate Request was Rejected`,
+            html: `
+                <h1>Hello, ${data.requesterName},</h1>
+                <p>Your certificate request for the task "<strong>${data.taskTitle}</strong>" has been rejected.</p>
+                <p><strong>Reason provided by ${data.rejectorName}:</strong></p>
+                <p><em>${data.reason}</em></p>
+                <p>Please review the feedback and make the necessary changes. You can view more details and comments by logging into the Dev2QA portal.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
         });
-        
-        try {
-            await sendEmail({
-                to: request.requesterEmail,
-                subject: `Action Required: Your Certificate Request was Rejected`,
-                html: `
-                    <h1>Hello, ${request.requesterName},</h1>
-                    <p>Your certificate request for the task "<strong>${request.taskTitle}</strong>" has been rejected.</p>
-                    <p><strong>Reason provided by ${rejector.name}:</strong></p>
-                    <p><em>${reason}</em></p>
-                    <p>Please review the feedback and make the necessary changes. You can view more details and comments by logging into the Dev2QA portal.</p>
-                    <br>
-                    <p>Thank you,</p>
-                    <p>The Dev2QA Team</p>
-                `
-            });
-        } catch (emailError) {
-            console.warn(`Request ${request.id} was rejected, but the email failed.`, emailError);
-        }
-        
-        revalidatePath(`/dashboard/requests/${request.id}`);
-        revalidatePath('/dashboard');
-
-        return { success: true };
-
-    } catch (error) {
-        const err = error as Error;
-        console.error('Error rejecting request:', err);
-        return { success: false, error: err.message };
+         return { success: true };
+    } catch (emailError) {
+        console.warn(`Request rejection notification email failed to send to ${data.recipientEmail}.`, emailError);
+        return { success: false, error: "Database updated, but email notification failed."};
     }
 }
 
@@ -181,11 +118,7 @@ export async function sendTestEmail(email: string) {
             `
         });
 
-        if (emailResult.success) {
-            return { success: true };
-        } else {
-            return { success: false, error: emailResult.error };
-        }
+        return emailResult;
     } catch (error) {
         const err = error as Error;
         console.error('Error sending test email:', err);
@@ -202,10 +135,10 @@ export async function sendWelcomeEmail(name: string, email: string) {
             html: `
                 <h1>Welcome aboard, ${name}!</h1>
                 <p>An account has been created for you on the Dev2QA platform.</p>
-                <p>Please contact your administrator to receive your temporary password and get started.</p>
+                <p>Please log in using the temporary password provided by your administrator. You will be prompted to change it upon your first login.</p>
                 <br>
                 <p>Best regards,</p>
-                <p>The Dev2QA Team</p>
+                <p>The echobitstech Team</p>
             `
         });
         return { success: true };
@@ -216,24 +149,20 @@ export async function sendWelcomeEmail(name: string, email: string) {
     }
 }
 
-export async function notifyOnNewRequest(request: Omit<CertificateRequest, 'id'> & {id:string}) {
+export async function notifyOnNewRequest(data: { qaEmails: string[], taskTitle: string, requesterName: string, associatedProject: string, associatedTeam: string}) {
     try {
-        const qaQuery = query(collection(db!, 'users'), where('role', '==', 'qa_tester'));
-        const qaSnapshot = await getDocs(qaQuery);
-        const qaEmails = qaSnapshot.docs.map(doc => (doc.data() as User).email);
-
-        if(qaEmails.length === 0) return { success: true, message: 'No QA testers to notify.' };
+        if(data.qaEmails.length === 0) return { success: true, message: 'No QA testers to notify.' };
 
         await sendEmail({
-            to: qaEmails.join(','),
-            subject: `New Certificate Request: "${request.taskTitle}"`,
+            to: data.qaEmails.join(','),
+            subject: `New Certificate Request: "${data.taskTitle}"`,
             html: `
                 <h1>New Request for QA Review</h1>
-                <p>A new certificate request has been submitted by <strong>${request.requesterName}</strong> and is ready for review.</p>
+                <p>A new certificate request has been submitted by <strong>${data.requesterName}</strong> and is ready for review.</p>
                 <ul>
-                    <li><strong>Task:</strong> ${request.taskTitle}</li>
-                    <li><strong>Project:</strong> ${request.associatedProject}</li>
-                    <li><strong>Team:</strong> ${request.associatedTeam}</li>
+                    <li><strong>Task:</strong> ${data.taskTitle}</li>
+                    <li><strong>Project:</strong> ${data.associatedProject}</li>
+                    <li><strong>Team:</strong> ${data.associatedTeam}</li>
                 </ul>
                 <p>Please log in to the Dev2QA dashboard to review the details and take action.</p>
             `
@@ -246,37 +175,20 @@ export async function notifyOnNewRequest(request: Omit<CertificateRequest, 'id'>
     }
 }
 
-
-export async function notifyOnNewComment(request: CertificateRequest, comment: Omit<Comment, 'id'>) {
+export async function notifyOnNewComment(data: { recipientEmail: string, commenterName: string, taskTitle: string, commentText: string }) {
     try {
-        let recipientEmail: string | undefined;
-        let recipientName: string | undefined;
-
-        if (comment.userRole === 'requester' && request.qaTesterId) {
-            const userRef = doc(db!, 'users', request.qaTesterId);
-            const userSnap = await getDoc(userRef);
-            if (userSnap.exists()) {
-                const qaTester = userSnap.data() as User;
-                recipientEmail = qaTester.email;
-                recipientName = qaTester.name;
-            }
-        } else if (comment.userRole === 'qa_tester' || comment.userRole === 'admin') {
-            recipientEmail = request.requesterEmail;
-            recipientName = request.requesterName;
-        }
-
-        if (!recipientEmail || !recipientName) {
+        if (!data.recipientEmail) {
             return { success: true, message: 'No recipient for comment notification.' };
         }
 
         await sendEmail({
-            to: recipientEmail,
-            subject: `New Comment on Request: "${request.taskTitle}"`,
+            to: data.recipientEmail,
+            subject: `New Comment on Request: "${data.taskTitle}"`,
             html: `
-                <h1>New Comment from ${comment.userName}</h1>
-                <p>A new comment was added to the certificate request for "<strong>${request.taskTitle}</strong>".</p>
+                <h1>New Comment from ${data.commenterName}</h1>
+                <p>A new comment was added to the certificate request for "<strong>${data.taskTitle}</strong>".</p>
                 <p><strong>Comment:</strong></p>
-                <p><em>${comment.text}</em></p>
+                <p><em>${data.commentText}</em></p>
                 <p>Please log in to the Dev2QA dashboard to view the conversation and reply.</p>
             `
         });
@@ -288,27 +200,23 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
     }
 }
 
-export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id'> & {id: string}) {
+export async function notifyAdminsOnLeaveRequest(data: { adminEmails: string[], userName: string, leaveType: string, startDate: string, endDate: string, daysCount: number, reason: string }) {
     try {
-        const adminQuery = query(collection(db!, 'users'), where('role', '==', 'admin'));
-        const adminSnapshot = await getDocs(adminQuery);
-        const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
-
-        if(adminEmails.length === 0) {
+        if(data.adminEmails.length === 0) {
              console.warn("New leave request submitted, but no admin users found to notify.");
              return { success: true, message: 'No admins to notify.' };
         }
         
         await sendEmail({
-            to: adminEmails.join(','),
-            subject: `New Leave Request from ${request.userName}`,
+            to: data.adminEmails.join(','),
+            subject: `New Leave Request from ${data.userName}`,
             html: `
                 <h1>New Leave Request for Approval</h1>
-                <p><strong>${request.userName}</strong> has submitted a new leave request.</p>
+                <p><strong>${data.userName}</strong> has submitted a new leave request.</p>
                 <ul>
-                    <li><strong>Type:</strong> ${request.leaveType}</li>
-                    <li><strong>Dates:</strong> ${format(request.startDate.toDate(), 'PPP')} to ${format(request.endDate.toDate(), 'PPP')} (${request.daysCount} days)</li>
-                    <li><strong>Reason:</strong> ${request.reason}</li>
+                    <li><strong>Type:</strong> ${data.leaveType}</li>
+                    <li><strong>Dates:</strong> ${format(new Date(data.startDate), 'PPP')} to ${format(new Date(data.endDate), 'PPP')} (${data.daysCount} days)</li>
+                    <li><strong>Reason:</strong> ${data.reason}</li>
                 </ul>
                 <p>Please log in to the Dev2QA dashboard to review and approve/reject the request.</p>
             `
@@ -321,42 +229,48 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
     }
 }
 
-export async function sendBonusNotification(bonus: Omit<Bonus, 'id'>, recipientEmail: string) {
+export async function sendBonusNotification(data: { recipientEmail: string, userName: string, bonusType: string, description: string }) {
     try {
         const emailResult = await sendEmail({
-            to: recipientEmail,
+            to: data.recipientEmail,
             subject: `You've Received a Bonus!`,
             html: `
-                <h1>Congratulations, ${bonus.userName}!</h1>
-                <p>You have been awarded a bonus for: <strong>${bonus.bonusType}</strong>.</p>
-                <p><strong>Notes from management:</strong> ${bonus.description}</p>
+                <h1>Congratulations, ${data.userName}!</h1>
+                <p>You have been awarded a bonus for: <strong>${data.bonusType}</strong>.</p>
+                <p><strong>Notes from management:</strong> ${data.description}</p>
                 <p>This will be reflected in your next payroll. Keep up the great work!</p>
             `
         });
         if (!emailResult.success) {
-            console.warn(`Bonus for ${bonus.userName} was issued, but notification failed: ${emailResult.error}`);
+            console.warn(`Bonus for ${data.userName} was issued, but notification failed: ${emailResult.error}`);
         }
+        return { success: true };
     } catch (emailError) {
-        console.warn(`Bonus for ${bonus.userName} was issued, but the notification email failed to send.`, emailError);
+        console.warn(`Bonus for ${data.userName} was issued, but the notification email failed to send.`, emailError);
+        return { success: false, error: "Database updated, but email failed." };
     }
 }
 
-export async function sendInfractionNotification(infraction: Omit<Infraction, 'id'>, recipientEmail: string) {
+export async function sendInfractionNotification(data: { recipientEmail: string, userName: string, infractionType: string, description: string }) {
     try {
         const emailResult = await sendEmail({
             to: recipientEmail,
             subject: `Notification of Recorded Infraction`,
             html: `
-                <h1>Hello, ${infraction.userName},</h1>
-                <p>This is a notification that an infraction has been recorded in your performance history: <strong>${infraction.infractionType}</strong>.</p>
-                <p><strong>Notes from management:</strong> ${infraction.description}</p>
+                <h1>Hello, ${data.userName},</h1>
+                <p>This is a notification that an infraction has been recorded in your performance history: <strong>${data.infractionType}</strong>.</p>
+                <p><strong>Notes from management:</strong> ${data.description}</p>
                 <p>Please log in to the Dev2QA portal to view your full performance record. If you have any questions, please speak with your manager.</p>
             `
         });
         if (!emailResult.success) {
-             console.warn(`Infraction for ${infraction.userName} was issued, but notification failed: ${emailResult.error}`);
+             console.warn(`Infraction for ${data.userName} was issued, but notification failed: ${emailResult.error}`);
         }
+        return { success: true };
     } catch (emailError) {
-        console.warn(`Infraction for ${infraction.userName} was issued, but the notification email failed to send.`, emailError);
+        console.warn(`Infraction for ${data.userName} was issued, but the notification email failed to send.`, emailError);
+        return { success: false, error: "Database updated, but email failed." };
     }
 }
+
+    

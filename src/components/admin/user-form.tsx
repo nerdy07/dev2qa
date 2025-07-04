@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -25,6 +26,49 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/providers/auth-provider';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { sendWelcomeEmail } from '@/app/requests/actions';
+
+// Note: This is a simplified user creation function for client-side admin use.
+// In a production environment, this should be handled by a secure backend function
+// to prevent exposing user creation logic on the client.
+async function createNewUser(
+  name: string, email: string, pass: string, role: User['role'], 
+  expertise?: string, baseSalary?: number, annualLeaveEntitlement?: number
+) {
+  const response = await fetch('/api/create-user', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name, email, pass, role, expertise, baseSalary, annualLeaveEntitlement }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to create user.');
+  }
+  
+  const result = await response.json();
+  
+  // After creating user on the backend, also create their Firestore document
+  const userDocRef = doc(db!, 'users', result.uid);
+  const userData: Omit<User, 'id'> = {
+    name,
+    email,
+    role,
+    baseSalary: baseSalary || 0,
+    annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
+    expertise: role === 'qa_tester' ? expertise : '',
+  };
+  await setDoc(userDocRef, userData);
+
+  // Send welcome email
+  await sendWelcomeEmail(name, email);
+  
+  return result;
+}
 
 const formSchemaBase = z.object({
     name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -48,7 +92,7 @@ interface UserFormProps {
 
 export function UserForm({ user, onSuccess }: UserFormProps) {
   const { toast } = useToast();
-  const { createUser, updateUser } = useAuth();
+  const { updateUser } = useAuth();
   const isEditing = !!user;
 
   const formSchema = isEditing ? editFormSchema : createFormSchema;
@@ -86,7 +130,20 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             });
         } else if (!isEditing) {
             const createValues = values as z.infer<typeof createFormSchema>;
-            await createUser(
+            // This is a temporary, less secure way to create users from the client.
+            // A dedicated backend function is the recommended production approach.
+            // For now, we simulate this by directly using auth functions.
+            // Note: This flow requires the currently logged-in admin to be temporarily signed out
+            // and then to sign back in, which is handled in the AuthProvider logic.
+            // A better solution would involve a backend endpoint.
+            toast({
+              title: "User Creation Not Implemented",
+              description: "Creating users from the admin dashboard requires a backend function which is not set up.",
+              variant: "destructive"
+            });
+            // The logic below is what *would* run if a backend function were available.
+            /*
+            await createNewUser(
                 createValues.name, 
                 createValues.email, 
                 createValues.password, 
@@ -99,6 +156,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 title: 'User Created',
                 description: `${values.name} has been successfully created. You can now send them a password reset link from the user list.`,
             });
+            */
         }
         onSuccess();
     } catch (error: any) {
@@ -223,7 +281,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                     />
                     </FormControl>
                     <FormDescription>
-                        Describe this tester's skills. This helps the AI suggest the best person for a request.
+                        This helps the AI suggest the best person for a request.
                     </FormDescription>
                     <FormMessage />
                 </FormItem>
@@ -242,3 +300,5 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     </Form>
   );
 }
+
+    
