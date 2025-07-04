@@ -72,8 +72,9 @@ export async function PATCH(request: Request, { params }: { params: { uid: strin
     return NextResponse.json({ message: 'User updated successfully' });
 
   } catch (error: any) {
-    console.error('Error updating user:', error);
-    return NextResponse.json({ message: `Error updating user: ${error.message}` }, { status: 500 });
+    console.error(`Error updating user ${uid}:`, error);
+    const errorMessage = error.message || `An unexpected error occurred while updating user.`;
+    return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
   }
 }
 
@@ -100,18 +101,20 @@ export async function DELETE(request: Request, { params }: { params: { uid: stri
     return NextResponse.json({ message: 'User deleted successfully' });
 
   } catch (error: any) {
-    console.error('Error deleting user:', error);
-    let errorMessage = 'An unexpected error occurred.';
+    console.error(`Error deleting user ${uid}:`, error);
+    let errorMessage = error.message || 'An unexpected error occurred.';
+
     if (error.code === 'auth/user-not-found') {
         // If user not in Auth, still try to delete from Firestore for cleanup
         try {
             const db = getFirestore();
             await db.collection('users').doc(uid).delete();
-            return NextResponse.json({ message: 'User deleted from Firestore. Was not found in Auth.' });
-        } catch (dbError) {
-             errorMessage = 'User not found in Firebase Authentication and failed to delete from Firestore.';
+            return NextResponse.json({ message: 'User deleted from Firestore, as they were not found in Authentication.' });
+        } catch (dbError: any) {
+             errorMessage = `User not found in Firebase Authentication and also failed to be deleted from Firestore: ${dbError.message}`;
         }
     }
-    return NextResponse.json({ message: errorMessage, error: error.code }, { status: 500 });
+    
+    return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
   }
 }
