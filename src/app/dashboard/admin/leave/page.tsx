@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -7,7 +8,7 @@ import { Check, ThumbsDown, TriangleAlert } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { LeaveRequest } from '@/lib/types';
+import type { LeaveRequest, User } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -19,7 +20,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { approveLeaveRequestAndNotify, rejectLeaveRequestAndNotify } from '@/app/requests/actions';
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { sendLeaveApprovalEmail, sendLeaveRejectionEmail } from '@/app/requests/actions';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -51,12 +54,28 @@ export default function LeaveManagementPage() {
 
   const handleApprove = async (request: LeaveRequest) => {
     if (!currentUser) return;
-    const result = await approveLeaveRequestAndNotify(request.id, currentUser.id, currentUser.name);
-    if (result.success) {
-      toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
-    } else {
-      console.error("Error approving leave:", result.error);
-      toast({ title: 'Approval Failed', variant: 'destructive', description: result.error });
+    try {
+        const leaveRequestRef = doc(db!, 'leaveRequests', request.id);
+        
+        await updateDoc(leaveRequestRef, {
+            status: 'approved',
+            reviewedById: currentUser.id,
+            reviewedByName: currentUser.name,
+            reviewedAt: serverTimestamp(),
+        });
+        
+        const userRef = doc(db!, 'users', request.userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
+        const requesterEmail = userSnap.data().email;
+        
+        await sendLeaveApprovalEmail(request, requesterEmail, currentUser.name);
+
+        toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
+    } catch (e) {
+        const error = e as Error;
+        console.error("Error approving leave:", error);
+        toast({ title: 'Approval Failed', variant: 'destructive', description: error.message });
     }
   };
 
@@ -71,16 +90,32 @@ export default function LeaveManagementPage() {
       return;
     }
     
-    const result = await rejectLeaveRequestAndNotify(selectedRequest.id, currentUser.id, currentUser.name, rejectionReason);
+    try {
+        const leaveRequestRef = doc(db!, 'leaveRequests', selectedRequest.id);
 
-    if (result.success) {
+        await updateDoc(leaveRequestRef, {
+            status: 'rejected',
+            rejectionReason: rejectionReason,
+            reviewedById: currentUser.id,
+            reviewedByName: currentUser.name,
+            reviewedAt: serverTimestamp(),
+        });
+
+        const userRef = doc(db!, 'users', selectedRequest.userId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
+        const requesterEmail = userSnap.data().email;
+
+        await sendLeaveRejectionEmail(selectedRequest, requesterEmail, rejectionReason, currentUser.name);
+
         toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });
         setIsRejectionDialogOpen(false);
         setRejectionReason('');
         setSelectedRequest(null);
-    } else {
-        console.error("Error rejecting leave:", result.error);
-        toast({ title: 'Rejection Failed', variant: 'destructive', description: result.error });
+    } catch (e) {
+        const error = e as Error;
+        console.error("Error rejecting leave:", error);
+        toast({ title: 'Rejection Failed', variant: 'destructive', description: error.message });
     }
   };
 
@@ -116,7 +151,7 @@ export default function LeaveManagementPage() {
                 <TableRow key={req.id}>
                     <TableCell className="font-medium">{req.userName}</TableCell>
                     <TableCell>{req.leaveType}</TableCell>
-                    <TableCell>{format(req.startDate.toDate(), 'PPP')} - {format(req.endDate.toDate(), 'PPP')}</TableCell>
+                    <TableCell>{req.startDate ? format(req.startDate.toDate(), 'PPP') : ''} - {req.endDate ? format(req.endDate.toDate(), 'PPP') : ''}</TableCell>
                     <TableCell>{req.daysCount}</TableCell>
 
                     {status === 'pending' && <TableCell className="text-muted-foreground text-sm max-w-xs truncate">{req.reason}</TableCell>}

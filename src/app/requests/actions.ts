@@ -1,3 +1,4 @@
+
 'use server';
 
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
@@ -7,22 +8,40 @@ import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
 
-export async function getMyRoleOnServer(userId: string): Promise<{ success: boolean; role?: string; error?: string; }> {
-    if (!userId) {
-        return { success: false, error: "No user ID provided." };
-    }
+export async function sendLeaveApprovalEmail(request: LeaveRequest, recipientEmail: string, approverName: string) {
     try {
-        const userDocRef = doc(db!, 'users', userId);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (!userDocSnap.exists()) {
-            return { success: false, error: "User document not found." };
-        }
-        return { success: true, role: userDocSnap.data().role || "No role found" };
+        await sendEmail({
+            to: recipientEmail,
+            subject: `Your Leave Request has been Approved`,
+            html: `
+                <h1>Hello, ${request.userName},</h1>
+                <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
+                <p>Your time off has been logged in the system.</p>
+            `
+        });
+        return { success: true };
     } catch (error) {
-        const err = error as Error;
-        console.error("getMyRoleOnServer failed:", err);
-        return { success: false, error: err.message };
+        console.warn(`Leave request ${request.id} was approved, but the notification email failed to send.`, error);
+        return { success: false, error: 'DB update successful, but email failed.' };
+    }
+}
+
+export async function sendLeaveRejectionEmail(request: LeaveRequest, recipientEmail: string, reason: string, rejectorName: string) {
+    try {
+        await sendEmail({
+            to: recipientEmail,
+            subject: `Your Leave Request has been Rejected`,
+            html: `
+                <h1>Hello, ${request.userName},</h1>
+                <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <p>Please see your manager if you have any questions.</p>
+            `
+        });
+        return { success: true };
+    } catch (error) {
+        console.warn(`Leave request ${request.id} was rejected, but the notification email failed to send.`, error);
+        return { success: false, error: 'DB update successful, but email failed.' };
     }
 }
 
@@ -252,116 +271,6 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
     } catch (error) {
         const err = error as Error;
         console.error('Error sending comment notification:', err);
-        return { success: false, error: err.message };
-    }
-}
-
-export async function approveLeaveRequestAndNotify(requestId: string, approverId: string, approverName: string) {
-    try {
-        const approverRef = doc(db!, 'users', approverId);
-        const approverSnap = await getDoc(approverRef);
-        if (!approverSnap.exists() || approverSnap.data()?.role !== 'admin') {
-            throw new Error(`Action denied. The user '${approverName}' does not have admin privileges.`);
-        }
-        
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const leaveRequestRef = doc(leaveRequestsCollection, requestId);
-        
-        await updateDoc(leaveRequestRef, {
-            status: 'approved',
-            reviewedById: approverId,
-            reviewedByName: approverName,
-            reviewedAt: serverTimestamp(),
-        });
-        
-        const requestSnap = await getDoc(leaveRequestRef);
-        if (!requestSnap.exists()) {
-            throw new Error("Could not find the leave request after approving it.");
-        }
-        const requestData = requestSnap.data() as LeaveRequest;
-        
-        const userRef = doc(db!, 'users', requestData.userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-            throw new Error("Could not find the user associated with the leave request.");
-        }
-        const user = userSnap.data() as User;
-
-        await sendEmail({
-            to: user.email,
-            subject: `Your Leave Request has been Approved`,
-            html: `
-                <h1>Hello, ${requestData.userName},</h1>
-                <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
-                <p>Your time off has been logged in the system.</p>
-            `
-        });
-
-        revalidatePath('/dashboard/admin/leave');
-        return { success: true };
-
-    } catch (error) {
-        const err = error as Error;
-        console.error("Error in approveLeaveRequestAndNotify:", err);
-        if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
-             return { success: false, error: 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.' };
-        }
-        return { success: false, error: err.message };
-    }
-}
-
-export async function rejectLeaveRequestAndNotify(requestId: string, rejectorId: string, rejectorName: string, reason: string) {
-    try {
-        const rejectorRef = doc(db!, 'users', rejectorId);
-        const rejectorSnap = await getDoc(rejectorRef);
-        if (!rejectorSnap.exists() || rejectorSnap.data()?.role !== 'admin') {
-            throw new Error(`Action denied. The user '${rejectorName}' does not have admin privileges.`);
-        }
-
-        const leaveRequestsCollection = collection(db!, 'leaveRequests');
-        const leaveRequestRef = doc(leaveRequestsCollection, requestId);
-
-        await updateDoc(leaveRequestRef, {
-            status: 'rejected',
-            rejectionReason: reason,
-            reviewedById: rejectorId,
-            reviewedByName: rejectorName,
-            reviewedAt: serverTimestamp(),
-        });
-
-        const requestSnap = await getDoc(leaveRequestRef);
-        if (!requestSnap.exists()) {
-            throw new Error("Could not find the leave request after rejecting it.");
-        }
-        const requestData = requestSnap.data() as LeaveRequest;
-       
-        const userRef = doc(db!, 'users', requestData.userId);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-            throw new Error("Could not find the user associated with the leave request.");
-        }
-        const user = userSnap.data() as User;
-
-        await sendEmail({
-            to: user.email,
-            subject: `Your Leave Request has been Rejected`,
-            html: `
-                <h1>Hello, ${requestData.userName},</h1>
-                <p>Your leave request for <strong>${format(requestData.startDate.toDate(), 'PPP')}</strong> to <strong>${format(requestData.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
-                <p><strong>Reason:</strong> ${reason}</p>
-                <p>Please see your manager if you have any questions.</p>
-            `
-        });
-
-        revalidatePath('/dashboard/admin/leave');
-        return { success: true };
-
-    } catch (error) {
-        const err = error as Error;
-        console.error("Error in rejectLeaveRequestAndNotify:", err);
-        if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
-            return { success: false, error: 'Database permission denied. Ensure the admin user has the correct "admin" role in their Firestore user document and that security rules are published.' };
-       }
         return { success: false, error: err.message };
     }
 }
