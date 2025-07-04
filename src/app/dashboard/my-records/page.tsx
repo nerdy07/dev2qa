@@ -19,7 +19,7 @@ export default function MyRecordsPage() {
     const { user } = useAuth();
 
     const infractionsQuery = React.useMemo(() => {
-        if (!user?.id) return undefined;
+        if (!user?.id) return null;
         return query(
             collection(db!, 'infractions'), 
             where('userId', '==', user.id),
@@ -28,7 +28,7 @@ export default function MyRecordsPage() {
     }, [user?.id]);
     
     const bonusesQuery = React.useMemo(() => {
-        if (!user?.id) return undefined;
+        if (!user?.id) return null;
         return query(
             collection(db!, 'bonuses'), 
             where('userId', '==', user.id),
@@ -65,10 +65,10 @@ export default function MyRecordsPage() {
             <Tabs defaultValue="infractions" className="w-full">
                 <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
                     <TabsTrigger value="infractions">
-                        <ShieldX /> Infractions ({loading ? '...' : infractions?.length || 0})
+                        <ShieldX className="mr-2 h-4 w-4" /> Infractions ({loading ? '...' : infractions?.length || 0})
                     </TabsTrigger>
                     <TabsTrigger value="bonuses">
-                        <Sparkles /> Bonuses ({loading ? '...' : bonuses?.length || 0})
+                        <Sparkles className="mr-2 h-4 w-4" /> Bonuses ({loading ? '...' : bonuses?.length || 0})
                     </TabsTrigger>
                 </TabsList>
                 <TabsContent value="infractions" className="mt-6">

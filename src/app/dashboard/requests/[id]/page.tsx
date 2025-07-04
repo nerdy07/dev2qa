@@ -55,7 +55,7 @@ export default function RequestDetailsPage() {
 
 
   const commentsQuery = React.useMemo(() => {
-    if (!id) return undefined;
+    if (!id) return null;
     return query(collection(db!, 'comments'), where('requestId', '==', id as string), orderBy('createdAt', 'asc'));
   }, [id]);
 

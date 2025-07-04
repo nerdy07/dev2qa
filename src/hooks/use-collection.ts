@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { db, firebaseInitialized } from '@/lib/firebase';
 import { collection, onSnapshot, query, type Query, doc } from 'firebase/firestore';
 
-export function useCollection<T>(collectionName: string, firestoreQuery?: Query) {
+export function useCollection<T>(collectionName: string, firestoreQuery?: Query | null) {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -12,6 +12,12 @@ export function useCollection<T>(collectionName: string, firestoreQuery?: Query)
     if (!firebaseInitialized) {
         setLoading(false);
         // AuthProvider will show a config error, so we don't need to do anything here.
+        return;
+    }
+
+    if (firestoreQuery === null) {
+        setLoading(true);
+        setData(null);
         return;
     }
 

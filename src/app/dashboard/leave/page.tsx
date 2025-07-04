@@ -24,7 +24,7 @@ export default function MyLeavePage() {
   const [isFormOpen, setIsFormOpen] = React.useState(false);
 
   const leaveQuery = React.useMemo(() => {
-    if (!user?.id) return undefined;
+    if (!user?.id) return null;
     const currentYear = getYear(new Date());
     // This query fetches all leave requests for the user, sorted by date.
     // Filtering for the current year will happen on the client-side for the calculation.
@@ -47,7 +47,7 @@ export default function MyLeavePage() {
       .filter(req => 
         req.status === 'approved' && 
         req.leaveType === 'Annual Leave' &&
-        getYear(req.startDate.toDate()) === currentYear
+        req.startDate && getYear(req.startDate.toDate()) === currentYear
       )
       .reduce((acc, req) => acc + req.daysCount, 0);
     
@@ -109,7 +109,7 @@ export default function MyLeavePage() {
             <TableRow key={req.id}>
               <TableCell className="font-medium">{req.leaveType}</TableCell>
               <TableCell>
-                {format(req.startDate.toDate(), 'PPP')} - {format(req.endDate.toDate(), 'PPP')}
+                {req.startDate && format(req.startDate.toDate(), 'PPP')} - {req.endDate && format(req.endDate.toDate(), 'PPP')}
               </TableCell>
               <TableCell>{req.daysCount}</TableCell>
               <TableCell>

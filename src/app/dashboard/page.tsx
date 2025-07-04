@@ -119,9 +119,14 @@ export default function DashboardPage() {
   };
 
   const RequesterDashboard = () => {
+    const myRequestsQuery = React.useMemo(() => {
+        if (!user?.id) return null;
+        return query(collection(db!, 'requests'), where('requesterId', '==', user.id));
+    }, [user?.id]);
+    
     const { data: myRequests, loading, error } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db!, 'requests'), where('requesterId', '==', user?.id || ''))
+        myRequestsQuery
     );
     const { toast } = useToast();
     const prevRequestsRef = React.useRef<CertificateRequest[] | null>(null);
@@ -227,7 +232,7 @@ export default function DashboardPage() {
 
     // Data for My Approvals tab
     const myApprovalsQuery = React.useMemo(() => {
-        if (!user?.id) return undefined;
+        if (!user?.id) return null;
         return query(
             collection(db!, 'requests'), 
             where('qaTesterId', '==', user.id), 
@@ -290,10 +295,10 @@ export default function DashboardPage() {
         <Tabs defaultValue="pending" className="w-full">
             <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
                 <TabsTrigger value="pending">
-                    <Clock /> Pending Review ({pendingRequests?.length || 0})
+                    <Clock className="mr-2 h-4 w-4" /> Pending Review ({pendingRequests?.length || 0})
                 </TabsTrigger>
                 <TabsTrigger value="approvals">
-                    <CheckCircle /> My Approvals ({myApprovedRequests?.length || 0})
+                    <CheckCircle className="mr-2 h-4 w-4" /> My Approvals ({myApprovedRequests?.length || 0})
                 </TabsTrigger>
             </TabsList>
             <TabsContent value="pending" className="mt-6">
