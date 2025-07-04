@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -46,7 +47,7 @@ export default function MyLeavePage() {
     const leaveTaken = leaveRequests
       .filter(req => 
         req.status === 'approved' && 
-        req.leaveType === 'Annual Leave' &&
+        req.leaveType !== 'Unpaid Leave' &&
         req.startDate && getYear(req.startDate.toDate()) === currentYear
       )
       .reduce((acc, req) => acc + req.daysCount, 0);
