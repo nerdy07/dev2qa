@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -69,7 +68,13 @@ export default function LeaveManagementPage() {
         if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
         const requesterEmail = userSnap.data().email;
         
-        await sendLeaveApprovalEmail(request, requesterEmail, currentUser.name);
+        await sendLeaveApprovalEmail({
+            userName: request.userName,
+            startDate: request.startDate.toDate().toISOString(),
+            endDate: request.endDate.toDate().toISOString(),
+            recipientEmail: requesterEmail,
+            approverName: currentUser.name
+        });
 
         toast({ title: 'Leave Approved', description: `Leave request for ${request.userName} has been approved.` });
     } catch (e) {
@@ -106,7 +111,14 @@ export default function LeaveManagementPage() {
         if (!userSnap.exists()) throw new Error("Requester's user document not found to send email.");
         const requesterEmail = userSnap.data().email;
 
-        await sendLeaveRejectionEmail(selectedRequest, requesterEmail, rejectionReason, currentUser.name);
+        await sendLeaveRejectionEmail({
+            userName: selectedRequest.userName,
+            startDate: selectedRequest.startDate.toDate().toISOString(),
+            endDate: selectedRequest.endDate.toDate().toISOString(),
+            recipientEmail: requesterEmail,
+            reason: rejectionReason,
+            rejectorName: currentUser.name
+        });
 
         toast({ title: 'Leave Rejected', description: `Leave request for ${selectedRequest.userName} has been rejected.`, variant: 'destructive' });
         setIsRejectionDialogOpen(false);

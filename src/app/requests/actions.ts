@@ -8,39 +8,52 @@ import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
 
-export async function sendLeaveApprovalEmail(request: LeaveRequest, recipientEmail: string, approverName: string) {
+export async function sendLeaveApprovalEmail(data: {
+    recipientEmail: string, 
+    userName: string, 
+    startDate: string,
+    endDate: string,
+    approverName: string
+}) {
     try {
         await sendEmail({
-            to: recipientEmail,
+            to: data.recipientEmail,
             subject: `Your Leave Request has been Approved`,
             html: `
-                <h1>Hello, ${request.userName},</h1>
-                <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been approved by ${approverName}.</p>
+                <h1>Hello, ${data.userName},</h1>
+                <p>Your leave request for <strong>${format(new Date(data.startDate), 'PPP')}</strong> to <strong>${format(new Date(data.endDate), 'PPP')}</strong> has been approved by ${data.approverName}.</p>
                 <p>Your time off has been logged in the system.</p>
             `
         });
         return { success: true };
     } catch (error) {
-        console.warn(`Leave request ${request.id} was approved, but the notification email failed to send.`, error);
+        console.warn(`Leave request approval email failed to send for ${data.userName}.`, error);
         return { success: false, error: 'DB update successful, but email failed.' };
     }
 }
 
-export async function sendLeaveRejectionEmail(request: LeaveRequest, recipientEmail: string, reason: string, rejectorName: string) {
+export async function sendLeaveRejectionEmail(data: {
+    recipientEmail: string,
+    userName: string,
+    startDate: string,
+    endDate: string,
+    reason: string,
+    rejectorName: string
+}) {
     try {
         await sendEmail({
-            to: recipientEmail,
+            to: data.recipientEmail,
             subject: `Your Leave Request has been Rejected`,
             html: `
-                <h1>Hello, ${request.userName},</h1>
-                <p>Your leave request for <strong>${format(request.startDate.toDate(), 'PPP')}</strong> to <strong>${format(request.endDate.toDate(), 'PPP')}</strong> has been rejected by ${rejectorName}.</p>
-                <p><strong>Reason:</strong> ${reason}</p>
+                <h1>Hello, ${data.userName},</h1>
+                <p>Your leave request for <strong>${format(new Date(data.startDate), 'PPP')}</strong> to <strong>${format(new Date(data.endDate), 'PPP')}</strong> has been rejected by ${data.rejectorName}.</p>
+                <p><strong>Reason:</strong> ${data.reason}</p>
                 <p>Please see your manager if you have any questions.</p>
             `
         });
         return { success: true };
     } catch (error) {
-        console.warn(`Leave request ${request.id} was rejected, but the notification email failed to send.`, error);
+        console.warn(`Leave request rejection email failed to send for ${data.userName}.`, error);
         return { success: false, error: 'DB update successful, but email failed.' };
     }
 }
