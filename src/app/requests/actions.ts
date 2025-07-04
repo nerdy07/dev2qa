@@ -9,7 +9,7 @@ import { format } from 'date-fns';
 
 export async function checkMyRole(userId: string): Promise<{ success: boolean; role?: string; error?: string; }> {
     if (!userId) {
-        return { success: false, error: "Not authenticated on the client. Could not get current user ID." };
+        return { success: false, error: "Not authenticated. Could not get current user." };
     }
 
     try {
