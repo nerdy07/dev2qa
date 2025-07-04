@@ -12,7 +12,6 @@ export async function getMyRoleOnServer(userId: string): Promise<{ success: bool
         return { success: false, error: "No user ID provided." };
     }
     try {
-        // This getDoc is what is governed by security rules.
         const userDocRef = doc(db!, 'users', userId);
         const userDocSnap = await getDoc(userDocRef);
 
