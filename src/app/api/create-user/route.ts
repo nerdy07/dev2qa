@@ -37,8 +37,8 @@ export async function POST(request: Request) {
     };
     await userDocRef.set(userData);
 
-    // Send welcome email
-    await sendWelcomeEmail(name, email);
+    // Send welcome email with credentials
+    await sendWelcomeEmail({ name, email, password });
 
     return NextResponse.json({ uid: userRecord.uid, message: 'User created successfully' });
 
