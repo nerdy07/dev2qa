@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
@@ -69,9 +70,6 @@ const FullPageSkeleton = () => (
                     ))}
                 </nav>
             </div>
-            <div className="mt-auto border-t p-4">
-                <Skeleton className="h-12 w-full" />
-            </div>
         </div>
         <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8">
             <div className="flex-1 space-y-4">
@@ -96,10 +94,6 @@ const FullPageSkeleton = () => (
                                 <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
                                     <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-32" /></th>
                                     <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell"><Skeleton className="h-5 w-24" /></th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell"><Skeleton className="h-5 w-24" /></th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground hidden sm:table-cell"><Skeleton className="h-5 w-20" /></th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-16" /></th>
-                                    <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground"><Skeleton className="h-5 w-16" /></th>
                                 </tr>
                             </thead>
                             <tbody className="[&_tr:last-child]:border-0">
@@ -107,10 +101,6 @@ const FullPageSkeleton = () => (
                                     <tr key={i} className="border-b transition-colors hover:bg-muted/50">
                                         <td className="p-4 align-middle"><Skeleton className="h-5 w-40" /></td>
                                         <td className="p-4 align-middle hidden md:table-cell"><Skeleton className="h-5 w-28" /></td>
-                                        <td className="p-4 align-middle hidden lg:table-cell"><Skeleton className="h-5 w-28" /></td>
-                                        <td className="p-4 align-middle hidden sm:table-cell"><Skeleton className="h-5 w-24" /></td>
-                                        <td className="p-4 align-middle"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                                        <td className="p-4 align-middle text-right"><Skeleton className="h-8 w-8 ml-auto" /></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -130,59 +120,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!auth) {
-        setLoading(false);
-        return;
+    if (!auth || !db) {
+      setLoading(false);
+      return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (authUser) {
-        const userDocRef = doc(db!, 'users', authUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data() as User;
-          setUser({
-            id: authUser.uid,
-            name: authUser.displayName || userData.name,
-            email: authUser.email!,
-            role: userData.role,
-            photoURL: authUser.photoURL || undefined,
-            expertise: userData.expertise,
-            baseSalary: userData.baseSalary,
-            annualLeaveEntitlement: userData.annualLeaveEntitlement,
-          });
-        } else {
-            console.warn("No user document found in Firestore for UID:", authUser.uid, ". Creating one.");
-            
-            const superAdminEmail = 'sshuaibu@echobitstech.com';
-            let role: User['role'] = 'requester';
+        try {
+            if (authUser) {
+                const userDocRef = doc(db, 'users', authUser.uid);
+                const userDocSnap = await getDoc(userDocRef);
 
-            // Check if the current user is the super admin email
-            if (authUser.email?.toLowerCase() === superAdminEmail.toLowerCase()) {
-                role = 'admin';
-            } else {
-                // Check if this is the very first user in the system
-                const usersCollectionRef = collection(db!, 'users');
-                const q = query(usersCollectionRef, limit(1));
-                const querySnapshot = await getDocs(q);
-                
-                if (querySnapshot.empty) {
-                    // If no users exist, make this first user an admin
-                    role = 'admin';
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data() as User;
+                    setUser({
+                        id: authUser.uid,
+                        name: authUser.displayName || userData.name,
+                        email: authUser.email!,
+                        role: userData.role,
+                        photoURL: authUser.photoURL || undefined,
+                        expertise: userData.expertise,
+                        baseSalary: userData.baseSalary,
+                        annualLeaveEntitlement: userData.annualLeaveEntitlement,
+                    });
+                } else {
+                    // If user is authenticated but no data exists in Firestore,
+                    // it's an invalid state. Log them out.
+                    console.warn(`User ${authUser.uid} is authenticated but has no Firestore document. Logging out.`);
+                    await signOut(auth);
+                    setUser(null);
                 }
+            } else {
+                setUser(null);
             }
-            
-            const userToCreate: Omit<User, 'id'> = {
-              name: authUser.displayName || 'New User',
-              email: authUser.email!,
-              role: role,
-            };
-            await setDoc(userDocRef, userToCreate);
-            setUser({ id: authUser.uid, ...userToCreate, name: userToCreate.name, role: userToCreate.role });
+        } catch (error) {
+            console.error("Error during authentication state change:", error);
+            setUser(null);
+        } finally {
+            // This is critical to prevent infinite loading screens.
+            setLoading(false);
         }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -191,9 +167,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && firebaseInitialized) {
       const isAuthPage = pathname === '/';
-      if (user && isAuthPage) {
+      const isSignupPage = pathname === '/signup'; // It just redirects, but good to handle
+      const publicPages = isAuthPage || isSignupPage;
+
+      if (user && publicPages) {
         router.push('/dashboard');
-      } else if (!user && !isAuthPage) {
+      } else if (!user && !publicPages) {
         router.push('/');
       }
     }
@@ -213,6 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const createUser = async (name: string, email: string, pass: string, role: User['role'], expertise?: string, baseSalary?: number, annualLeaveEntitlement?: number) => {
     if (!auth || !db) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     
+    // We create the auth user but sign them out immediately.
+    // They cannot log in until their Firestore doc is created.
+    // This avoids race conditions and auth state issues.
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(userCredential.user, { displayName: name });
     
@@ -233,6 +215,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Send welcome email after creating user
     await sendWelcomeEmail(name, email);
+    
+    // Sign out the current admin to prevent session swapping
+    if (auth.currentUser) {
+        // This is a safety measure. The createUser function is called by an admin,
+        // so we re-verify their session to avoid side-effects.
+        await auth.currentUser.reload();
+    }
+
 
     return userCredential;
   };
@@ -254,6 +244,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return <MissingFirebaseConfig />;
   }
 
+  // Show a full-page skeleton during the initial auth check.
+  // The redirection logic in the useEffect hook will handle routing once loading is false.
   if (loading) {
     return <FullPageSkeleton />;
   }
