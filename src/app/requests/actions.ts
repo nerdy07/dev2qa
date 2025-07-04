@@ -7,29 +7,23 @@ import type { CertificateRequest, User, LeaveRequest, Bonus, Infraction, Comment
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
 
-export async function checkMyRole(userId: string): Promise<{ success: boolean; role?: string; error?: string; }> {
+export async function getMyRoleOnServer(userId: string): Promise<{ success: boolean; role?: string; error?: string; }> {
     if (!userId) {
-        return { success: false, error: "Not authenticated. Could not get current user." };
+        return { success: false, error: "No user ID provided." };
     }
-
     try {
-        const userRef = doc(db!, 'users', userId);
-        const userSnap = await getDoc(userRef);
+        // This getDoc is what is governed by security rules.
+        const userDocRef = doc(db!, 'users', userId);
+        const userDocSnap = await getDoc(userDocRef);
 
-        if (!userSnap.exists()) {
-            return { success: false, error: `User document not found in Firestore for your user ID (${userId}).` };
+        if (!userDocSnap.exists()) {
+            return { success: false, error: "User document not found." };
         }
-
-        const userData = userSnap.data();
-        return { success: true, role: userData.role || 'No role specified' };
-
+        return { success: true, role: userDocSnap.data().role || "No role found" };
     } catch (error) {
         const err = error as Error;
-        console.error("Diagnostic check failed:", err);
-        if (err.message.includes('permission-denied') || err.message.includes('Permissions')) {
-             return { success: false, error: 'Database permission denied. This means your security rules are blocking you from reading your own user document. Check the rules for the `/users/{userId}` path.' };
-        }
-        return { success: false, error: err.message || "An unknown error occurred." };
+        console.error("getMyRoleOnServer failed:", err);
+        return { success: false, error: err.message };
     }
 }
 
@@ -87,7 +81,7 @@ export async function approveRequestAndSendEmail(request: CertificateRequest, ap
     } catch (error) {
         const err = error as Error;
         console.error('Error approving request:', err);
-        return { success: false, error: err.message || 'An unexpected error occurred during the approval process.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -134,7 +128,7 @@ export async function rejectRequest(request: CertificateRequest, rejector: User,
     } catch (error) {
         const err = error as Error;
         console.error('Error rejecting request:', err);
-        return { success: false, error: err.message || 'An unexpected error occurred during the rejection process.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -164,7 +158,7 @@ export async function sendTestEmail(email: string) {
     } catch (error) {
         const err = error as Error;
         console.error('Error sending test email:', err);
-        return { success: false, error: err.message || 'An unexpected error occurred while sending the test email.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -187,7 +181,7 @@ export async function sendWelcomeEmail(name: string, email: string) {
     } catch (error) {
         const err = error as Error;
         console.error('Error sending welcome email:', err);
-        return { success: false, error: err.message || 'Failed to send welcome email.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -217,7 +211,7 @@ export async function notifyOnNewRequest(request: Omit<CertificateRequest, 'id'>
     } catch (error) {
         const err = error as Error;
         console.error('Error notifying QA testers:', err);
-        return { success: false, error: err.message || 'Failed to send notification to QA testers.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -259,7 +253,7 @@ export async function notifyOnNewComment(request: CertificateRequest, comment: O
     } catch (error) {
         const err = error as Error;
         console.error('Error sending comment notification:', err);
-        return { success: false, error: err.message || 'Failed to send comment notification.' };
+        return { success: false, error: err.message };
     }
 }
 
@@ -402,7 +396,7 @@ export async function notifyAdminsOnLeaveRequest(request: Omit<LeaveRequest, 'id
     } catch (error) {
         const err = error as Error;
         console.error('Error notifying admins of leave request:', err);
-        return { success: false, error: err.message || 'Failed to send notification to admins.' };
+        return { success: false, error: err.message };
     }
 }
 

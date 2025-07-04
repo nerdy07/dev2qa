@@ -4,36 +4,21 @@ import React, { useState } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { checkMyRole } from '@/app/requests/actions';
+import { getMyRoleOnServer } from '@/app/requests/actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Fingerprint, Loader2, TriangleAlert } from 'lucide-react';
 import { useAuth } from '@/providers/auth-provider';
-import { useToast } from '@/hooks/use-toast';
-
-type CheckResult = {
-  success: boolean;
-  role?: string;
-  error?: string;
-};
 
 export default function DiagnosticsPage() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<CheckResult | null>(null);
+  const [result, setResult] = useState<{ success: boolean; role?: string; error?: string; } | null>(null);
 
   const handleCheckRole = async () => {
-    if (!user) {
-      toast({
-        title: "Not Logged In",
-        description: "Cannot perform check because user is not logged in.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!user) return;
     setLoading(true);
     setResult(null);
-    const checkResult = await checkMyRole(user.id);
+    const checkResult = await getMyRoleOnServer(user.id);
     setResult(checkResult);
     setLoading(false);
   };
