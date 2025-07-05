@@ -15,11 +15,12 @@ interface MailOptions {
 
 export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ success: boolean; error?: string }> {
     if (!isBrevoConfigured) {
-        const errorMessage = 'Email service is not configured. Please provide BREVO_API_KEY, BREVO_SENDER_EMAIL, and BREVO_SENDER_NAME in your .env file.';
+        const errorMessage = 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.';
         console.error(errorMessage);
         return { success: false, error: errorMessage };
     }
 
+    // Brevo API expects an array of objects for recipients
     const emailRecipients = to.split(',').map(email => ({ email: email.trim() }));
 
     const payload = {
@@ -44,17 +45,19 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
         });
 
         if (!response.ok) {
+            // Attempt to parse the error response from Brevo
             const errorBody = await response.json();
             const errorMessage = errorBody.message || `Brevo API Error: Status ${response.status}`;
             console.error('Error sending email via Brevo:', errorBody);
-
+            
+            // Provide more specific feedback for common configuration errors
             if (response.status === 401) {
                 return { success: false, error: 'Brevo authentication failed. Please check if your BREVO_API_KEY is correct in the .env file.' };
             }
             if (errorMessage.includes('Sender not found') || errorMessage.includes('sender is not valid')) {
                 return { success: false, error: 'Brevo Error: The sender email address is not valid or not authorized in your Brevo account.' };
             }
-            if (errorMessage.includes("Invalid recipient email address")) {
+             if (errorMessage.includes("Invalid recipient email address")) {
                 return { success: false, error: `Brevo Error: One of the recipient emails is invalid.` };
             }
 
@@ -69,5 +72,3 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
         return { success: false, error: 'A network or unknown error occurred while trying to send the email.' };
     }
 }
-
-    
