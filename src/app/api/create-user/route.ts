@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       email: email,
       password: password,
       displayName: name,
+      disabled: false,
     });
 
     // Create user document in Firestore
@@ -34,24 +35,41 @@ export async function POST(request: Request) {
         baseSalary: baseSalary || 0,
         annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
         expertise: role === 'qa_tester' ? expertise : '',
+        disabled: false,
     };
     await userDocRef.set(userData);
 
-    // Send welcome email
-    await sendWelcomeEmail(name, email);
+    // Send welcome email without waiting for it to complete.
+    // If it fails, log it, but don't fail the entire user creation process.
+    sendWelcomeEmail({ name, email, password }).then(result => {
+      if (!result.success) {
+          console.error(`Welcome email failed for ${email}: ${result.error}`);
+      }
+    });
 
     return NextResponse.json({ uid: userRecord.uid, message: 'User created successfully' });
 
   } catch (error: any) {
     console.error('Error creating user:', error);
-    // Provide more specific error messages
-    let errorMessage = 'An unexpected error occurred.';
-    if (error.code === 'auth/email-already-exists') {
-      errorMessage = 'The email address is already in use by another account.';
-    } else if (error.code === 'auth/invalid-password') {
-        errorMessage = 'The password must be a string with at least 6 characters.';
+    
+    // Provide a more specific error message back to the client.
+    let errorMessage = error.message || 'An unexpected error occurred during user creation.';
+    
+    // Customize messages for common Firebase Auth errors
+    if (error.code) {
+        switch (error.code) {
+            case 'auth/email-already-exists':
+                errorMessage = 'The email address is already in use by another account.';
+                break;
+            case 'auth/invalid-password':
+                errorMessage = 'The password must be a string with at least 6 characters.';
+                break;
+            case 'auth/invalid-email':
+                errorMessage = 'The email address provided is not a valid email address.';
+                break;
+        }
     }
 
-    return NextResponse.json({ message: errorMessage, error: error.code }, { status: 500 });
+    return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
   }
 }
