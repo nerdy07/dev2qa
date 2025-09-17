@@ -3,6 +3,19 @@
 
 import { sendEmail } from '@/lib/email';
 import { format } from 'date-fns';
+import {
+  getWelcomeEmailTemplate,
+  getRequestApprovedTemplate,
+  getRequestRejectedTemplate,
+  getNewRequestNotificationTemplate,
+  getLeaveApprovalTemplate,
+  getLeaveRejectionTemplate,
+  getNewLeaveRequestTemplate,
+  getBonusNotificationTemplate,
+  getInfractionNotificationTemplate,
+  getNewCommentTemplate,
+  getTestEmailTemplate
+} from '@/lib/email-templates';
 
 export async function sendLeaveApprovalEmail(data: {
     recipientEmail: string, 
@@ -14,12 +27,8 @@ export async function sendLeaveApprovalEmail(data: {
     try {
         await sendEmail({
             to: data.recipientEmail,
-            subject: `Your Leave Request has been Approved`,
-            html: `
-                <h1>Hello, ${data.userName},</h1>
-                <p>Your leave request for <strong>${format(new Date(data.startDate), 'PPP')}</strong> to <strong>${format(new Date(data.endDate), 'PPP')}</strong> has been approved by ${data.approverName}.</p>
-                <p>Your time off has been logged in the system.</p>
-            `
+            subject: `✅ Your Leave Request has been Approved - Dev2QA`,
+            html: getLeaveApprovalTemplate(data.userName, data.startDate, data.endDate, data.approverName)
         });
         return { success: true };
     } catch (error) {
@@ -39,13 +48,8 @@ export async function sendLeaveRejectionEmail(data: {
     try {
         await sendEmail({
             to: data.recipientEmail,
-            subject: `Your Leave Request has been Rejected`,
-            html: `
-                <h1>Hello, ${data.userName},</h1>
-                <p>Your leave request for <strong>${format(new Date(data.startDate), 'PPP')}</strong> to <strong>${format(new Date(data.endDate), 'PPP')}</strong> has been rejected by ${data.rejectorName}.</p>
-                <p><strong>Reason:</strong> ${data.reason}</p>
-                <p>Please see your manager if you have any questions.</p>
-            `
+            subject: `❌ Your Leave Request was not Approved - Dev2QA`,
+            html: getLeaveRejectionTemplate(data.userName, data.startDate, data.endDate, data.reason, data.rejectorName)
         });
         return { success: true };
     } catch (error) {
@@ -59,15 +63,8 @@ export async function sendRequestApprovedEmail(data: { recipientEmail: string; r
     try {
         await sendEmail({
             to: data.recipientEmail,
-            subject: `Your Certificate Request has been Approved!`,
-            html: `
-                <h1>Congratulations, ${data.requesterName}!</h1>
-                <p>Your request for the task "<strong>${data.taskTitle}</strong>" has been approved.</p>
-                <p>You can view your certificate by logging into the Dev2QA portal.</p>
-                <br>
-                <p>Thank you,</p>
-                <p>The Dev2QA Team</p>
-            `
+            subject: `✅ Your Certificate Request has been Approved! - Dev2QA`,
+            html: getRequestApprovedTemplate(data.requesterName, data.taskTitle)
         });
         return { success: true };
     } catch (emailError) {
@@ -81,17 +78,8 @@ export async function sendRequestRejectedEmail(data: { recipientEmail: string; r
     try {
         await sendEmail({
             to: data.recipientEmail,
-            subject: `Action Required: Your Certificate Request was Rejected`,
-            html: `
-                <h1>Hello, ${data.requesterName},</h1>
-                <p>Your certificate request for the task "<strong>${data.taskTitle}</strong>" has been rejected.</p>
-                <p><strong>Reason provided by ${data.rejectorName}:</strong></p>
-                <p><em>${data.reason}</em></p>
-                <p>Please review the feedback and make the necessary changes. You can view more details and comments by logging into the Dev2QA portal.</p>
-                <br>
-                <p>Thank you,</p>
-                <p>The Dev2QA Team</p>
-            `
+            subject: `❌ Action Required: Your Certificate Request Needs Revision - Dev2QA`,
+            html: getRequestRejectedTemplate(data.requesterName, data.taskTitle, data.reason, data.rejectorName)
         });
          return { success: true };
     } catch (emailError) {
@@ -108,14 +96,8 @@ export async function sendTestEmail(email: string) {
     try {
         const emailResult = await sendEmail({
             to: email,
-            subject: 'Dev2QA Test Email',
-            html: `
-                <h1>This is a test email from Dev2QA.</h1>
-                <p>If you are seeing this, your email configuration is working correctly.</p>
-                <br>
-                <p>Thank you,</p>
-                <p>The Dev2QA Team</p>
-            `
+            subject: '🧪 Dev2QA Email System Test',
+            html: getTestEmailTemplate()
         });
 
         return emailResult;
@@ -131,19 +113,8 @@ export async function sendWelcomeEmail(data: { name: string, email: string, pass
     try {
         await sendEmail({
             to: data.email,
-            subject: `Welcome to Dev2QA! Your Account is Ready.`,
-            html: `
-                <h1>Welcome aboard, ${data.name}!</h1>
-                <p>An account has been created for you on the Dev2QA platform. You can now log in using the following credentials:</p>
-                <ul>
-                    <li><strong>Email:</strong> ${data.email}</li>
-                    <li><strong>Password:</strong> ${data.password}</li>
-                </ul>
-                <p>We highly recommend you change your password after your first login.</p>
-                <br>
-                <p>Best regards,</p>
-                <p>The Dev2QA Team</p>
-            `
+            subject: `🎉 Welcome to Dev2QA! Your Account is Ready`,
+            html: getWelcomeEmailTemplate(data.name, data.email, data.password || '')
         });
         return { success: true };
     } catch (error) {
@@ -159,17 +130,8 @@ export async function notifyOnNewRequest(data: { qaEmails: string[], taskTitle: 
 
         await sendEmail({
             to: data.qaEmails.join(','),
-            subject: `New Certificate Request: "${data.taskTitle}"`,
-            html: `
-                <h1>New Request for QA Review</h1>
-                <p>A new certificate request has been submitted by <strong>${data.requesterName}</strong> and is ready for review.</p>
-                <ul>
-                    <li><strong>Task:</strong> ${data.taskTitle}</li>
-                    <li><strong>Project:</strong> ${data.associatedProject}</li>
-                    <li><strong>Team:</strong> ${data.associatedTeam}</li>
-                </ul>
-                <p>Please log in to the Dev2QA dashboard to review the details and take action.</p>
-            `
+            subject: `🔔 New Certificate Request: "${data.taskTitle}" - Dev2QA`,
+            html: getNewRequestNotificationTemplate(data.taskTitle, data.requesterName, data.associatedProject, data.associatedTeam)
         });
         return { success: true };
     } catch (error) {
@@ -187,14 +149,8 @@ export async function notifyOnNewComment(data: { recipientEmail: string, comment
 
         await sendEmail({
             to: data.recipientEmail,
-            subject: `New Comment on Request: "${data.taskTitle}"`,
-            html: `
-                <h1>New Comment from ${data.commenterName}</h1>
-                <p>A new comment was added to the certificate request for "<strong>${data.taskTitle}</strong>".</p>
-                <p><strong>Comment:</strong></p>
-                <p><em>${data.commentText}</em></p>
-                <p>Please log in to the Dev2QA dashboard to view the conversation and reply.</p>
-            `
+            subject: `💬 New Comment on Request: "${data.taskTitle}" - Dev2QA`,
+            html: getNewCommentTemplate(data.commenterName, data.taskTitle, data.commentText)
         });
         return { success: true };
     } catch (error) {
@@ -213,17 +169,8 @@ export async function notifyAdminsOnLeaveRequest(data: { adminEmails: string[], 
         
         await sendEmail({
             to: data.adminEmails.join(','),
-            subject: `New Leave Request from ${data.userName}`,
-            html: `
-                <h1>New Leave Request for Approval</h1>
-                <p><strong>${data.userName}</strong> has submitted a new leave request.</p>
-                <ul>
-                    <li><strong>Type:</strong> ${data.leaveType}</li>
-                    <li><strong>Dates:</strong> ${format(new Date(data.startDate), 'PPP')} to ${format(new Date(data.endDate), 'PPP')} (${data.daysCount} days)</li>
-                    <li><strong>Reason:</strong> ${data.reason}</li>
-                </ul>
-                <p>Please log in to the Dev2QA dashboard to review and approve/reject the request.</p>
-            `
+            subject: `📋 New Leave Request from ${data.userName} - Dev2QA`,
+            html: getNewLeaveRequestTemplate(data.userName, data.leaveType, data.startDate, data.endDate, data.daysCount, data.reason)
         });
         return { success: true };
     } catch (error) {
@@ -237,13 +184,8 @@ export async function sendBonusNotification(data: { recipientEmail: string, user
     try {
         const emailResult = await sendEmail({
             to: data.recipientEmail,
-            subject: `You've Received a Bonus!`,
-            html: `
-                <h1>Congratulations, ${data.userName}!</h1>
-                <p>You have been awarded a bonus for: <strong>${data.bonusType}</strong>.</p>
-                <p><strong>Notes from management:</strong> ${data.description}</p>
-                <p>This will be reflected in your next payroll. Keep up the great work!</p>
-            `
+            subject: `🎉 You've Received a Bonus! - Dev2QA`,
+            html: getBonusNotificationTemplate(data.userName, data.bonusType, data.description)
         });
         if (!emailResult.success) {
             console.warn(`Bonus for ${data.userName} was issued, but notification failed: ${emailResult.error}`);
@@ -259,13 +201,8 @@ export async function sendInfractionNotification(data: { recipientEmail: string,
     try {
         const emailResult = await sendEmail({
             to: data.recipientEmail,
-            subject: `Notification of Recorded Infraction`,
-            html: `
-                <h1>Hello, ${data.userName},</h1>
-                <p>This is a notification that an infraction has been recorded in your performance history: <strong>${data.infractionType}</strong>.</p>
-                <p><strong>Notes from management:</strong> ${data.description}</p>
-                <p>Please log in to the Dev2QA portal to view your full performance record. If you have any questions, please speak with your manager.</p>
-            `
+            subject: `⚠️ Performance Notice - Dev2QA`,
+            html: getInfractionNotificationTemplate(data.userName, data.infractionType, data.description)
         });
         if (!emailResult.success) {
              console.warn(`Infraction for ${data.userName} was issued, but notification failed: ${emailResult.error}`);

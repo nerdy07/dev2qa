@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeAdminApp } from '@/lib/firebase-admin';
+import { getAuth, getFirestore } from '@/lib/firebase-admin-simple';
 import { sendWelcomeEmail } from '@/app/requests/actions';
 import type { User } from '@/lib/types';
 
 export async function POST(request: Request) {
   try {
-    await initializeAdminApp();
     const adminAuth = getAuth();
     const db = getFirestore();
 

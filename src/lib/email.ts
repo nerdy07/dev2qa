@@ -3,7 +3,7 @@
 
 const brevoApiKey = process.env.BREVO_API_KEY;
 const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL;
-const brevoSenderName = process.env.BREVO_SENDER_NAME || 'Dev2QA';
+const brevoSenderName = process.env.BREVO_SENDER_NAME || 'Dev2QA Certificate Management';
 
 const isBrevoConfigured = brevoApiKey && brevoSenderEmail;
 
