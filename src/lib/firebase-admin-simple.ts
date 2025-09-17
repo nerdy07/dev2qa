@@ -14,10 +14,10 @@ export function getFirebaseAdmin() {
     return app;
   }
 
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const serviceAccountKey = process.env.ADMIN_SERVICE_ACCOUNT_KEY;
 
   if (!serviceAccountKey) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set');
+    throw new Error('ADMIN_SERVICE_ACCOUNT_KEY environment variable is not set');
   }
 
   try {
@@ -36,7 +36,7 @@ export function getFirebaseAdmin() {
     return app;
   } catch (error: any) {
     console.error('Firebase Admin initialization error:', error);
-    throw new Error('Failed to initialize Firebase Admin SDK');
+    throw new Error('Failed to initialize Firebase Admin SDK. Check your ADMIN_SERVICE_ACCOUNT_KEY environment variable.');
   }
 }
 
