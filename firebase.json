@@ -1,12 +1,7 @@
 {
   "hosting": {
     "source": ".",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "frameworksBackend": {
+    "backend": {
       "id": "app",
       "region": "us-central1"
     }
