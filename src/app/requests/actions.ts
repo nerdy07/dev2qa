@@ -127,18 +127,22 @@ export async function sendTestEmail(email: string) {
 }
 
 
-export async function sendWelcomeEmail(name: string, email: string) {
+export async function sendWelcomeEmail(data: { name: string, email: string, password?: string }) {
     try {
         await sendEmail({
-            to: email,
-            subject: `Welcome to Dev2QA!`,
+            to: data.email,
+            subject: `Welcome to Dev2QA! Your Account is Ready.`,
             html: `
-                <h1>Welcome aboard, ${name}!</h1>
-                <p>An account has been created for you on the Dev2QA platform.</p>
-                <p>Please log in using the temporary password provided by your administrator. You will be prompted to change it upon your first login.</p>
+                <h1>Welcome aboard, ${data.name}!</h1>
+                <p>An account has been created for you on the Dev2QA platform. You can now log in using the following credentials:</p>
+                <ul>
+                    <li><strong>Email:</strong> ${data.email}</li>
+                    <li><strong>Password:</strong> ${data.password}</li>
+                </ul>
+                <p>We highly recommend you change your password after your first login.</p>
                 <br>
                 <p>Best regards,</p>
-                <p>The echobitstech Team</p>
+                <p>The Dev2QA Team</p>
             `
         });
         return { success: true };
@@ -254,7 +258,7 @@ export async function sendBonusNotification(data: { recipientEmail: string, user
 export async function sendInfractionNotification(data: { recipientEmail: string, userName: string, infractionType: string, description: string }) {
     try {
         const emailResult = await sendEmail({
-            to: recipientEmail,
+            to: data.recipientEmail,
             subject: `Notification of Recorded Infraction`,
             html: `
                 <h1>Hello, ${data.userName},</h1>
@@ -268,9 +272,7 @@ export async function sendInfractionNotification(data: { recipientEmail: string,
         }
         return { success: true };
     } catch (emailError) {
-        console.warn(`Infraction for ${data.userName} was issued, but the notification email failed to send.`, emailError);
+        console.warn(`Infraction for ${data.userName} was issued, a notification email failed to send.`, emailError);
         return { success: false, error: "Database updated, but email failed." };
     }
 }
-
-    

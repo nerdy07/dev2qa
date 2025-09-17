@@ -7,6 +7,7 @@ export type User = {
   expertise?: string;
   baseSalary?: number;
   annualLeaveEntitlement?: number;
+  disabled?: boolean;
 };
 
 export type Team = {

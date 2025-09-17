@@ -25,10 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
-import { useAuth } from '@/providers/auth-provider';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { sendWelcomeEmail } from '@/app/requests/actions';
+
 
 const formSchemaBase = z.object({
     name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -52,7 +49,6 @@ interface UserFormProps {
 
 export function UserForm({ user, onSuccess }: UserFormProps) {
   const { toast } = useToast();
-  const { updateUser } = useAuth();
   const isEditing = !!user;
 
   const formSchema = isEditing ? editFormSchema : createFormSchema;
@@ -75,26 +71,26 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
         if (isEditing && user) {
-            const dataToUpdate: Partial<User> = {
-                name: values.name,
-                email: values.email,
-                role: values.role,
-                expertise: values.role === 'qa_tester' ? values.expertise : '',
-                baseSalary: values.baseSalary,
-                annualLeaveEntitlement: values.annualLeaveEntitlement,
-            };
-            await updateUser(user.id, dataToUpdate);
+            const response = await fetch(`/api/users/${user.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(values),
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+              throw new Error(result.message || 'Failed to update user.');
+            }
+            
             toast({
                 title: 'User Updated',
                 description: `${values.name} has been successfully updated.`,
             });
-        } else if (!isEditing) {
-            const createValues = values as z.infer<typeof createFormSchema>;
-            
+        } else {
             const response = await fetch('/api/create-user', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(createValues),
+              body: JSON.stringify(values),
             });
 
             const result = await response.json();
@@ -180,7 +176,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             </FormItem>
             )}
         />
-        {!isEditing && (
+        {!isEditing && 'password' in form.getValues() && (
             <FormField
                 control={form.control}
                 name="password"

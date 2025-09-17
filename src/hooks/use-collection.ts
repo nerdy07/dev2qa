@@ -39,7 +39,7 @@ export function useCollection<T>(collectionName: string, firestoreQuery?: Query 
     return () => unsubscribe();
   }, [collectionName, firestoreQuery]);
 
-  return { data, loading, error };
+  return { data, loading, error, setData };
 }
 
 export function useDocument<T>(collectionName: string, docId: string) {

@@ -3,23 +3,20 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
 import { auth, db, firebaseInitialized } from '@/lib/firebase';
 import { TriangleAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { sendWelcomeEmail } from '@/app/requests/actions';
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
-  createUser: (name: string, email: string, pass:string, role: User['role'], expertise?: string, baseSalary?: number, annualLeaveEntitlement?: number) => Promise<void>;
-  updateUser: (uid: string, data: Partial<User>) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
 }
 
@@ -131,17 +128,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const userDocSnap = await getDoc(userDocRef);
 
                 if (userDocSnap.exists()) {
-                    const userData = userDocSnap.data() as User;
-                    setUser({
-                        id: authUser.uid,
-                        name: authUser.displayName || userData.name,
-                        email: authUser.email!,
-                        role: userData.role,
-                        photoURL: authUser.photoURL || undefined,
-                        expertise: userData.expertise,
-                        baseSalary: userData.baseSalary,
-                        annualLeaveEntitlement: userData.annualLeaveEntitlement,
-                    });
+                    const userData = { id: userDocSnap.id, ...userDocSnap.data() } as User;
+                    if (userData.disabled) {
+                        await signOut(auth);
+                        setUser(null);
+                    } else {
+                        setUser({
+                            id: authUser.uid,
+                            name: authUser.displayName || userData.name,
+                            email: authUser.email!,
+                            role: userData.role,
+                            photoURL: authUser.photoURL || undefined,
+                            expertise: userData.expertise,
+                            baseSalary: userData.baseSalary,
+                            annualLeaveEntitlement: userData.annualLeaveEntitlement,
+                            disabled: userData.disabled
+                        });
+                    }
                 } else {
                     console.warn(`User ${authUser.uid} is authenticated but has no Firestore document. Logging out.`);
                     await signOut(auth);
@@ -165,15 +168,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!loading && firebaseInitialized) {
       const isAuthPage = pathname === '/';
       const isSignupPage = pathname === '/signup'; 
-      const publicPages = isAuthPage || isSignupPage;
+      const isPublicPage = isAuthPage || isSignupPage;
 
-      if (user && publicPages) {
+      if (user && isPublicPage) {
         router.push('/dashboard');
-      } else if (!user && !publicPages) {
+      } else if (!user && !isPublicPage) {
         router.push('/');
       }
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading, pathname, router, firebaseInitialized]);
 
 
   const login = (email: string, pass: string) => {
@@ -185,53 +188,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) return Promise.reject(new Error("Firebase not initialized. Check your .env file."));
     return signOut(auth);
   };
-
-  const createUser = async (name: string, email: string, pass: string, role: User['role'], expertise?: string, baseSalary?: number, annualLeaveEntitlement?: number) => {
-    if (!auth || !db) throw new Error("Firebase not initialized. Check your .env file.");
-    
-    // We cannot create a user while another user is logged in with client-side SDK.
-    // This action should be handled by a secure backend function in a real-world scenario.
-    // For this environment, we'll throw an error to indicate this limitation.
-    // A better approach would be to use a Firebase Function to create users.
-    if (auth.currentUser) {
-        console.warn("Attempted to create a user while another user is signed in. This is not supported client-side. Please use a backend function.");
-        throw new Error("Cannot create a new user while you are logged in. Please use a backend function for user creation.");
-    }
-    
-    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(userCredential.user, { displayName: name });
-    
-    const userDocRef = doc(db, 'users', userCredential.user.uid);
-    
-    const userData: Omit<User, 'id'> = {
-        name,
-        email,
-        role,
-        baseSalary: baseSalary || 0,
-        annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
-        expertise: role === 'qa_tester' ? expertise : '',
-    };
-
-    await setDoc(userDocRef, userData);
-    
-    await sendWelcomeEmail(name, email);
-
-    // After creating the user, sign them out and let the admin log back in.
-    await signOut(auth);
-  };
   
-  const updateUser = async (uid: string, data: Partial<User>) => {
-    if (!db) throw new Error("Firebase not initialized. Check your .env file.");
-    const userDocRef = doc(db, 'users', uid);
-    await updateDoc(userDocRef, data);
-  }
-
   const sendPasswordReset = async (email: string) => {
     if (!auth) throw new Error("Firebase not initialized. Check your .env file.");
     await sendPasswordResetEmail(auth, email);
   }
 
-  const value = { user, login, logout, loading, createUser, updateUser, sendPasswordReset };
+  const value = { user, login, logout, loading, sendPasswordReset };
 
   if (!firebaseInitialized) {
     return <MissingFirebaseConfig />;
@@ -255,5 +218,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    
