@@ -1,7 +1,7 @@
 # The name of the backend. This is reflected in the backend's resource name.
 # This name can be whatever you want, but it cannot be changed after it's
 # created.
-# id: my-next-app
+id: app
 run:
   # This is the command that starts your application.
   command: npm run start
