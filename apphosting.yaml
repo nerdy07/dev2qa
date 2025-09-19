@@ -1,13 +1,25 @@
-# Settings to manage and configure a Firebase App Hosting backend.
-# https://firebase.google.com/docs/app-hosting/configure
-
-runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+# The name of the backend. This is reflected in the backend's resource name.
+# This name can be whatever you want, but it cannot be changed after it's
+# created.
+# id: my-next-app
+run:
+  # This is the command that starts your application.
+  command: npm run start
+  # The service can listen to any port, but it must listen to the port specified
+  # in the "PORT" environment variable.
+env:
+  - variable: PORT
+    value: '3000'
+# This is a list of environment variables that will be available to your
+# application. You can add any environment variables you need here.
+# env:
+#   - variable: FOO
+#     value: bar
+#   - variable: BAZ
+#     value: qux
 build:
-  # Command to build your app
-  command: "npm install && npm run build"
-start:
-  # Command to start your app
-  command: "npm run start"
+  # This is the command that builds your application.
+  command: npm run build
+# This specifies the node version to be used to build and run your
+# application.
+runtime: nodejs20
