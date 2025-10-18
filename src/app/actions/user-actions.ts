@@ -1,34 +1,40 @@
-import { NextResponse } from 'next/server';
+'use server';
+
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { sendWelcomeEmail } from '@/app/requests/actions';
 import type { User } from '@/lib/types';
+import { revalidatePath } from 'next/cache';
 
-export async function POST(request: Request) {
+// This is a server action, a secure way to run server-side code from a client component.
+
+type CreateUserResult = { success: true; uid: string } | { success: false; error: string };
+
+export async function createUser(userData: any): Promise<CreateUserResult> {
   try {
+    // Ensure Firebase Admin is initialized
     await initializeAdminApp();
     const adminAuth = getAuth();
     const db = getFirestore();
 
-    const body = await request.json();
-    const { name, email, password, role, expertise, baseSalary, annualLeaveEntitlement } = body;
+    const { name, email, password, role, expertise, baseSalary, annualLeaveEntitlement } = userData;
 
     if (!name || !email || !password || !role) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+      return { success: false, error: 'Missing required fields' };
     }
 
-    // Create user in Firebase Auth
+    // 1. Create user in Firebase Auth
     const userRecord = await adminAuth.createUser({
-      email: email,
-      password: password,
+      email,
+      password,
       displayName: name,
       disabled: false,
     });
 
-    // Create user document in Firestore
+    // 2. Create user document in Firestore
     const userDocRef = db.collection('users').doc(userRecord.uid);
-    const userData: Omit<User, 'id'> = {
+    const newUserFirestoreData: Omit<User, 'id'> = {
         name,
         email,
         role,
@@ -37,22 +43,23 @@ export async function POST(request: Request) {
         expertise: role === 'qa_tester' ? expertise : '',
         disabled: false,
     };
-    await userDocRef.set(userData);
+    await userDocRef.set(newUserFirestoreData);
 
-    // Send welcome email without waiting for it to complete.
-    // If it fails, log it, but don't fail the entire user creation process.
+    // 3. Send welcome email (don't block for this)
     sendWelcomeEmail({ name, email, password }).then(result => {
       if (!result.success) {
           console.error(`Welcome email failed for ${email}: ${result.error}`);
       }
     });
+    
+    // 4. Revalidate the users page to show the new user
+    revalidatePath('/dashboard/admin/users');
 
-    return NextResponse.json({ uid: userRecord.uid, message: 'User created successfully' });
+    return { success: true, uid: userRecord.uid };
 
   } catch (error: any) {
-    console.error('Error creating user:', error);
+    console.error('Error creating user via server action:', error);
     
-    // Provide a more specific error message back to the client.
     let errorMessage = error.message || 'An unexpected error occurred during user creation.';
     
     // Customize messages for common Firebase Auth errors
@@ -70,6 +77,6 @@ export async function POST(request: Request) {
         }
     }
 
-    return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
+    return { success: false, error: errorMessage };
   }
 }

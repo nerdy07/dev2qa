@@ -25,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
+import { createUser } from '@/app/actions/user-actions';
 
 
 const formSchemaBase = z.object({
@@ -71,6 +72,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
         if (isEditing && user) {
+            // Server action for updating a user
             const response = await fetch(`/api/users/${user.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -87,16 +89,11 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 description: `${values.name} has been successfully updated.`,
             });
         } else {
-            const response = await fetch('/api/create-user', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(values),
-            });
+            // New server action for creating a user
+            const result = await createUser(values);
 
-            const result = await response.json();
-
-            if (!response.ok) {
-              throw new Error(result.message || 'Failed to create user.');
+            if (!result.success) {
+              throw new Error(result.error);
             }
             
             toast({
