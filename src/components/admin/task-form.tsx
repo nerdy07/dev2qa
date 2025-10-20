@@ -24,6 +24,8 @@ import { useCollection } from '@/hooks/use-collection';
 import type { Task, User } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { notifyOnTaskAssignment } from '@/app/requests/actions';
+import { useToast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
   status: z.enum(['To Do', 'In Progress', 'Done']),
@@ -33,23 +35,27 @@ const formSchema = z.object({
 interface TaskFormProps {
   task: Task;
   milestoneId: string;
+  milestoneName: string; // Pass milestone and project names for the email
+  projectName: string;
   onSave: (updatedTask: Task, milestoneId: string) => Promise<boolean>;
   onCancel: () => void;
 }
 
-export function TaskForm({ task, milestoneId, onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ task, milestoneId, milestoneName, projectName, onSave, onCancel }: TaskFormProps) {
   const { data: users, loading: usersLoading } = useCollection<User>('users');
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       status: task.status,
-      assigneeId: task.assigneeId || undefined,
+      assigneeId: task.assigneeId || 'unassigned',
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    const selectedUser = users?.find(u => u.id === values.assigneeId);
+    const selectedUserId = values.assigneeId === 'unassigned' ? undefined : values.assigneeId;
+    const selectedUser = users?.find(u => u.id === selectedUserId);
     
     const updatedTask: Task = {
         ...task,
@@ -58,7 +64,32 @@ export function TaskForm({ task, milestoneId, onSave, onCancel }: TaskFormProps)
         assigneeName: selectedUser?.name || '',
     };
     
-    await onSave(updatedTask, milestoneId);
+    const wasJustAssigned = !task.assigneeId && selectedUser;
+
+    const success = await onSave(updatedTask, milestoneId);
+
+    if (success && wasJustAssigned && selectedUser) {
+        const emailResult = await notifyOnTaskAssignment({
+            recipientEmail: selectedUser.email,
+            assigneeName: selectedUser.name,
+            taskName: updatedTask.name,
+            milestoneName: milestoneName,
+            projectName: projectName,
+        });
+
+        if (emailResult.success) {
+            toast({
+                title: "User Notified",
+                description: `${selectedUser.name} has been notified of their assignment.`
+            })
+        } else {
+            toast({
+                title: "Notification Failed",
+                description: emailResult.error,
+                variant: "destructive",
+            })
+        }
+    }
   }
 
   return (

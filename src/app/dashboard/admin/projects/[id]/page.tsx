@@ -76,7 +76,7 @@ export default function ProjectDetailsPage() {
     const { data: project, loading: projectLoading, error: projectError, setData: setProject } = useDocument<Project>('projects', id as string);
 
     const [isTaskFormOpen, setIsTaskFormOpen] = React.useState(false);
-    const [selectedTask, setSelectedTask] = React.useState<{task: Task, milestoneId: string} | null>(null);
+    const [selectedTask, setSelectedTask] = React.useState<{task: Task, milestoneId: string, milestoneName: string} | null>(null);
 
     const requestsQuery = React.useMemo(() => {
         if (!project) return null;
@@ -103,8 +103,8 @@ export default function ProjectDetailsPage() {
         return Math.round((completedTasks / allTasks.length) * 100);
     }, [project]);
 
-    const handleEditTask = (task: Task, milestoneId: string) => {
-        setSelectedTask({ task, milestoneId });
+    const handleEditTask = (task: Task, milestoneId: string, milestoneName: string) => {
+        setSelectedTask({ task, milestoneId, milestoneName });
         setIsTaskFormOpen(true);
     };
 
@@ -290,7 +290,7 @@ export default function ProjectDetailsPage() {
                                                                             <span className='italic text-xs'>Unassigned</span>
                                                                         )}
                                                                         {canEdit && (
-                                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task, milestone.id)}>
+                                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task, milestone.id, milestone.name)}>
                                                                                 <Pencil className="h-3 w-3" />
                                                                             </Button>
                                                                         )}
@@ -335,6 +335,8 @@ export default function ProjectDetailsPage() {
                         <TaskForm
                             task={selectedTask.task}
                             milestoneId={selectedTask.milestoneId}
+                            milestoneName={selectedTask.milestoneName}
+                            projectName={project.name}
                             onSave={handleSaveTask}
                             onCancel={() => setIsTaskFormOpen(false)}
                         />

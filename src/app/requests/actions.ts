@@ -250,7 +250,7 @@ export async function sendBonusNotification(data: { recipientEmail: string, user
         }
         return { success: true };
     } catch (emailError) {
-        console.warn(`Bonus for ${data.userName} was issued, but the notification email failed to send.`, emailError);
+        console.warn(`Bonus for ${data.userName} was issued, a notification email failed to send.`, emailError);
         return { success: false, error: "Database updated, but email failed." };
     }
 }
@@ -285,16 +285,47 @@ export async function notifyOnProjectUpdate(data: { recipientEmails: string[], p
             to: data.recipientEmails.join(','),
             subject: `Project Update: "${data.projectName}"`,
             html: `
-                <h1>Project Update</h1>
-                <p>The project "<strong>${data.projectName}</strong>" has been updated.</p>
-                <p>This may include changes to your assigned tasks or their timelines.</p>
-                <p>Please log in to the Dev2QA dashboard to review the project details.</p>
+                <h1>Project Update Notification</h1>
+                <p>This is an automated notification to inform you that the project "<strong>${data.projectName}</strong>" has been updated.</p>
+                <p>Changes may include updates to project details, task assignments, or task timelines.</p>
+                <p>Please log in to the Dev2QA dashboard to review the project and see how these changes may affect your assigned work.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
             `
         });
         return { success: true };
     } catch (error) {
         const err = error as Error;
         console.error('Error notifying users of project update:', err);
+        return { success: false, error: err.message };
+    }
+}
+
+export async function notifyOnTaskAssignment(data: { recipientEmail: string, assigneeName: string, taskName: string, milestoneName: string, projectName: string }) {
+    try {
+        await sendEmail({
+            to: data.recipientEmail,
+            subject: `New Task Assignment: "${data.taskName}"`,
+            html: `
+                <h1>New Task Assigned to You</h1>
+                <p>Hello ${data.assigneeName},</p>
+                <p>You have been assigned a new task: <strong>${data.taskName}</strong>.</p>
+                <p>Details:</p>
+                <ul>
+                    <li><strong>Project:</strong> ${data.projectName}</li>
+                    <li><strong>Milestone:</strong> ${data.milestoneName}</li>
+                </ul>
+                <p>Please log in to the Dev2QA dashboard to view the full task details, including the timeline and description.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
+        });
+        return { success: true };
+    } catch (error) {
+        const err = error as Error;
+        console.error('Error notifying user of task assignment:', err);
         return { success: false, error: err.message };
     }
 }
