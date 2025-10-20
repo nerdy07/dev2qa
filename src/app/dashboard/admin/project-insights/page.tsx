@@ -1,63 +1,119 @@
 'use client';
 
+import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, GanttChartSquare, KanbanSquare, Target } from 'lucide-react';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartBar } from '@/components/ui/chart';
+import { BarChart as BarChartIcon, TriangleAlert } from 'lucide-react';
+import { useCollection } from '@/hooks/use-collection';
+import type { Project } from '@/lib/types';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { ChartConfig } from '@/components/ui/chart';
 
 export default function ProjectInsightsPage() {
-  return (
-    <>
-      <PageHeader
-        title="Project Insights"
-        description="Visualize project timelines, manage tasks, and track overall progress."
-      />
-      <div className="grid gap-8">
-        <Card className="border-2 border-dashed bg-secondary/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-3">
-              <BarChart className="h-6 w-6 text-primary" />
-              Comprehensive Dashboard Coming Soon
-            </CardTitle>
-            <CardDescription>
-              This space will soon be populated with rich, interactive visualizations and project management tools.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm text-muted-foreground">
-                <div className="flex items-start gap-3">
-                    <GanttChartSquare className="h-5 w-5 mt-0.5 text-accent" />
-                    <div>
-                        <p className="font-semibold text-card-foreground">Visual Timelines</p>
-                        <p>Interactive Gantt charts to plan and track project milestones and dependencies.</p>
-                    </div>
-                </div>
-                <div className="flex items-start gap-3">
-                    <KanbanSquare className="h-5 w-5 mt-0.5 text-accent" />
-                    <div>
-                        <p className="font-semibold text-card-foreground">Task Boards</p>
-                        <p>Collaborative Kanban boards for seamless task management between developers and QA.</p>
-                    </div>
-                </div>
-                <div className="flex items-start gap-3">
-                    <Target className="h-5 w-5 mt-0.5 text-accent" />
-                    <div>
-                        <p className="font-semibold text-card-foreground">Real-time Analytics</p>
-                        <p>Burndown charts, progress rings, and team workload visualizations.</p>
-                    </div>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
+    const { data: projects, loading, error } = useCollection<Project>('projects');
 
-        <div>
-            <h3 className="text-lg font-semibold mb-4">Next Steps:</h3>
-            <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
-                <li><span className="font-semibold text-foreground">Define Core Entities:</span> We'll expand the database schema for Projects, Tasks, and Milestones.</li>
-                <li><span className="font-semibold text-foreground">Implement Data Visualizations:</span> We'll add charting libraries to build the dashboard widgets.</li>
-                <li><span className="font-semibold text-foreground">Integrate AI Features:</span> We'll connect the AI engine to predict delays and suggest resource allocation.</li>
-            </ol>
-        </div>
-      </div>
-    </>
-  );
+    const chartData = React.useMemo(() => {
+        if (!projects) return [];
+        const statusCounts = projects.reduce((acc, project) => {
+            const status = project.status || 'Not Started';
+            acc[status] = (acc[status] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        return Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
+    }, [projects]);
+
+    const chartConfig = {
+        count: {
+            label: 'Projects',
+            color: 'hsl(var(--primary))',
+        },
+    } satisfies ChartConfig;
+
+    const renderContent = () => {
+        if (loading) {
+            return <Skeleton className="h-[400px] w-full" />;
+        }
+
+        if (error) {
+            return (
+                <Alert variant="destructive">
+                    <TriangleAlert className="h-4 w-4" />
+                    <AlertTitle>Error Loading Chart Data</AlertTitle>
+                    <AlertDescription>{error.message}</AlertDescription>
+                </Alert>
+            );
+        }
+        
+        if (chartData.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg">
+                    <p className="text-muted-foreground">No project data to display.</p>
+                    <p className="text-sm text-muted-foreground">Create some projects to see insights here.</p>
+                </div>
+            )
+        }
+
+        return (
+            <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
+                <BarChart data={chartData} accessibilityLayer>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                        dataKey="status"
+                        tickLine={false}
+                        tickMargin={10}
+                        axisLine={false}
+                    />
+                    <YAxis allowDecimals={false} />
+                    <ChartTooltip
+                        content={<ChartTooltipContent />}
+                        cursor={false}
+                    />
+                    <Bar
+                        dataKey="count"
+                        fill="var(--color-count)"
+                        radius={4}
+                    />
+                </BarChart>
+            </ChartContainer>
+        );
+    }
+
+    return (
+        <>
+            <PageHeader
+                title="Project Insights"
+                description="Visualize project timelines, manage tasks, and track overall progress."
+            />
+            <div className="grid gap-8">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-3">
+                            <BarChartIcon className="h-6 w-6 text-primary" />
+                            Project Status Overview
+                        </CardTitle>
+                        <CardDescription>
+                            A summary of all projects based on their current status.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {renderContent()}
+                    </CardContent>
+                </Card>
+
+                {/* Placeholder for future charts */}
+                <Card className="border-2 border-dashed bg-secondary/50">
+                    <CardHeader>
+                        <CardTitle>More Visualizations Coming Soon</CardTitle>
+                        <CardDescription>
+                            This space will soon be populated with Gantt charts, Kanban boards, and real-time analytics.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
+            </div>
+        </>
+    );
 }
