@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -47,17 +48,25 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
+import { ALL_PERMISSIONS } from '@/lib/roles';
 
 type ActionType = 'delete' | 'deactivate' | 'activate';
 
 export default function UsersPage() {
   const { data: users, loading, error, setData } = useCollection<User>('users');
   const { user: currentUser, sendPasswordReset } = useAuth();
+  const { hasPermission } = usePermissions();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
   const { toast } = useToast();
+
+  const canCreate = hasPermission(ALL_PERMISSIONS.USERS.CREATE);
+  const canUpdate = hasPermission(ALL_PERMISSIONS.USERS.UPDATE);
+  const canDelete = hasPermission(ALL_PERMISSIONS.USERS.DELETE);
+
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
@@ -116,7 +125,6 @@ export default function UsersPage() {
 
         toast({ title: 'Success', description: successMessage });
         
-        // Optimistically update the local state to reflect the change immediately
         if (users && setData) {
             if (actionToConfirm === 'delete') {
                 setData(users.filter(u => u.id !== selectedUser.id));
@@ -227,17 +235,17 @@ export default function UsersPage() {
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id}>
+                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id || !canUpdate}>
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {user.disabled ? (
+                  {canUpdate && <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>}
+                  {canUpdate && <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>}
+                  {(canUpdate || canDelete) && <DropdownMenuSeparator />}
+                  {canUpdate && (user.disabled ? (
                     <DropdownMenuItem onClick={() => handleActionTrigger(user, 'activate')}>
                       <UserCheck className="mr-2 h-4 w-4" />
                       Activate User
@@ -247,9 +255,9 @@ export default function UsersPage() {
                       <UserX className="mr-2 h-4 w-4" />
                       Deactivate User
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleActionTrigger(user, 'delete')}>Delete User</DropdownMenuItem>
+                  ))}
+                  {canDelete && <DropdownMenuSeparator />}
+                  {canDelete && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleActionTrigger(user, 'delete')}>Delete User</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>
@@ -265,23 +273,25 @@ export default function UsersPage() {
         title="User Management"
         description="Create, view, and manage user accounts."
       >
-        <Dialog open={isFormOpen} onOpenChange={(open) => {
-            if (!open) setSelectedUser(undefined);
-            setIsFormOpen(open);
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
-            </DialogHeader>
-            <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
-          </DialogContent>
-        </Dialog>
+        {canCreate && (
+          <Dialog open={isFormOpen} onOpenChange={(open) => {
+              if (!open) setSelectedUser(undefined);
+              setIsFormOpen(open);
+          }}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
+              </DialogHeader>
+              <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
+            </DialogContent>
+          </Dialog>
+        )}
       </PageHeader>
       <Card>
         <Table>

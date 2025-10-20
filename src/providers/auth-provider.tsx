@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, getIdToken } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -13,6 +13,7 @@ import { TriangleAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { PERMISSIONS_BY_ROLE } from '@/lib/roles';
 
 interface AuthContextType {
   user: User | null;
@@ -20,20 +21,15 @@ interface AuthContextType {
   logout: () => void;
   loading: boolean;
   sendPasswordReset: (email: string) => Promise<void>;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// This component listens for Firestore permission errors and throws them,
-// which will then be caught by the Next.js development overlay.
 function FirebaseErrorListener() {
   useEffect(() => {
     const handleError = (error: FirestorePermissionError) => {
-      // In a production environment, you would log this to a service like Sentry.
-      // For this development environment, we will throw the error to make it
-      // visible in the Next.js error overlay.
       if (process.env.NODE_ENV === 'development') {
-        // We throw the error in a timeout to break out of the current React render cycle.
         setTimeout(() => {
           throw error;
         }, 0);
@@ -47,7 +43,7 @@ function FirebaseErrorListener() {
     };
   }, []);
 
-  return null; // This component does not render anything.
+  return null;
 }
 
 
@@ -145,6 +141,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const userPermissions = useMemo(() => {
+    if (!user) return [];
+    return PERMISSIONS_BY_ROLE[user.role] || [];
+  }, [user]);
+
+  const hasPermission = (permission: string) => {
+    return userPermissions.includes(permission);
+  };
+
   useEffect(() => {
     if (!auth || !db) {
       setLoading(false);
@@ -162,9 +167,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         await signOut(auth);
                         setUser(null);
                     } else {
-                        // Pass idToken to user object for security rules
                         const idToken = await getIdToken(authUser);
-                        const userWithToken = {
+                        const userWithToken: User = {
                             id: authUser.uid,
                             name: authUser.displayName || userData.name,
                             email: authUser.email!,
@@ -174,11 +178,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             baseSalary: userData.baseSalary,
                             annualLeaveEntitlement: userData.annualLeaveEntitlement,
                             disabled: userData.disabled,
-                            // This token should NOT be stored in a client-side state management tool
-                            // like Redux or MobX. This is for demonstration purposes only.
-                            // In a real-world application, you would pass this token in the
-                            // header of each request to your backend.
-                            idToken: idToken,
                         };
                         setUser(userWithToken);
                     }
@@ -231,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendPasswordResetEmail(auth, email);
   }
 
-  const value = { user, login, logout, loading, sendPasswordReset };
+  const value = { user, login, logout, loading, sendPasswordReset, hasPermission };
 
   if (!firebaseInitialized) {
     return <MissingFirebaseConfig />;
@@ -256,5 +255,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    

@@ -1,0 +1,134 @@
+
+export const ROLES = {
+    ADMIN: 'admin',
+    QA_TESTER: 'qa_tester',
+    REQUESTER: 'requester',
+} as const;
+
+export const ALL_PERMISSIONS = {
+    // Admin Section
+    ADMIN_SECTION: {
+        READ: 'admin:read',
+    },
+    USERS: {
+        CREATE: 'users:create',
+        READ: 'users:read',
+        UPDATE: 'users:update',
+        DELETE: 'users:delete',
+    },
+    TEAMS: {
+        CREATE: 'teams:create',
+        READ: 'teams:read',
+        UPDATE: 'teams:update',
+        DELETE: 'teams:delete',
+    },
+    PROJECTS: {
+        CREATE: 'projects:create',
+        READ: 'projects:read',
+        UPDATE: 'projects:update',
+        DELETE: 'projects:delete',
+        ASSIGN_TASKS: 'projects:assign_tasks',
+    },
+    PROJECT_INSIGHTS: {
+        READ: 'insights:read',
+    },
+    PROJECT_DIAGNOSTICS: {
+        RUN: 'diagnostics:run',
+    },
+    PAYROLL: {
+        READ: 'payroll:read',
+    },
+    LEAVE_MANAGEMENT: {
+        MANAGE: 'leave:manage',
+    },
+    INFRACTIONS: {
+        MANAGE: 'infractions:manage',
+    },
+    BONUSES: {
+        MANAGE: 'bonuses:manage',
+    },
+    
+    // QA & Requester Section
+    REQUESTS: {
+        CREATE: 'requests:create',
+        READ_ALL: 'requests:read_all',
+        READ_OWN: 'requests:read_own',
+        APPROVE: 'requests:approve',
+        REJECT: 'requests:reject',
+        ADD_COMMENT: 'requests:add_comment',
+        RATE_SUBMISSION: 'requests:rate_submission',
+        GIVE_FEEDBACK: 'requests:give_feedback',
+    },
+    CERTIFICATES: {
+        READ: 'certificates:read',
+        REVOKE: 'certificates:revoke',
+    },
+    LEADERBOARDS: {
+        READ: 'leaderboards:read',
+    },
+    RECORDS: {
+        READ_OWN: 'records:read_own',
+    },
+    LEAVE: {
+        REQUEST: 'leave:request',
+    }
+} as const;
+
+
+const ADMIN_PERMISSIONS = [
+    ALL_PERMISSIONS.ADMIN_SECTION.READ,
+    ALL_PERMISSIONS.USERS.CREATE,
+    ALL_PERMISSIONS.USERS.READ,
+    ALL_PERMISSIONS.USERS.UPDATE,
+    ALL_PERMISSIONS.USERS.DELETE,
+    ALL_PERMISSIONS.TEAMS.CREATE,
+    ALL_PERMISSIONS.TEAMS.READ,
+    ALL_PERMISSIONS.TEAMS.UPDATE,
+    ALL_PERMISSIONS.TEAMS.DELETE,
+    ALL_PERMISSIONS.PROJECTS.CREATE,
+    ALL_PERMISSIONS.PROJECTS.READ,
+    ALL_PERMISSIONS.PROJECTS.UPDATE,
+    ALL_PERMISSIONS.PROJECTS.DELETE,
+    ALL_PERMISSIONS.PROJECTS.ASSIGN_TASKS,
+    ALL_PERMISSIONS.PROJECT_INSIGHTS.READ,
+    ALL_PERMISSIONS.PROJECT_DIAGNOSTICS.RUN,
+    ALL_PERMISSIONS.PAYROLL.READ,
+    ALL_PERMISSIONS.LEAVE_MANAGEMENT.MANAGE,
+    ALL_PERMISSIONS.INFRACTIONS.MANAGE,
+    ALL_PERMISSIONS.BONUSES.MANAGE,
+    ALL_PERMISSIONS.REQUESTS.READ_ALL,
+    ALL_PERMISSIONS.REQUESTS.ADD_COMMENT,
+    ALL_PERMISSIONS.CERTIFICATES.READ,
+    ALL_PERMISSIONS.CERTIFICATES.REVOKE,
+    ALL_PERMISSIONS.LEADERBOARDS.READ,
+];
+
+const QA_TESTER_PERMISSIONS = [
+    ALL_PERMISSIONS.REQUESTS.READ_ALL,
+    ALL_PERMISSIONS.REQUESTS.APPROVE,
+    ALL_PERMISSIONS.REQUESTS.REJECT,
+    ALL_PERMISSIONS.REQUESTS.ADD_COMMENT,
+    ALL_PERMISSIONS.REQUESTS.RATE_SUBMISSION,
+    ALL_PERMISSIONS.CERTIFICATES.READ,
+    ALL_PERMISSIONS.CERTIFICATES.REVOKE,
+    ALL_PERMISSIONS.LEADERBOARDS.READ,
+    ALL_PERMISSIONS.RECORDS.READ_OWN,
+    ALL_PERMISSIONS.LEAVE.REQUEST,
+];
+
+const REQUESTER_PERMISSIONS = [
+    ALL_PERMISSIONS.REQUESTS.CREATE,
+    ALL_PERMISSIONS.REQUESTS.READ_OWN,
+    ALL_PERMISSIONS.REQUESTS.ADD_COMMENT,
+    ALL_PERMISSIONS.REQUESTS.GIVE_FEEDBACK,
+    ALL_PERMISSIONS.CERTIFICATES.READ,
+    ALL_PERMISSIONS.LEADERBOARDS.READ,
+    ALL_PERMISSIONS.RECORDS.READ_OWN,
+    ALL_PERMISSIONS.LEAVE.REQUEST,
+];
+
+export const PERMISSIONS_BY_ROLE = {
+    [ROLES.ADMIN]: ADMIN_PERMISSIONS,
+    [ROLES.QA_TESTER]: QA_TESTER_PERMISSIONS,
+    [ROLES.REQUESTER]: REQUESTER_PERMISSIONS,
+};

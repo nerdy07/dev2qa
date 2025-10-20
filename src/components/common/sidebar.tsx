@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -23,76 +24,126 @@ import { usePathname } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
-import type { User } from '@/lib/types';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { Button } from '../ui/button';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { usePermissions } from '@/hooks/use-permissions';
 
-type NavItem = { href: string; icon: LucideIcon; label: string };
+type NavItem = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  permission: string;
+};
+type NavSection = {
+  label?: string;
+  items: NavItem[];
+};
 type NavSeparator = { type: 'separator' };
-type NavItemOrSeparator = NavItem | NavSeparator;
+type NavItemOrSeparator = NavSection | NavSeparator;
 
-const navItems: { [key in User['role']]: NavItemOrSeparator[] } = {
-    admin: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
-      { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights' },
-      { href: '/dashboard/admin/diagnostics', icon: Stethoscope, label: 'AI Diagnostics' },
-      { type: 'separator' },
-      { href: '/dashboard/admin/users', icon: Users, label: 'Users' },
-      { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams' },
-      { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects' },
-      { type: 'separator' },
-      { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions' },
-      { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses' },
-      { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll' },
-      { href: '/dashboard/admin/leave', icon: CalendarCheck, label: 'Leave Management' },
-    ],
-    requester: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'My Requests' },
-      { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request' },
-      { type: 'separator' },
-      { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
-      { type: 'separator' },
-      { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
-      { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
-    ],
-    qa_tester: [
-        { href: '/dashboard', icon: LayoutDashboard, label: 'Pending Requests' },
-        { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
-        { type: 'separator' },
-        { href: '/dashboard/my-records', icon: BookUser, label: 'My Records' },
-        { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave' },
-    ],
-  };
+
+const navConfig: NavItemOrSeparator[] = [
+    {
+        items: [
+            { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard:read' },
+            { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards', permission: ALL_PERMISSIONS.LEADERBOARDS.READ },
+        ]
+    },
+    { type: 'separator' },
+    {
+        label: "My Work",
+        items: [
+            { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request', permission: ALL_PERMISSIONS.REQUESTS.CREATE },
+            { href: '/dashboard/my-records', icon: BookUser, label: 'My Records', permission: ALL_PERMISSIONS.RECORDS.READ_OWN },
+            { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave', permission: ALL_PERMISSIONS.LEAVE.REQUEST },
+        ]
+    },
+    { type: 'separator' },
+    {
+        label: "Admin",
+        items: [
+            { href: '/dashboard/admin/users', icon: Users, label: 'Users', permission: ALL_PERMISSIONS.USERS.READ },
+            { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
+            { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects', permission: ALL_PERMISSIONS.PROJECTS.READ },
+            { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
+            { href: '/dashboard/admin/diagnostics', icon: Stethoscope, label: 'AI Diagnostics', permission: ALL_PERMISSIONS.PROJECT_DIAGNOSTICS.RUN },
+        ]
+    },
+    { type: 'separator' },
+    {
+        label: "HR",
+        items: [
+            { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions', permission: ALL_PERMISSIONS.INFRACTIONS.MANAGE },
+            { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses', permission: ALL_PERMISSIONS.BONUSES.MANAGE },
+            { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll', permission: ALL_PERMISSIONS.PAYROLL.READ },
+            { href: '/dashboard/admin/leave', icon: CalendarCheck, label: 'Leave Management', permission: ALL_PERMISSIONS.LEAVE_MANAGEMENT.MANAGE },
+        ]
+    }
+];
+
 
 const NavLinks = () => {
     const pathname = usePathname();
-    const { user } = useAuth();
+    const { hasPermission } = usePermissions();
 
-    const getRoleNavItems = () => {
-        if (!user) return [];
-        return navItems[user.role] || [];
-    };
+    const getFilteredNav = () => {
+        return navConfig.map(section => {
+            if ('type' in section) return section;
+
+            const filteredItems = section.items.filter(item => {
+                // A bit of custom logic for the dashboard link
+                if (item.href === '/dashboard') {
+                    if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN) || hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL)) {
+                        return true;
+                    }
+                }
+                return hasPermission(item.permission)
+            });
+            
+            if (filteredItems.length === 0) return null;
+
+            return { ...section, items: filteredItems };
+        }).filter(Boolean);
+    }
     
     return (
         <nav className="grid items-start gap-1 px-4 text-sm font-medium">
-            {getRoleNavItems().map((item, index) =>
-                'type' in item ? (
-                <Separator key={`sep-${index}`} className="my-1" />
-                ) : (
-                <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary',
-                    pathname === item.href && 'bg-secondary text-primary'
-                    )}
-                >
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                </Link>
+            {getFilteredNav().map((section, index) => {
+                if (!section) return null;
+                if ('type' in section) return <Separator key={`sep-${index}`} className="my-1" />;
+                
+                return (
+                    <div key={section.label || `section-${index}`} className="space-y-1">
+                        {section.label && <p className="px-3 text-xs font-semibold text-muted-foreground tracking-wider uppercase">{section.label}</p>}
+                        {section.items.map(item => {
+                           let itemLabel = item.label;
+                           // Customize dashboard label based on role
+                           if (item.href === '/dashboard') {
+                               if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) && !hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ)) {
+                                   itemLabel = 'Pending Requests';
+                               } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN)) {
+                                   itemLabel = 'My Requests';
+                               }
+                           }
+                            
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={cn(
+                                        'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary',
+                                        pathname === item.href && 'bg-secondary text-primary'
+                                    )}
+                                >
+                                    <item.icon className="h-4 w-4" />
+                                    {itemLabel}
+                                </Link>
+                            )
+                        })}
+                    </div>
                 )
-            )}
+            })}
         </nav>
     );
 }
