@@ -34,7 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2 } from 'lucide-react';
 import { useCollection } from '@/hooks/use-collection';
 import { Team, Project, User } from '@/lib/types';
-import { query, where, collection, addDoc, serverTimestamp, getDocs, FirebaseError } from 'firebase/firestore';
+import { query, where, collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
 import { notifyOnNewRequest } from '@/app/requests/actions';
@@ -137,9 +137,8 @@ export default function NewRequestPage() {
     
     const requestsCollectionRef = collection(db, 'requests');
 
-    try {
-        const docRef = await addDoc(requestsCollectionRef, requestData);
-        
+    addDoc(requestsCollectionRef, requestData)
+      .then(async (docRef) => {
         toast({
           title: 'Request Submitted!',
           description: 'Your certificate request has been sent for QA review.',
@@ -163,29 +162,24 @@ export default function NewRequestPage() {
         }
         
         router.push('/dashboard');
-    } catch (err: any) {
-        if (err instanceof FirebaseError && err.code === 'permission-denied') {
+      })
+      .catch(async (serverError) => {
+        if (serverError.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: requestsCollectionRef.path,
                 operation: 'create',
                 requestResourceData: requestData,
             });
             errorEmitter.emit('permission-error', permissionError);
-            // Show a generic message to the user
-            toast({
-                title: 'Permission Denied',
-                description: 'You do not have permission to create a certificate request.',
-                variant: 'destructive',
-            });
         } else {
-            console.error('Error submitting request:', err);
+            console.error('Error submitting request:', serverError);
             toast({
                 title: 'Submission Failed',
-                description: err.message || 'An unexpected error occurred.',
+                description: serverError.message || 'An unexpected error occurred.',
                 variant: 'destructive',
             });
         }
-    }
+      });
   }
 
   return (
