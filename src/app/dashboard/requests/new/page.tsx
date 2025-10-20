@@ -146,19 +146,20 @@ export default function NewRequestPage() {
     
     const requestsCollectionRef = collection(db, 'requests');
 
-    addDoc(requestsCollectionRef, requestData)
-      .then(async (docRef) => {
+    try {
+        await addDoc(requestsCollectionRef, requestData);
+
         toast({
-          title: 'Request Submitted!',
-          description: 'Your certificate request has been sent for QA review.',
+            title: 'Request Submitted!',
+            description: 'Your certificate request has been sent for QA review.',
         });
 
         // Notify QA Testers
-        const qaQuery = query(collection(db!, 'users'), where('role', '==', 'qa_tester'));
+        const qaQuery = query(collection(db, 'users'), where('role', '==', 'qa_tester'));
         const qaSnapshot = await getDocs(qaQuery);
         const qaEmails = qaSnapshot.docs.map(doc => (doc.data() as User).email);
 
-        const emailResult = await notifyOnNewRequest({ 
+        const emailResult = await notifyOnNewRequest({
             qaEmails: qaEmails,
             taskTitle: values.taskTitle,
             requesterName: user.name,
@@ -169,10 +170,9 @@ export default function NewRequestPage() {
         if (!emailResult.success) {
             toast({ title: 'QA Notification Failed', description: emailResult.error, variant: 'destructive' });
         }
-        
+
         router.push('/dashboard');
-      })
-      .catch(async (serverError) => {
+    } catch (serverError: any) {
         if (serverError.code === 'permission-denied') {
             const permissionError = new FirestorePermissionError({
                 path: requestsCollectionRef.path,
@@ -188,7 +188,7 @@ export default function NewRequestPage() {
                 variant: 'destructive',
             });
         }
-      });
+    }
   }
 
   return (

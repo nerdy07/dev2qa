@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { db, firebaseInitialized } from '@/lib/firebase';
 import { collection, onSnapshot, query, type Query, doc } from 'firebase/firestore';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 export function useCollection<T>(collectionName: string, firestoreQuery?: Query | null) {
   const [data, setData] = useState<T[] | null>(null);
@@ -31,9 +33,19 @@ export function useCollection<T>(collectionName: string, firestoreQuery?: Query 
       });
       setData(docs);
       setLoading(false);
-    }, (err) => {
-      console.error(err);
-      setError(err);
+    }, (err: any) => {
+      if (err.code === 'permission-denied') {
+        const permissionError = new FirestorePermissionError({
+          path: (q as any)._query.path.segments.join('/'),
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        // We still set a generic error for the component's internal state
+        setError(new Error('You do not have permission to view this data.'));
+      } else {
+        console.error(err);
+        setError(err);
+      }
       setLoading(false);
     });
 
@@ -68,9 +80,18 @@ export function useDocument<T>(collectionName: string, docId: string) {
           setData(null);
         }
         setLoading(false);
-      }, (err) => {
-        console.error(err);
-        setError(err);
+      }, (err: any) => {
+        if (err.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: docRef.path,
+            operation: 'get',
+          });
+          errorEmitter.emit('permission-error', permissionError);
+          setError(new Error('You do not have permission to view this document.'));
+        } else {
+          console.error(err);
+          setError(err);
+        }
         setLoading(false);
       });
   

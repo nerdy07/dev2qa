@@ -1,3 +1,4 @@
+
 'use client';
 
 // Defines the shape of the context object that will be passed to the FirestorePermissionError.
