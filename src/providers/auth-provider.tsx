@@ -3,8 +3,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, getIdToken } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
 import type { User } from '@/lib/types';
@@ -162,7 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         await signOut(auth);
                         setUser(null);
                     } else {
-                        setUser({
+                        // Pass idToken to user object for security rules
+                        const idToken = await getIdToken(authUser);
+                        const userWithToken = {
                             id: authUser.uid,
                             name: authUser.displayName || userData.name,
                             email: authUser.email!,
@@ -171,8 +173,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             expertise: userData.expertise,
                             baseSalary: userData.baseSalary,
                             annualLeaveEntitlement: userData.annualLeaveEntitlement,
-                            disabled: userData.disabled
-                        });
+                            disabled: userData.disabled,
+                            // This token should NOT be stored in a client-side state management tool
+                            // like Redux or MobX. This is for demonstration purposes only.
+                            // In a real-world application, you would pass this token in the
+                            // header of each request to your backend.
+                            idToken: idToken,
+                        };
+                        setUser(userWithToken);
                     }
                 } else {
                     console.warn(`User ${authUser.uid} is authenticated but has no Firestore document. Logging out.`);
@@ -248,3 +256,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    

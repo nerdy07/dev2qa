@@ -34,7 +34,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2 } from 'lucide-react';
 import { useCollection } from '@/hooks/use-collection';
 import { Team, Project, User } from '@/lib/types';
-import { query, where, collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { query, where, collection, addDoc, serverTimestamp, getDocs, FirebaseError } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
 import { notifyOnNewRequest } from '@/app/requests/actions';
@@ -137,9 +137,9 @@ export default function NewRequestPage() {
     
     const requestsCollectionRef = collection(db, 'requests');
 
-    addDoc(requestsCollectionRef, requestData)
-      .then(async (docRef) => {
-        // This block runs on success
+    try {
+        const docRef = await addDoc(requestsCollectionRef, requestData);
+        
         toast({
           title: 'Request Submitted!',
           description: 'Your certificate request has been sent for QA review.',
@@ -163,24 +163,29 @@ export default function NewRequestPage() {
         }
         
         router.push('/dashboard');
-      })
-      .catch(async (serverError) => {
-        // This block runs on failure
-        const permissionError = new FirestorePermissionError({
-          path: requestsCollectionRef.path,
-          operation: 'create',
-          requestResourceData: requestData,
-        });
-
-        errorEmitter.emit('permission-error', permissionError);
-
-        // Also show a generic error to the user in the toast
-        toast({
-            title: 'Submission Failed',
-            description: 'Could not submit request due to a permissions error.',
-            variant: 'destructive',
-        });
-      });
+    } catch (err: any) {
+        if (err instanceof FirebaseError && err.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+                path: requestsCollectionRef.path,
+                operation: 'create',
+                requestResourceData: requestData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            // Show a generic message to the user
+            toast({
+                title: 'Permission Denied',
+                description: 'You do not have permission to create a certificate request.',
+                variant: 'destructive',
+            });
+        } else {
+            console.error('Error submitting request:', err);
+            toast({
+                title: 'Submission Failed',
+                description: err.message || 'An unexpected error occurred.',
+                variant: 'destructive',
+            });
+        }
+    }
   }
 
   return (
@@ -326,3 +331,5 @@ export default function NewRequestPage() {
     </>
   );
 }
+
+    
