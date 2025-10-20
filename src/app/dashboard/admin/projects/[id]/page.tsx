@@ -23,6 +23,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
