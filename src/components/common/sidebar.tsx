@@ -2,6 +2,7 @@
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import {
+  BarChart,
   BookUser,
   CalendarCheck,
   DollarSign,
@@ -34,6 +35,7 @@ const navItems: { [key in User['role']]: NavItemOrSeparator[] } = {
     admin: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
       { href: '/dashboard/leaderboards', icon: Trophy, label: 'Leaderboards' },
+      { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights' },
       { type: 'separator' },
       { href: '/dashboard/admin/users', icon: Users, label: 'Users' },
       { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams' },
