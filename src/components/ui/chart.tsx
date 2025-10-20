@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -356,8 +357,6 @@ function getPayloadConfigFromPayload(
 }
 
 const ChartBar = RechartsPrimitive.Bar
-const ChartXAxis = RechartsPrimitive.XAxis
-const ChartYAxis = RechartsPrimitive.YAxis
 
 export {
   ChartContainer,
@@ -367,6 +366,4 @@ export {
   ChartLegendContent,
   ChartStyle,
   ChartBar,
-  ChartXAxis,
-  ChartYAxis,
 }
