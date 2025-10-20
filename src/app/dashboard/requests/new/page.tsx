@@ -38,6 +38,8 @@ import { query, where, collection, addDoc, serverTimestamp, getDocs } from 'fire
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
 import { notifyOnNewRequest } from '@/app/requests/actions';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const formSchema = z.object({
   taskTitle: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -64,6 +66,8 @@ export default function NewRequestPage() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       taskTitle: '',
+      associatedTeam: '',
+      associatedProject: '',
       description: '',
       taskLink: '',
     },
@@ -121,20 +125,28 @@ export default function NewRequestPage() {
         return;
     }
 
-    try {
-        const requestData = {
-            ...values,
-            requesterId: user.id,
-            requesterName: user.name,
-            requesterEmail: user.email,
-            status: 'pending' as const,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-        const docRef = await addDoc(collection(db, 'requests'), requestData);
-        
+    const requestData = {
+        ...values,
+        requesterId: user.id,
+        requesterName: user.name,
+        requesterEmail: user.email,
+        status: 'pending' as const,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+    };
+    
+    const requestsCollectionRef = collection(db, 'requests');
+
+    addDoc(requestsCollectionRef, requestData)
+      .then(async (docRef) => {
+        // This block runs on success
+        toast({
+          title: 'Request Submitted!',
+          description: 'Your certificate request has been sent for QA review.',
+        });
+
         // Notify QA Testers
-        const qaQuery = query(collection(db, 'users'), where('role', '==', 'qa_tester'));
+        const qaQuery = query(collection(db!, 'users'), where('role', '==', 'qa_tester'));
         const qaSnapshot = await getDocs(qaQuery);
         const qaEmails = qaSnapshot.docs.map(doc => (doc.data() as User).email);
 
@@ -146,21 +158,29 @@ export default function NewRequestPage() {
             associatedTeam: values.associatedTeam
         });
 
-        toast({
-          title: 'Request Submitted!',
-          description: 'Your certificate request has been sent for QA review.',
-        });
-
         if (!emailResult.success) {
             toast({ title: 'QA Notification Failed', description: emailResult.error, variant: 'destructive' });
         }
-
+        
         router.push('/dashboard');
-    } catch (err) {
-        const error = err as Error;
-        console.error("Error creating request: ", error);
-        toast({ title: "Submission Failed", description: error.message, variant: "destructive"});
-    }
+      })
+      .catch(async (serverError) => {
+        // This block runs on failure
+        const permissionError = new FirestorePermissionError({
+          path: requestsCollectionRef.path,
+          operation: 'create',
+          requestResourceData: requestData,
+        });
+
+        errorEmitter.emit('permission-error', permissionError);
+
+        // Also show a generic error to the user in the toast
+        toast({
+            title: 'Submission Failed',
+            description: 'Could not submit request due to a permissions error.',
+            variant: 'destructive',
+        });
+      });
   }
 
   return (

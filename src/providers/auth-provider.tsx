@@ -11,6 +11,8 @@ import type { User } from '@/lib/types';
 import { auth, db, firebaseInitialized } from '@/lib/firebase';
 import { TriangleAlert } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AuthContextType {
   user: User | null;
@@ -21,6 +23,33 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// This component listens for Firestore permission errors and throws them,
+// which will then be caught by the Next.js development overlay.
+function FirebaseErrorListener() {
+  useEffect(() => {
+    const handleError = (error: FirestorePermissionError) => {
+      // In a production environment, you would log this to a service like Sentry.
+      // For this development environment, we will throw the error to make it
+      // visible in the Next.js error overlay.
+      if (process.env.NODE_ENV === 'development') {
+        // We throw the error in a timeout to break out of the current React render cycle.
+        setTimeout(() => {
+          throw error;
+        }, 0);
+      }
+    };
+
+    errorEmitter.on('permission-error', handleError);
+
+    return () => {
+      errorEmitter.off('permission-error', handleError);
+    };
+  }, []);
+
+  return null; // This component does not render anything.
+}
+
 
 function MissingFirebaseConfig() {
     return (
@@ -206,6 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
+      <FirebaseErrorListener />
       {children}
     </AuthContext.Provider>
   );
