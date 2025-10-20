@@ -64,8 +64,7 @@ const navConfig: NavItemOrSeparator[] = [
     {
         label: "Admin",
         items: [
-            { href: '/dashboard/admin/users', icon: Users, label: 'Users', permission: ALL_PERMISSIONS.USERS.READ },
-            { href: '/dashboard/admin/roles', icon: ShieldCheck, label: 'Roles', permission: ALL_PERMISSIONS.ROLES.MANAGE },
+            { href: '/dashboard/admin/users', icon: Users, label: 'User Management', permission: ALL_PERMISSIONS.USERS.READ },
             { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
             { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects', permission: ALL_PERMISSIONS.PROJECTS.READ },
             { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
@@ -135,6 +134,7 @@ const NavLinks = () => {
                                     href={item.href}
                                     className={cn(
                                         'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary',
+                                        pathname.startsWith(item.href) && item.href !== '/dashboard' ? 'bg-secondary text-primary' : '',
                                         pathname === item.href && 'bg-secondary text-primary'
                                     )}
                                 >
