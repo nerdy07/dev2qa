@@ -133,7 +133,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
       for (const task of milestone.tasks || []) {
         if (task.doc) {
           try {
-            const path = `projects/${projectId}/tasks/${task.id || crypto.randomUUID()}`;
+            const path = `projects/${projectId}/tasks/${task.id}`; // Task ID is now guaranteed
             task.docUrl = await uploadFile(task.doc, path);
           } catch (error) {
             console.error("File upload failed for task:", task.name, error);
@@ -164,13 +164,13 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
             startDate: m.dates?.from || null,
             endDate: m.dates?.to || null,
             tasks: m.tasks?.map(t => ({
-                id: t.id || crypto.randomUUID(),
+                id: t.id!, // ID is guaranteed by the form logic now
                 name: t.name,
                 description: t.description || null,
                 docUrl: t.docUrl || null,
-                status: 'To Do', // Default status for new/updated tasks
-                assigneeId: null,
-                assigneeName: null,
+                status: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.status || 'To Do',
+                assigneeId: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeId || null,
+                assigneeName: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeName || null,
             })) || [],
         })) || [],
         resources: values.resources?.map(r => ({
@@ -541,7 +541,7 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => append({ name: '', description: '', docUrl: '' })}
+          onClick={() => append({ id: crypto.randomUUID(), name: '', description: '', docUrl: '' })}
           className="mt-2"
         >
           Add Task
@@ -549,3 +549,5 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
+
+    
