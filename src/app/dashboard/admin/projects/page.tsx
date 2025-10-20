@@ -45,7 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { addDoc, collection, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -57,10 +57,22 @@ export default function ProjectsPage() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [isAlertOpen, setIsAlertOpen] = React.useState(false);
     const [selectedProject, setSelectedProject] = React.useState<Project | undefined>(undefined);
+    const [newProjectId, setNewProjectId] = React.useState<string | undefined>(undefined);
     const { toast } = useToast();
   
+    const handleAddNew = () => {
+      setSelectedProject(undefined);
+      // Generate a new ID for the project upfront
+      if (db) {
+        const newDocRef = doc(collection(db, 'projects'));
+        setNewProjectId(newDocRef.id);
+      }
+      setIsFormOpen(true);
+    };
+
     const handleEdit = (project: Project) => {
       setSelectedProject(project);
+      setNewProjectId(project.id); // For editing, use the existing ID
       setIsFormOpen(true);
     };
     
@@ -91,30 +103,26 @@ export default function ProjectsPage() {
       setSelectedProject(undefined);
     }
   
-    const handleSave = async (values: Omit<Project, 'id'>) => {
+    const handleSave = async (values: Omit<Project, 'id'>, id: string) => {
         const isEditing = !!selectedProject;
         try {
-          let docId: string;
+          const projectRef = doc(db!, 'projects', id);
           if (isEditing) {
-              docId = selectedProject.id;
-              const projectRef = doc(db!, 'projects', docId);
               await updateDoc(projectRef, values);
               toast({
                   title: 'Project Updated',
                   description: `The project "${values.name}" has been successfully updated.`,
               });
           } else {
-              const docRef = await addDoc(collection(db!, 'projects'), values);
-              docId = docRef.id;
+              await setDoc(projectRef, values);
               toast({
                   title: 'Project Created',
                   description: `The project "${values.name}" has been successfully created.`,
               });
           }
           
-          // Optimistically update the UI to avoid a full refetch
           const newProjectData: Project = { 
-              id: docId, 
+              id: id, 
               ...values,
               // Convert JS Dates back to objects with a toDate method to mimic Timestamps for optimistic update
               startDate: values.startDate ? { toDate: () => values.startDate as Date } : null,
@@ -128,7 +136,7 @@ export default function ProjectsPage() {
           
           if (setData && projects) {
             if (isEditing) {
-              setData(projects.map(p => p.id === docId ? newProjectData : p));
+              setData(projects.map(p => p.id === id ? newProjectData : p));
             } else {
               setData([...projects, newProjectData]);
             }
@@ -151,6 +159,7 @@ export default function ProjectsPage() {
     const handleFormSuccess = () => {
       setIsFormOpen(false);
       setSelectedProject(undefined);
+      setNewProjectId(undefined);
     };
 
     const statusVariant = (status: Project['status']) => {
@@ -258,11 +267,11 @@ export default function ProjectsPage() {
           description="Create and manage all company projects."
         >
           <Dialog open={isFormOpen} onOpenChange={(open) => {
-              if (!open) setSelectedProject(undefined);
-              setIsFormOpen(open);
+              if (!open) handleFormSuccess();
+              else setIsFormOpen(open);
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={handleAddNew}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add Project
               </Button>
@@ -271,11 +280,14 @@ export default function ProjectsPage() {
               <DialogHeader>
                 <DialogTitle>{selectedProject ? 'Edit Project' : 'Create New Project'}</DialogTitle>
               </DialogHeader>
-              <ProjectForm
-                project={selectedProject} 
-                onSave={handleSave}
-                onCancel={handleFormSuccess}
-              />
+              {newProjectId && (
+                <ProjectForm
+                  projectId={newProjectId}
+                  project={selectedProject} 
+                  onSave={handleSave}
+                  onCancel={handleFormSuccess}
+                />
+              )}
             </DialogContent>
           </Dialog>
         </PageHeader>

@@ -34,10 +34,12 @@ import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import React from 'react';
 import { uploadFile } from '@/lib/storage';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProjectFormProps {
   project?: Project;
-  onSave: (values: Omit<Project, 'id'>) => Promise<boolean>;
+  projectId: string; // Always expect a project ID
+  onSave: (values: Omit<Project, 'id'>, id: string) => Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -80,9 +82,10 @@ const formSchema = z.object({
   resources: z.array(resourceSchema).optional(),
 });
 
-export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
+export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFormProps) {
   const isEditing = !!project;
   const { data: users, loading: usersLoading } = useCollection<User>('users');
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -130,10 +133,15 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
       for (const task of milestone.tasks || []) {
         if (task.doc) {
           try {
-            task.docUrl = await uploadFile(task.doc, `projects/${project?.id || 'new'}/tasks/${task.id || crypto.randomUUID()}`);
+            const path = `projects/${projectId}/tasks/${task.id || crypto.randomUUID()}`;
+            task.docUrl = await uploadFile(task.doc, path);
           } catch (error) {
             console.error("File upload failed for task:", task.name, error);
-            // Optionally, show a toast notification for the failed upload
+            toast({
+                title: 'File Upload Failed',
+                description: `Could not upload document for task "${task.name}".`,
+                variant: 'destructive',
+            })
             return; // Stop the submission if an upload fails
           }
         }
@@ -171,7 +179,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
             url: r.url,
         })) || [],
     };
-    await onSave(submissionValues);
+    await onSave(submissionValues, projectId);
   }
 
   return (
