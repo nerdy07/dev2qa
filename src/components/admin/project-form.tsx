@@ -95,11 +95,16 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
       },
       milestones: project?.milestones?.map(m => ({ 
           ...m, 
+          description: m.description || '',
           dates: {
             from: m.startDate ? m.startDate.toDate() : undefined,
             to: m.endDate ? m.endDate.toDate() : undefined,
           },
-          tasks: m.tasks || [] 
+          tasks: m.tasks?.map(t => ({
+              ...t,
+              description: t.description || '',
+              docUrl: t.docUrl || '',
+          })) || [] 
       })) || [],
       resources: project?.resources || [],
     },
@@ -513,3 +518,6 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
+
+
+    
