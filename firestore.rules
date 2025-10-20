@@ -8,10 +8,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
   
-    // Users can read their own user document. Admins can read any user document.
+    // Any authenticated user can read user data (needed for role checks and UI).
+    // Only admins can write to user documents.
     match /users/{userId} {
-      allow read: if request.auth.uid == userId || isRole('admin');
-      // Only admins can create, update, or delete user records.
+      allow read: if request.auth != null;
       allow write: if isRole('admin');
     }
     
