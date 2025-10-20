@@ -125,7 +125,19 @@ export default function ProjectDetailsPage() {
 
             // Optimistically update local state
             if (setProject) {
-              setProject({...project, milestones: updatedMilestones });
+              const updatedProject = { ...project, milestones: updatedMilestones };
+              // We need to ensure date objects are handled correctly for optimistic updates
+              const projectWithCorrectDates: Project = {
+                  ...updatedProject,
+                  startDate: updatedProject.startDate ? { toDate: () => updatedProject.startDate.toDate() } : null,
+                  endDate: updatedProject.endDate ? { toDate: () => updatedProject.endDate.toDate() } : null,
+                  milestones: updatedProject.milestones?.map(m => ({
+                      ...m,
+                      startDate: m.startDate ? { toDate: () => m.startDate.toDate() } : null,
+                      endDate: m.endDate ? { toDate: () => m.endDate.toDate() } : null,
+                  }))
+              };
+              setProject(projectWithCorrectDates);
             }
 
             toast({ title: 'Task Updated', description: `Task "${updatedTask.name}" has been saved.`});

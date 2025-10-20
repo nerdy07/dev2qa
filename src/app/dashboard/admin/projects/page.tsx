@@ -113,7 +113,18 @@ export default function ProjectsPage() {
           }
           
           // Optimistically update the UI to avoid a full refetch
-          const newProjectData: Project = { id: docId, ...values };
+          const newProjectData: Project = { 
+              id: docId, 
+              ...values,
+              // Convert JS Dates back to objects with a toDate method to mimic Timestamps for optimistic update
+              startDate: values.startDate ? { toDate: () => values.startDate as Date } : null,
+              endDate: values.endDate ? { toDate: () => values.endDate as Date } : null,
+              milestones: values.milestones?.map(m => ({
+                  ...m,
+                  startDate: m.startDate ? { toDate: () => m.startDate as Date } : null,
+                  endDate: m.endDate ? { toDate: () => m.endDate as Date } : null,
+              }))
+          };
           
           if (setData && projects) {
             if (isEditing) {
