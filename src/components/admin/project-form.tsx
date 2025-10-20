@@ -38,12 +38,17 @@ interface ProjectFormProps {
   onCancel: () => void;
 }
 
+const taskSchema = z.object({
+    id: z.string().optional(),
+    name: z.string().min(1, 'Task name is required.'),
+});
+
 const milestoneSchema = z.object({
     id: z.string().optional(),
     name: z.string().min(1, 'Milestone name is required.'),
     description: z.string().optional(),
     status: z.enum(['Pending', 'In Progress', 'Completed']).default('Pending'),
-    tasks: z.array(z.any()).optional().default([]),
+    tasks: z.array(taskSchema).optional().default([]),
 });
 
 const formSchema = z.object({
@@ -98,7 +103,11 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
             name: m.name,
             description: m.description,
             status: m.status,
-            tasks: project?.milestones?.find(pm => pm.id === m.id)?.tasks || [], // Preserve existing tasks
+            tasks: m.tasks?.map(t => ({
+                id: t.id || crypto.randomUUID(),
+                name: t.name,
+                status: project?.milestones?.find(pm => pm.id === m.id)?.tasks?.find(pt => pt.id === t.id)?.status || 'To Do',
+            })) || [],
         })) || [],
     };
     await onSave(submissionValues);
@@ -236,10 +245,10 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
 
         <div>
             <h3 className="text-lg font-medium">Project Milestones</h3>
-            <FormDescription>Break the project down into manageable milestones.</FormDescription>
+            <FormDescription>Break the project down into manageable milestones and tasks.</FormDescription>
             <div className="space-y-4 mt-4">
                 {fields.map((field, index) => (
-                    <div key={field.id} className="p-4 border rounded-lg space-y-4 relative">
+                    <div key={field.id} className="p-4 border rounded-lg space-y-4 relative bg-muted/20">
                          <Button
                             type="button"
                             variant="ghost"
@@ -297,6 +306,12 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                                 </FormItem>
                             )}
                         />
+
+                        {/* Nested Task Field Array */}
+                        <div className="pl-4 border-l-2 ml-2 space-y-3">
+                            <h4 className="text-md font-medium">Tasks</h4>
+                            <NestedTaskArray milestoneIndex={index} />
+                        </div>
                     </div>
                 ))}
                 <Button
@@ -321,3 +336,53 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
     </Form>
   );
 }
+
+// Helper component for nested task array
+function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
+    const { control } = useFormContext();
+    const { fields, append, remove } = useFieldArray({
+      control,
+      name: `milestones.${milestoneIndex}.tasks`,
+    });
+  
+    return (
+      <div>
+        {fields.map((field, taskIndex) => (
+          <div key={field.id} className="flex items-center gap-2 mb-2">
+            <FormField
+              control={control}
+              name={`milestones.${milestoneIndex}.tasks.${taskIndex}.name`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormControl>
+                    <Input placeholder={`Task ${taskIndex + 1}`} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => remove(taskIndex)}
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => append({ name: '' })}
+          className="mt-2"
+        >
+          Add Task
+        </Button>
+      </div>
+    );
+  }
+
+    

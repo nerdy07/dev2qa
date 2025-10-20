@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle } from 'lucide-react';
+import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle, CircleDot } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
@@ -153,27 +153,34 @@ export default function ProjectDetailsPage() {
                         </CardHeader>
                         <CardContent>
                             {project.milestones && project.milestones.length > 0 ? (
-                                <Accordion type="single" collapsible className="w-full">
+                                <Accordion type="single" collapsible className="w-full" defaultValue={project.milestones[0].id}>
                                     {project.milestones.map((milestone) => (
                                         <AccordionItem value={milestone.id} key={milestone.id}>
                                             <AccordionTrigger>
                                                 <div className='flex items-center gap-3'>
                                                     {milestone.status === 'Completed' ? <CheckCircle className='h-5 w-5 text-green-500'/> : <Target className='h-5 w-5'/>}
                                                     <span className='font-semibold'>{milestone.name}</span>
+                                                    <Badge variant="outline">{milestone.status}</Badge>
                                                 </div>
                                             </AccordionTrigger>
-                                            <AccordionContent className="space-y-4 pl-4 border-l ml-2">
+                                            <AccordionContent className="space-y-4 pl-4 border-l-2 ml-2">
                                                 <p className='text-muted-foreground'>{milestone.description || 'No description for this milestone.'}</p>
                                                 
-                                                <h4 className='font-semibold pt-2'>Tasks</h4>
-                                                {milestone.tasks && milestone.tasks.length > 0 ? (
-                                                    <div className='space-y-2'>
-                                                        {milestone.tasks.map(task => <div key={task.id}>{task.name}</div>)}
-                                                    </div>
-                                                ) : (
-                                                    <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
-                                                )}
-
+                                                <div className='space-y-3 pt-2'>
+                                                    <h4 className='font-semibold'>Tasks</h4>
+                                                    {milestone.tasks && milestone.tasks.length > 0 ? (
+                                                        <div className='space-y-2'>
+                                                            {milestone.tasks.map(task => (
+                                                                <div key={task.id} className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded-md">
+                                                                    <CircleDot className="h-4 w-4 text-muted-foreground" />
+                                                                    <span>{task.name}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
+                                                    )}
+                                                </div>
                                             </AccordionContent>
                                         </AccordionItem>
                                     ))}
@@ -200,3 +207,5 @@ export default function ProjectDetailsPage() {
         </>
     );
 }
+
+    
