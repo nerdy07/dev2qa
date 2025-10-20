@@ -33,6 +33,7 @@ import { Calendar } from '../ui/calendar';
 import { Separator } from '../ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import React from 'react';
+import { uploadFile } from '@/lib/storage';
 
 interface ProjectFormProps {
   project?: Project;
@@ -51,7 +52,7 @@ const taskSchema = z.object({
     name: z.string().min(1, 'Task name is required.'),
     description: z.string().optional(),
     docUrl: z.string().url('Must be a valid URL.').optional().or(z.literal('')),
-    doc: z.any().optional(),
+    doc: z.instanceof(File).optional(),
 });
 
 const milestoneSchema = z.object({
@@ -124,15 +125,20 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const selectedUser = users?.find(u => u.id === values.leadId);
     
-    // TODO: Handle file uploads
-    values.milestones?.forEach(m => {
-        m.tasks?.forEach(t => {
-            if (t.doc) {
-                console.log(`File for task "${t.name}":`, t.doc);
-                // Upload logic will go here
-            }
-        })
-    })
+    // Handle file uploads
+    for (const milestone of values.milestones || []) {
+      for (const task of milestone.tasks || []) {
+        if (task.doc) {
+          try {
+            task.docUrl = await uploadFile(task.doc, `projects/${project?.id || 'new'}/tasks/${task.id || crypto.randomUUID()}`);
+          } catch (error) {
+            console.error("File upload failed for task:", task.name, error);
+            // Optionally, show a toast notification for the failed upload
+            return; // Stop the submission if an upload fails
+          }
+        }
+      }
+    }
 
     const submissionValues: Omit<Project, 'id'> = {
         name: values.name,
@@ -153,8 +159,8 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                 id: t.id || crypto.randomUUID(),
                 name: t.name,
                 description: t.description || null,
-                docUrl: t.docUrl || null, // This will be replaced by the uploaded file URL
-                status: 'To Do',
+                docUrl: t.docUrl || null,
+                status: 'To Do', // Default status for new/updated tasks
                 assigneeId: null,
                 assigneeName: null,
             })) || [],
@@ -503,20 +509,21 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                     )}
                     />
                     <FormField
-                    control={control}
-                    name={`milestones.${milestoneIndex}.tasks.${taskIndex}.doc`}
-                    render={({ field }) => (
+                      control={control}
+                      name={`milestones.${milestoneIndex}.tasks.${taskIndex}.doc`}
+                      render={({ field: { onChange, value, ...rest } }) => (
                         <FormItem>
                             <FormLabel className="text-xs">Document Upload</FormLabel>
                             <FormControl>
                                 <Input 
-                                    type="file" 
-                                    onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)} 
+                                    type="file"
+                                    onChange={(e) => onChange(e.target.files?.[0])}
+                                    {...rest}
                                 />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
-                    )}
+                      )}
                     />
                 </CollapsibleContent>
              </Collapsible>
@@ -534,5 +541,3 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
-
-    
