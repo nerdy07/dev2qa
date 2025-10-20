@@ -16,6 +16,24 @@ export type Team = {
   name:string;
 };
 
+export type Task = {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  assigneeId?: string;
+  assigneeName?: string;
+  certificateRequestId?: string;
+};
+
+export type Milestone = {
+  id: string;
+  name: string;
+  description?: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  tasks: Task[];
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -25,6 +43,7 @@ export type Project = {
   status: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed';
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
+  milestones?: Milestone[];
 };
 
 export type CertificateRequest = {

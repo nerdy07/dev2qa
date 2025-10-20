@@ -50,6 +50,7 @@ import { db } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { Progress } from '@/components/ui/progress';
 
 export default function ProjectsPage() {
     const { data: projects, loading, error } = useCollection<Project>('projects');
@@ -95,7 +96,7 @@ export default function ProjectsPage() {
       try {
         if (isEditing) {
             const projectRef = doc(db!, 'projects', selectedProject.id);
-            await updateDoc(projectRef, values);
+            await updateDoc(projectRef, { ...values });
             toast({
                 title: 'Project Updated',
                 description: `The project "${values.name}" has been successfully updated.`,
@@ -145,6 +146,7 @@ export default function ProjectsPage() {
                             <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                             <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                             <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                         </TableRow>
                     ))}
@@ -156,7 +158,7 @@ export default function ProjectsPage() {
             return (
               <TableBody>
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                       <Alert variant="destructive">
                           <TriangleAlert className="h-4 w-4" />
                           <AlertTitle>Error Loading Projects</AlertTitle>
@@ -170,34 +172,47 @@ export default function ProjectsPage() {
 
         return (
             <TableBody>
-                {projects?.map((project) => (
-                  <TableRow key={project.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/dashboard/admin/projects/${project.id}`} className="hover:underline">
-                        {project.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{project.leadName || 'N/A'}</TableCell>
-                    <TableCell><Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge></TableCell>
-                    <TableCell>{project.startDate ? format(project.startDate.toDate(), 'PPP') : 'N/A'}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleEdit(project)}>Edit</DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(project)}>Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {projects?.map((project) => {
+                  const progress = project.milestones && project.milestones.length > 0 
+                      ? (project.milestones.filter(m => m.status === 'Completed').length / project.milestones.length) * 100 
+                      : 0;
+
+                  return (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">
+                        <Link href={`/dashboard/admin/projects/${project.id}`} className="hover:underline">
+                          {project.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{project.leadName || 'N/A'}</TableCell>
+                      <TableCell><Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge></TableCell>
+                      <TableCell>{project.endDate ? format(project.endDate.toDate(), 'PPP') : 'N/A'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                           <Progress value={progress} className="h-2 w-24" />
+                           <span className="text-xs text-muted-foreground">{Math.round(progress)}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem asChild><Link href={`/dashboard/admin/projects/${project.id}`}>View Details</Link></DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(project)}>Edit</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(project)}>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
         );
     }
@@ -237,7 +252,8 @@ export default function ProjectsPage() {
                 <TableHead>Project Name</TableHead>
                 <TableHead>Project Lead</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
+                <TableHead>Progress</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>

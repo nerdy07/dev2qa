@@ -4,18 +4,25 @@
 import React from 'react';
 import { useParams } from 'next/navigation';
 import { useCollection, useDocument } from '@/hooks/use-collection';
-import type { Project, CertificateRequest } from '@/lib/types';
+import type { Project, CertificateRequest, Milestone } from '@/lib/types';
 import { PageHeader } from '@/components/common/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User, Calendar, Flag, Info } from 'lucide-react';
+import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
 import { query, where, collection } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
+import { Progress } from '@/components/ui/progress';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
@@ -42,7 +49,6 @@ export default function ProjectDetailsPage() {
 
     const requestsQuery = React.useMemo(() => {
         if (!project) return null;
-        // Query requests where the associatedProject field (a string) matches the project's name
         return query(collection(db!, 'requests'), where('associatedProject', '==', project.name));
     }, [project]);
 
@@ -50,6 +56,15 @@ export default function ProjectDetailsPage() {
 
     const loading = projectLoading || (project && requestsLoading);
     const error = projectError || requestsError;
+
+    const projectProgress = React.useMemo(() => {
+        if (!project || !project.milestones || project.milestones.length === 0) {
+            return 0;
+        }
+        const completedMilestones = project.milestones.filter(m => m.status === 'Completed').length;
+        return Math.round((completedMilestones / project.milestones.length) * 100);
+    }, [project]);
+
 
     if (loading) {
         return (
@@ -60,7 +75,7 @@ export default function ProjectDetailsPage() {
                         <Card>
                             <CardHeader><Skeleton className="h-7 w-1/3" /></CardHeader>
                             <CardContent className="space-y-4">
-                                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                                {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
                             </CardContent>
                         </Card>
                     </div>
@@ -98,16 +113,23 @@ export default function ProjectDetailsPage() {
                             <CardTitle>Project Summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <DetailItem icon={Flag} label="Status">
+                             <DetailItem icon={Flag} label="Status">
                                 <Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge>
                             </DetailItem>
-                            <DetailItem icon={User} label="Project Lead">{project.leadName}</DetailItem>
-                            <DetailItem icon={Calendar} label="Start Date">
+                             <DetailItem icon={User} label="Project Lead">{project.leadName}</DetailItem>
+                             <DetailItem icon={Calendar} label="Start Date">
                                 {project.startDate ? format(project.startDate.toDate(), 'PPP') : 'Not set'}
                             </DetailItem>
                              <DetailItem icon={Calendar} label="End Date">
                                 {project.endDate ? format(project.endDate.toDate(), 'PPP') : 'Not set'}
                             </DetailItem>
+                            <div>
+                                <Label className="text-sm text-muted-foreground">Overall Progress</Label>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <Progress value={projectProgress} className="h-2" />
+                                    <span className="text-sm font-semibold">{projectProgress}%</span>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -123,6 +145,46 @@ export default function ProjectDetailsPage() {
                 </aside>
 
                 <main className="lg:col-span-2 space-y-6">
+                     <Card>
+                        <CardHeader>
+                            <CardTitle>Project Milestones</CardTitle>
+                            <CardDescription>A breakdown of the project's key phases and tasks.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {project.milestones && project.milestones.length > 0 ? (
+                                <Accordion type="single" collapsible className="w-full">
+                                    {project.milestones.map((milestone) => (
+                                        <AccordionItem value={milestone.id} key={milestone.id}>
+                                            <AccordionTrigger>
+                                                <div className='flex items-center gap-3'>
+                                                    {milestone.status === 'Completed' ? <CheckCircle className='h-5 w-5 text-green-500'/> : <Target className='h-5 w-5'/>}
+                                                    <span className='font-semibold'>{milestone.name}</span>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="space-y-4 pl-4 border-l ml-2">
+                                                <p className='text-muted-foreground'>{milestone.description || 'No description for this milestone.'}</p>
+                                                
+                                                <h4 className='font-semibold pt-2'>Tasks</h4>
+                                                {milestone.tasks && milestone.tasks.length > 0 ? (
+                                                    <div className='space-y-2'>
+                                                        {milestone.tasks.map(task => <div key={task.id}>{task.name}</div>)}
+                                                    </div>
+                                                ) : (
+                                                    <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
+                                                )}
+
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
+                            ) : (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Target className="mx-auto h-12 w-12" />
+                                    <p className="mt-4">No milestones have been defined for this project yet.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
                     <Card>
                         <CardHeader>
                             <CardTitle>Associated Certificate Requests</CardTitle>
@@ -137,4 +199,3 @@ export default function ProjectDetailsPage() {
         </>
     );
 }
-

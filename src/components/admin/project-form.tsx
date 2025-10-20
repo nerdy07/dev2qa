@@ -1,10 +1,9 @@
 
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { DateRange } from 'react-day-picker';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -24,19 +23,28 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { Project, User } from '@/lib/types';
+import type { Project, User, Milestone } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Trash } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Calendar } from '../ui/calendar';
+import { Separator } from '../ui/separator';
 
 interface ProjectFormProps {
   project?: Project;
-  onSave: (values: Omit<Project, 'id' | 'status'> & { status: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed' }) => Promise<boolean>;
+  onSave: (values: Omit<Project, 'id'>) => Promise<boolean>;
   onCancel: () => void;
 }
+
+const milestoneSchema = z.object({
+    id: z.string().optional(),
+    name: z.string().min(1, 'Milestone name is required.'),
+    description: z.string().optional(),
+    status: z.enum(['Pending', 'In Progress', 'Completed']).default('Pending'),
+    tasks: z.array(z.any()).optional().default([]),
+});
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -47,6 +55,7 @@ const formSchema = z.object({
       from: z.date().optional(),
       to: z.date().optional(),
   }).optional(),
+  milestones: z.array(milestoneSchema).optional(),
 });
 
 export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
@@ -63,13 +72,20 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
       dates: {
         from: project?.startDate ? project.startDate.toDate() : undefined,
         to: project?.endDate ? project.endDate.toDate() : undefined,
-      }
+      },
+      milestones: project?.milestones?.map(m => ({ ...m, tasks: m.tasks || [] })) || [],
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "milestones",
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const selectedUser = users?.find(u => u.id === values.leadId);
-    const submissionValues = {
+    
+    const submissionValues: Omit<Project, 'id'> = {
         name: values.name,
         description: values.description,
         leadId: values.leadId,
@@ -77,13 +93,20 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
         status: values.status,
         startDate: values.dates?.from,
         endDate: values.dates?.to,
+        milestones: values.milestones?.map(m => ({
+            id: m.id || crypto.randomUUID(),
+            name: m.name,
+            description: m.description,
+            status: m.status,
+            tasks: project?.milestones?.find(pm => pm.id === m.id)?.tasks || [], // Preserve existing tasks
+        })) || [],
     };
     await onSave(submissionValues);
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[80vh] overflow-y-auto pr-4">
         <FormField
           control={form.control}
           name="name"
@@ -195,7 +218,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                     initialFocus
                     mode="range"
                     defaultMonth={field.value?.from}
-                    selected={{from: field.value?.from || new Date(), to: field.value?.to}}
+                    selected={{from: field.value?.from || undefined, to: field.value?.to}}
                     onSelect={field.onChange}
                     numberOfMonths={2}
                   />
@@ -208,7 +231,85 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
             </FormItem>
           )}
         />
-        <div className="flex justify-end gap-2 pt-4">
+        
+        <Separator />
+
+        <div>
+            <h3 className="text-lg font-medium">Project Milestones</h3>
+            <FormDescription>Break the project down into manageable milestones.</FormDescription>
+            <div className="space-y-4 mt-4">
+                {fields.map((field, index) => (
+                    <div key={field.id} className="p-4 border rounded-lg space-y-4 relative">
+                         <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-2 right-2 text-muted-foreground hover:text-destructive"
+                            onClick={() => remove(index)}
+                        >
+                            <Trash className="h-4 w-4" />
+                        </Button>
+                        <FormField
+                            control={form.control}
+                            name={`milestones.${index}.name`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Milestone Name</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., Phase 1: Design & Prototyping" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name={`milestones.${index}.description`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Milestone Description</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="Describe the goals of this milestone." {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={form.control}
+                            name={`milestones.${index}.status`}
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Milestone Status</FormLabel>
+                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a status" />
+                                        </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            <SelectItem value="Pending">Pending</SelectItem>
+                                            <SelectItem value="In Progress">In Progress</SelectItem>
+                                            <SelectItem value="Completed">Completed</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                ))}
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => append({ name: '', description: '', status: 'Pending', tasks: [] })}
+                >
+                    Add Milestone
+                </Button>
+            </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4 sticky bottom-0 bg-background/95 py-3">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
