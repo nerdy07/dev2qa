@@ -51,6 +51,7 @@ const taskSchema = z.object({
     name: z.string().min(1, 'Task name is required.'),
     description: z.string().optional(),
     docUrl: z.string().url('Must be a valid URL.').optional().or(z.literal('')),
+    doc: z.any().optional(),
 });
 
 const milestoneSchema = z.object({
@@ -123,6 +124,16 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const selectedUser = users?.find(u => u.id === values.leadId);
     
+    // TODO: Handle file uploads
+    values.milestones?.forEach(m => {
+        m.tasks?.forEach(t => {
+            if (t.doc) {
+                console.log(`File for task "${t.name}":`, t.doc);
+                // Upload logic will go here
+            }
+        })
+    })
+
     const submissionValues: Omit<Project, 'id'> = {
         name: values.name,
         description: values.description || null,
@@ -142,7 +153,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                 id: t.id || crypto.randomUUID(),
                 name: t.name,
                 description: t.description || null,
-                docUrl: t.docUrl || null,
+                docUrl: t.docUrl || null, // This will be replaced by the uploaded file URL
                 status: 'To Do',
                 assigneeId: null,
                 assigneeName: null,
@@ -446,7 +457,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
 
 // Helper component for nested task array
 function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
-    const { control } = useFormContext();
+    const { control, register } = useFormContext();
     const { fields, append, remove } = useFieldArray({
       control,
       name: `milestones.${milestoneIndex}.tasks`,
@@ -493,11 +504,16 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                     />
                     <FormField
                     control={control}
-                    name={`milestones.${milestoneIndex}.tasks.${taskIndex}.docUrl`}
+                    name={`milestones.${milestoneIndex}.tasks.${taskIndex}.doc`}
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel className="text-xs">Document Upload</FormLabel>
-                            <FormControl><Input type="file" {...field} value={undefined} /></FormControl>
+                            <FormControl>
+                                <Input 
+                                    type="file" 
+                                    onChange={(e) => field.onChange(e.target.files ? e.target.files[0] : null)} 
+                                />
+                            </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -518,6 +534,5 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
-
 
     
