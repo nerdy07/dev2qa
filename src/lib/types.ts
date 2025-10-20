@@ -1,3 +1,4 @@
+
 export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
@@ -12,12 +13,18 @@ export type User = {
 
 export type Team = {
   id: string;
-  name: string;
+  name:string;
 };
 
 export type Project = {
   id: string;
   name: string;
+  description?: string;
+  leadId?: string;
+  leadName?: string;
+  status?: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed';
+  startDate?: any; // Firestore Timestamp
+  endDate?: any; // Firestore Timestamp
 };
 
 export type CertificateRequest = {

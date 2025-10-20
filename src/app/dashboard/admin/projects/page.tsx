@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -39,13 +40,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
 import type { Project } from '@/lib/types';
-import { DataTableForm } from '@/components/admin/data-table-form';
+import { ProjectForm } from '@/components/admin/project-form';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 export default function ProjectsPage() {
     const { data: projects, loading, error } = useCollection<Project>('projects');
@@ -86,21 +89,21 @@ export default function ProjectsPage() {
       setSelectedProject(undefined);
     }
   
-    const handleSave = async (name: string) => {
+    const handleSave = async (values: Omit<Project, 'id'>) => {
       const isEditing = !!selectedProject;
       try {
         if (isEditing) {
             const projectRef = doc(db!, 'projects', selectedProject.id);
-            await updateDoc(projectRef, { name });
+            await updateDoc(projectRef, values);
             toast({
                 title: 'Project Updated',
-                description: `The project "${name}" has been successfully updated.`,
+                description: `The project "${values.name}" has been successfully updated.`,
             });
         } else {
-            await addDoc(collection(db!, 'projects'), { name });
+            await addDoc(collection(db!, 'projects'), values);
             toast({
                 title: 'Project Created',
-                description: `The project "${name}" has been successfully created.`,
+                description: `The project "${values.name}" has been successfully created.`,
             });
         }
         handleFormSuccess();
@@ -121,6 +124,15 @@ export default function ProjectsPage() {
       setIsFormOpen(false);
       setSelectedProject(undefined);
     };
+
+    const statusVariant = (status: Project['status']) => {
+        switch (status) {
+            case 'In Progress': return 'default';
+            case 'Completed': return 'secondary';
+            case 'On Hold': return 'destructive';
+            default: return 'outline';
+        }
+    }
   
     const renderContent = () => {
         if (loading) {
@@ -129,6 +141,9 @@ export default function ProjectsPage() {
                     {[...Array(5)].map((_, i) => (
                         <TableRow key={i}>
                             <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                            <TableCell><Skeleton className="h-6 w-24 rounded-full" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                             <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                         </TableRow>
                     ))}
@@ -140,7 +155,7 @@ export default function ProjectsPage() {
             return (
               <TableBody>
                 <TableRow>
-                  <TableCell colSpan={2}>
+                  <TableCell colSpan={5}>
                       <Alert variant="destructive">
                           <TriangleAlert className="h-4 w-4" />
                           <AlertTitle>Error Loading Projects</AlertTitle>
@@ -157,6 +172,9 @@ export default function ProjectsPage() {
                 {projects?.map((project) => (
                   <TableRow key={project.id}>
                     <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell>{project.leadName || 'N/A'}</TableCell>
+                    <TableCell><Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge></TableCell>
+                    <TableCell>{project.startDate ? format(project.startDate.toDate(), 'PPP') : 'N/A'}</TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -183,7 +201,7 @@ export default function ProjectsPage() {
       <>
         <PageHeader
           title="Project Management"
-          description="Create and manage project names for certificate requests."
+          description="Create and manage all company projects."
         >
           <Dialog open={isFormOpen} onOpenChange={(open) => {
               if (!open) setSelectedProject(undefined);
@@ -195,13 +213,12 @@ export default function ProjectsPage() {
                 Add Project
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{selectedProject ? 'Edit Project' : 'Create New Project'}</DialogTitle>
               </DialogHeader>
-              <DataTableForm 
-                entity={selectedProject} 
-                entityName="Project" 
+              <ProjectForm
+                project={selectedProject} 
                 onSave={handleSave}
                 onCancel={handleFormSuccess}
               />
@@ -213,6 +230,9 @@ export default function ProjectsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Project Name</TableHead>
+                <TableHead>Project Lead</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Start Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -230,7 +250,7 @@ export default function ProjectsPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel onClick={() => setSelectedProject(undefined)}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                    <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>

@@ -1,4 +1,8 @@
+
 'use client';
+
+// This component is deprecated and will be removed in a future update.
+// Please use the more specific forms like ProjectForm instead.
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
