@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+    // Helper function to check the role of the requesting user.
+    function isRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+  
+    // Users can read their own user document. Admins can read any user document.
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || isRole('admin');
+      // Only admins can create, update, or delete user records.
+      allow write: if isRole('admin');
+    }
+    
+    // Admins have full control over these configuration collections.
+    match /teams/{teamId} {
+      allow read, write: if isRole('admin');
+    }
+    match /projects/{projectId} {
+      allow read, write: if isRole('admin');
+    }
+    match /bonuses/{bonusId} {
+      allow read, write: if isRole('admin');
+    }
+    match /infractions/{infractionId} {
+      allow read, write: if isRole('admin');
+    }
+
+    // Rules for the 'leaveRequests' collection.
+    match /leaveRequests/{leaveId} {
+      // Any authenticated user can create a leave request for themselves.
+      allow create: if request.auth.uid == request.resource.data.userId;
+      // Users can read their own requests. Admins can read all requests.
+      allow read: if resource.data.userId == request.auth.uid || isRole('admin');
+      // Only admins can approve or reject (update) leave requests.
+      allow update: if isRole('admin');
+      // Only admins can delete leave requests.
+      allow delete: if isRole('admin');
+    }
+    
+    // Rules for certificate requests.
+    match /requests/{requestId} {
+      // A requester can create a request for themselves.
+      allow create: if isRole('requester') && request.auth.uid == request.resource.data.requesterId;
+      // Admins, the requester, and the assigned QA tester can read the request.
+      allow read: if resource.data.requesterId == request.auth.uid 
+                  || resource.data.qaTesterId == request.auth.uid 
+                  || isRole('admin');
+      // Admins and QA testers can update the status.
+      // Requesters can only update their feedback after completion.
+      allow update: if (isRole('admin') || isRole('qa_tester')) || 
+                    (request.auth.uid == resource.data.requesterId && 
+                     request.resource.data.keys().hasOnly(['qaProcessRating', 'qaProcessFeedback', 'submissionRating']));
+    }
+    
+    // Rules for comments on requests.
+    match /comments/{commentId} {
+        // Anyone involved in a request (or an admin) can read and create comments.
+        allow read, create: if get(/databases/$(database)/documents/requests/$(request.resource.data.requestId)).data.requesterId == request.auth.uid
+                            || get(/databases/$(database)/documents/requests/$(request.resource.data.requestId)).data.qaTesterId == request.auth.uid
+                            || isRole('admin');
+        // Comments cannot be edited or deleted
+        allow update, delete: if false;
+    }
+
+    // Rules for generated certificates.
+    match /certificates/{certId} {
+      // Any logged-in user can view a certificate.
+      allow read: if request.auth != null;
+      // Only admins and QA testers can revoke (update) certificates.
+      allow write: if isRole('admin') || isRole('qa_tester');
+    }
+  }
+}
