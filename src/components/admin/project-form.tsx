@@ -180,7 +180,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                 <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                        <Textarea placeholder="Describe the project's goals and scope." {...field} />
+                        <Textarea placeholder="Describe the project's goals and scope." {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                 </FormItem>
@@ -364,7 +364,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
                                 <FormItem>
                                     <FormLabel>Milestone Description</FormLabel>
                                     <FormControl>
-                                        <Textarea placeholder="Describe the goals of this milestone." {...field} />
+                                        <Textarea placeholder="Describe the goals of this milestone." {...field} value={field.value ?? ''} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -486,7 +486,7 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel className="text-xs">Task Description</FormLabel>
-                            <FormControl><Textarea placeholder="Describe what this task entails..." {...field} /></FormControl>
+                            <FormControl><Textarea placeholder="Describe what this task entails..." {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -496,8 +496,8 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                     name={`milestones.${milestoneIndex}.tasks.${taskIndex}.docUrl`}
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel className="text-xs">Document URL</FormLabel>
-                            <FormControl><Input placeholder="https://..." {...field} /></FormControl>
+                            <FormLabel className="text-xs">Document Upload</FormLabel>
+                            <FormControl><Input type="file" {...field} value={undefined} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
