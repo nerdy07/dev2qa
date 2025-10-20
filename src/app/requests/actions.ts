@@ -276,3 +276,25 @@ export async function sendInfractionNotification(data: { recipientEmail: string,
         return { success: false, error: "Database updated, but email failed." };
     }
 }
+
+export async function notifyOnProjectUpdate(data: { recipientEmails: string[], projectName: string }) {
+    try {
+        if(data.recipientEmails.length === 0) return { success: true, message: 'No users to notify.' };
+
+        await sendEmail({
+            to: data.recipientEmails.join(','),
+            subject: `Project Update: "${data.projectName}"`,
+            html: `
+                <h1>Project Update</h1>
+                <p>The project "<strong>${data.projectName}</strong>" has been updated.</p>
+                <p>This may include changes to your assigned tasks or their timelines.</p>
+                <p>Please log in to the Dev2QA dashboard to review the project details.</p>
+            `
+        });
+        return { success: true };
+    } catch (error) {
+        const err = error as Error;
+        console.error('Error notifying users of project update:', err);
+        return { success: false, error: err.message };
+    }
+}

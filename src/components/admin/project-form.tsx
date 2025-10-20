@@ -36,6 +36,7 @@ import React from 'react';
 import { uploadFile } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { getTaskTimelines } from '@/app/actions';
+import { notifyAdminsOnLeaveRequest, notifyOnProjectUpdate } from '@/app/requests/actions';
 
 interface ProjectFormProps {
   project?: Project;
@@ -131,57 +132,39 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
     name: "resources",
   });
   
-  const [isPlanning, setIsPlanning] = React.useState<Record<number, boolean>>({});
-
-  const handleGenerateTimelines = async (milestoneIndex: number) => {
-    const milestone = form.getValues(`milestones.${milestoneIndex}`);
-    if (!milestone.dates?.from || !milestone.dates?.to) {
-        toast({ title: 'Milestone Dates Required', description: 'Please set a start and end date for the milestone first.', variant: 'destructive'});
-        return;
-    }
-    if (!milestone.tasks || milestone.tasks.length === 0) {
-        toast({ title: 'No Tasks', description: 'Please add at least one task to the milestone.', variant: 'destructive'});
-        return;
-    }
-    
-    setIsPlanning(prev => ({...prev, [milestoneIndex]: true}));
-
-    const input = {
-        milestoneStartDate: milestone.dates.from.toISOString(),
-        milestoneEndDate: milestone.dates.to.toISOString(),
-        tasks: milestone.tasks.map(t => ({ id: t.id!, description: t.description || t.name }))
-    };
-
-    const result = await getTaskTimelines(input);
-
-    if (result.success) {
-        const updatedTasks = milestone.tasks.map(originalTask => {
-            const plannedTask = result.data.tasks.find(pt => pt.id === originalTask.id);
-            if (plannedTask) {
-                return {
-                    ...originalTask,
-                    startDate: new Date(plannedTask.startDate),
-                    endDate: new Date(plannedTask.endDate),
-                };
-            }
-            return originalTask;
-        });
-
-        // Use update from useFieldArray to properly trigger re-render
-        updateMilestone(milestoneIndex, { ...milestone, tasks: updatedTasks });
-        
-        toast({ title: 'Timelines Generated', description: 'AI has scheduled the tasks for this milestone.' });
-    } else {
-        toast({ title: 'AI Planning Failed', description: result.error, variant: 'destructive' });
-    }
-
-    setIsPlanning(prev => ({...prev, [milestoneIndex]: false}));
-  };
-
+  const [isPlanning, setIsPlanning] = React.useState(false);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsPlanning(true);
     const selectedUser = users?.find(u => u.id === values.leadId);
     
+    // Automatic AI timeline generation
+    const updatedMilestones = await Promise.all(values.milestones?.map(async (milestone) => {
+        const needsPlanning = milestone.tasks && milestone.tasks.length > 0 && milestone.tasks.some(t => !t.startDate || !t.endDate);
+        if (needsPlanning && milestone.dates?.from && milestone.dates.to) {
+            toast({ title: 'AI Scheduling', description: `Automatically planning tasks for milestone: ${milestone.name}.` });
+            const input = {
+                milestoneStartDate: milestone.dates.from.toISOString(),
+                milestoneEndDate: milestone.dates.to.toISOString(),
+                tasks: milestone.tasks.map(t => ({ id: t.id!, description: t.description || t.name }))
+            };
+            const result = await getTaskTimelines(input);
+            if (result.success) {
+                const plannedTasks = milestone.tasks?.map(originalTask => {
+                    const plannedTask = result.data.tasks.find(pt => pt.id === originalTask.id);
+                    return plannedTask ? { ...originalTask, startDate: new Date(plannedTask.startDate), endDate: new Date(plannedTask.endDate) } : originalTask;
+                });
+                return { ...milestone, tasks: plannedTasks };
+            } else {
+                toast({ title: 'AI Planning Failed', description: result.error, variant: 'destructive' });
+                return milestone; // Return original milestone on failure
+            }
+        }
+        return milestone;
+    }) || []);
+    
+    values.milestones = updatedMilestones;
+
     for (const milestone of values.milestones || []) {
       for (const task of milestone.tasks || []) {
         if (task.doc) {
@@ -195,12 +178,14 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                 description: `Could not upload document for task "${task.name}".`,
                 variant: 'destructive',
             })
+            setIsPlanning(false);
             return;
           }
         }
       }
     }
 
+    const assignedUserIds = new Set<string>();
     const submissionValues: Omit<Project, 'id'> = {
         name: values.name,
         description: values.description || null,
@@ -216,17 +201,23 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
             status: m.status,
             startDate: m.dates?.from || null,
             endDate: m.dates?.to || null,
-            tasks: m.tasks?.map(t => ({
-                id: t.id!,
-                name: t.name,
-                description: t.description || null,
-                docUrl: t.docUrl || null,
-                startDate: t.startDate || null,
-                endDate: t.endDate || null,
-                status: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.status || 'To Do',
-                assigneeId: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeId || null,
-                assigneeName: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeName || null,
-            })) || [],
+            tasks: m.tasks?.map(t => {
+                const existingTask = project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id);
+                if (existingTask?.assigneeId) {
+                    assignedUserIds.add(existingTask.assigneeId);
+                }
+                return {
+                    id: t.id!,
+                    name: t.name,
+                    description: t.description || null,
+                    docUrl: t.docUrl || null,
+                    startDate: t.startDate || null,
+                    endDate: t.endDate || null,
+                    status: existingTask?.status || 'To Do',
+                    assigneeId: existingTask?.assigneeId || null,
+                    assigneeName: existingTask?.assigneeName || null,
+                }
+            }) || [],
         })) || [],
         resources: values.resources?.map(r => ({
             id: r.id || crypto.randomUUID(),
@@ -234,7 +225,20 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
             url: r.url,
         })) || [],
     };
-    await onSave(submissionValues, projectId);
+
+    const saveResult = await onSave(submissionValues, projectId);
+    
+    if (saveResult) {
+        const assigneeEmails = users?.filter(u => assignedUserIds.has(u.id)).map(u => u.email) || [];
+        if (assigneeEmails.length > 0) {
+            await notifyOnProjectUpdate({
+                projectName: values.name,
+                recipientEmails: assigneeEmails,
+            });
+        }
+    }
+
+    setIsPlanning(false);
   }
 
   return (
@@ -411,7 +415,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
 
         <div>
             <h3 className="text-lg font-medium">Project Milestones</h3>
-            <FormDescription>Break the project down into manageable milestones and tasks.</FormDescription>
+            <FormDescription>Break the project down into manageable milestones and tasks. AI will automatically schedule tasks within a milestone's timeline upon saving.</FormDescription>
             <div className="space-y-4 mt-4">
                 {milestoneFields.map((field, index) => (
                     <div key={field.id} className="p-4 border rounded-lg space-y-4 relative bg-muted/20">
@@ -495,13 +499,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                         </div>
                         
                         <div className="pl-4 border-l-2 ml-2 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <h4 className="text-md font-medium">Tasks</h4>
-                                <Button type="button" variant="ghost" size="sm" onClick={() => handleGenerateTimelines(index)} disabled={isPlanning[index]}>
-                                    {isPlanning[index] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                    Generate Task Timelines
-                                </Button>
-                            </div>
+                            <h4 className="text-md font-medium">Tasks</h4>
                             <NestedTaskArray milestoneIndex={index} control={form.control} />
                         </div>
                     </div>
@@ -520,8 +518,9 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Project')}
+          <Button type="submit" disabled={form.formState.isSubmitting || isPlanning}>
+            {isPlanning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {isPlanning ? 'AI is Scheduling...' : (form.formState.isSubmitting ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Project'))}
           </Button>
         </div>
       </form>
@@ -658,3 +657,4 @@ function NestedTaskArray({ milestoneIndex, control }: { milestoneIndex: number, 
       </div>
     );
   }
+

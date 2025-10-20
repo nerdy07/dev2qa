@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive } from 'lucide-react';
+import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive, CalendarClock } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
@@ -122,23 +122,6 @@ export default function ProjectDetailsPage() {
         try {
             const projectRef = doc(db, 'projects', project.id);
             await updateDoc(projectRef, { milestones: updatedMilestones });
-
-            // Optimistically update local state
-            if (setProject) {
-              const updatedProject = { ...project, milestones: updatedMilestones };
-              // We need to ensure date objects are handled correctly for optimistic updates
-              const projectWithCorrectDates: Project = {
-                  ...updatedProject,
-                  startDate: updatedProject.startDate ? { toDate: () => updatedProject.startDate.toDate() } : null,
-                  endDate: updatedProject.endDate ? { toDate: () => updatedProject.endDate.toDate() } : null,
-                  milestones: updatedProject.milestones?.map(m => ({
-                      ...m,
-                      startDate: m.startDate ? { toDate: () => m.startDate.toDate() } : null,
-                      endDate: m.endDate ? { toDate: () => m.endDate.toDate() } : null,
-                  }))
-              };
-              setProject(projectWithCorrectDates);
-            }
 
             toast({ title: 'Task Updated', description: `Task "${updatedTask.name}" has been saved.`});
             setIsTaskFormOpen(false);
@@ -287,7 +270,13 @@ export default function ProjectDetailsPage() {
                                                                         {taskStatusIcon(task.status)}
                                                                         <span>{task.name}</span>
                                                                     </div>
-                                                                    <div className='flex items-center gap-2 text-muted-foreground'>
+                                                                    <div className='flex items-center gap-3 text-muted-foreground'>
+                                                                        {task.startDate && task.endDate && (
+                                                                            <div className='flex items-center gap-1.5 text-xs'>
+                                                                                <CalendarClock className="h-3 w-3" />
+                                                                                <span>{format(task.startDate.toDate(), 'MMM d')} - {format(task.endDate.toDate(), 'MMM d')}</span>
+                                                                            </div>
+                                                                        )}
                                                                         <Badge variant={taskStatusVariant(task.status)}>{task.status}</Badge>
                                                                         {assignee ? (
                                                                             <div className='flex items-center gap-1.5'>
