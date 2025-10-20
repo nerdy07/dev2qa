@@ -3,14 +3,14 @@
 
 import React from 'react';
 import { useParams } from 'next/navigation';
-import { useCollection, useDocument } from '@/hooks/use-collection';
-import type { Project, CertificateRequest, Milestone, Task, User } from '@/lib/types';
+import { useDocument } from '@/hooks/use-collection';
+import type { Project, CertificateRequest, Milestone, Task, User, ProjectResource } from '@/lib/types';
 import { PageHeader } from '@/components/common/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil } from 'lucide-react';
+import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
@@ -30,6 +30,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TaskForm } from '@/components/admin/task-form';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection } from '@/hooks/use-collection';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
@@ -123,7 +124,9 @@ export default function ProjectDetailsPage() {
             await updateDoc(projectRef, { milestones: updatedMilestones });
 
             // Optimistically update local state
-            setProject({...project, milestones: updatedMilestones });
+            if (setProject) {
+              setProject({...project, milestones: updatedMilestones });
+            }
 
             toast({ title: 'Task Updated', description: `Task "${updatedTask.name}" has been saved.`});
             setIsTaskFormOpen(false);
@@ -212,6 +215,29 @@ export default function ProjectDetailsPage() {
                             <p className="text-sm text-muted-foreground">
                                 {project.description || 'No description provided.'}
                             </p>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Project Resources</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                           {project.resources && project.resources.length > 0 ? (
+                                <div className="space-y-3">
+                                    {project.resources.map(resource => (
+                                        <a key={resource.id} href={resource.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors">
+                                            <FileArchive className="h-5 w-5 text-muted-foreground" />
+                                            <div className="flex-1">
+                                                <p className="font-medium text-sm">{resource.name}</p>
+                                                <p className="text-xs text-primary truncate">{resource.url}</p>
+                                            </div>
+                                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                        </a>
+                                    ))}
+                                </div>
+                           ) : (
+                                <p className="text-sm text-muted-foreground">No resources attached to this project.</p>
+                           )}
                         </CardContent>
                     </Card>
                 </aside>

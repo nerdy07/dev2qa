@@ -1,4 +1,5 @@
 
+
 export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
@@ -20,6 +21,7 @@ export type Task = {
   id: string;
   name: string;
   description?: string;
+  docUrl?: string;
   status: 'To Do' | 'In Progress' | 'Done';
   assigneeId?: string;
   assigneeName?: string;
@@ -31,7 +33,15 @@ export type Milestone = {
   name: string;
   description?: string;
   status: 'Pending' | 'In Progress' | 'Completed';
+  startDate?: any; // Firestore Timestamp
+  endDate?: any; // Firestore Timestamp
   tasks: Task[];
+};
+
+export type ProjectResource = {
+  id: string;
+  name: string;
+  url: string;
 };
 
 export type Project = {
@@ -44,6 +54,7 @@ export type Project = {
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
   milestones?: Milestone[];
+  resources?: ProjectResource[];
 };
 
 export type CertificateRequest = {
@@ -134,3 +145,4 @@ export type LeaveRequest = {
   reviewedByName?: string; // Admin name
   daysCount: number;
 };
+
