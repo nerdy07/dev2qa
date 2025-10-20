@@ -27,6 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { User, Role } from '@/lib/types';
 import { createUser } from '@/app/actions/user-actions';
 import { useCollection } from '@/hooks/use-collection';
+import React from 'react';
 
 
 const formSchemaBase = z.object({
@@ -61,27 +62,36 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      role: user?.role || undefined,
+      // The role field in the form will store the ROLE ID for the select component
+      role: '',
       password: '',
       expertise: user?.expertise || '',
       baseSalary: user?.baseSalary || 0,
       annualLeaveEntitlement: user?.annualLeaveEntitlement ?? 20,
     },
   });
-
-  const roleValue = form.watch('role');
   
-  const findRoleId = (roleName?: string) => {
-    if (!roleName) return undefined;
-    return roles?.find(r => r.name === roleName)?.id || roleName;
-  }
+  // Effect to set the role ID once roles are loaded when editing
+  React.useEffect(() => {
+    if (isEditing && user && roles) {
+      const roleId = roles.find(r => r.name === user.role)?.id;
+      if (roleId) {
+        form.setValue('role', roleId);
+      }
+    }
+  }, [isEditing, user, roles, form]);
 
-  const roleId = findRoleId(roleValue);
-  const roleName = roles?.find(r => r.id === roleId)?.name || roleValue;
+
+  const roleId = form.watch('role');
+  const roleName = roles?.find(r => r.id === roleId)?.name;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-        const roleNameToSave = roles?.find(r => r.id === values.role)?.name || values.role;
+        const roleNameToSave = roles?.find(r => r.id === values.role)?.name;
+        if (!roleNameToSave) {
+          throw new Error("Selected role is invalid.");
+        }
+        
         const submissionValues = { ...values, role: roleNameToSave };
 
         if (isEditing && user) {
@@ -208,7 +218,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} value={findRoleId(field.value)} disabled={rolesLoading}>
+              <Select onValueChange={field.onChange} value={field.value} disabled={rolesLoading}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
