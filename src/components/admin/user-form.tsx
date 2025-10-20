@@ -62,8 +62,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      // The role field in the form will store the ROLE ID for the select component
-      role: '',
+      role: '', // Start with an empty role
       password: '',
       expertise: user?.expertise || '',
       baseSalary: user?.baseSalary || 0,
@@ -71,15 +70,16 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     },
   });
   
-  // Effect to set the role ID once roles are loaded when editing
+  // This effect will run when the component mounts or when `user` or `roles` change.
+  // It correctly finds the role ID from the user's role name and sets the form value.
   React.useEffect(() => {
-    if (isEditing && user && roles) {
-      const roleId = roles.find(r => r.name === user.role)?.id;
-      if (roleId) {
-        form.setValue('role', roleId);
+    if (isEditing && user && roles && roles.length > 0) {
+      const currentRoleId = roles.find(r => r.name === user.role)?.id;
+      if (currentRoleId) {
+        form.setValue('role', currentRoleId);
       }
     }
-  }, [isEditing, user, roles, form]);
+  }, [isEditing, user, roles, form.setValue]);
 
 
   const roleId = form.watch('role');
