@@ -45,18 +45,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function RolesPage() {
-  // Replace mock data with Firestore data in the next step
-  const { data: roles, loading, error } = { 
-      data: [
-          { id: '1', name: 'Admin', permissions: ['users:create', 'users:read', 'users:update', 'users:delete'] },
-          { id: '2', name: 'QA Tester', permissions: ['requests:read_all', 'requests:approve', 'requests:reject'] },
-          { id: '3', name: 'Requester', permissions: ['requests:create', 'requests:read_own'] },
-      ] as Role[], 
-      loading: false, 
-      error: null 
-  };
+  const { data: roles, loading, error } = useCollection<Role>('roles');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedRole, setSelectedRole] = React.useState<Role | undefined>(undefined);
@@ -73,20 +66,43 @@ export default function RolesPage() {
   }
   
   const confirmDelete = async () => {
-    if (selectedRole) {
-      // Deletion logic will be added here
-      toast({ title: `(Mock) Role "${selectedRole.name}" Deleted` });
+    if (selectedRole && db) {
+      try {
+        await deleteDoc(doc(db, 'roles', selectedRole.id));
+        toast({ title: `Role "${selectedRole.name}" Deleted`, description: 'The role has been successfully removed.' });
+      } catch (e) {
+        const error = e as Error;
+        console.error("Error deleting role: ", error);
+        toast({ title: 'Error Deleting Role', description: error.message, variant: 'destructive' });
+      }
     }
     setIsAlertOpen(false);
     setSelectedRole(undefined);
   }
 
   const handleSave = async (values: Omit<Role, 'id'>) => {
-    // Save logic will be added here
+    if (!db) {
+        toast({ title: 'Database not available', variant: 'destructive' });
+        return false;
+    }
     const isEditing = !!selectedRole;
-    toast({ title: `(Mock) Role ${isEditing ? 'Updated' : 'Created'}`, description: `Role "${values.name}" was saved.` });
-    handleFormSuccess();
-    return true;
+    try {
+        if (isEditing) {
+            const roleRef = doc(db, 'roles', selectedRole.id);
+            await updateDoc(roleRef, values);
+            toast({ title: `Role Updated`, description: `Role "${values.name}" was saved.` });
+        } else {
+            await addDoc(collection(db, 'roles'), values);
+            toast({ title: `Role Created`, description: `Role "${values.name}" was created.` });
+        }
+        handleFormSuccess();
+        return true;
+    } catch(e) {
+        const error = e as Error;
+        console.error("Error saving role: ", error);
+        toast({ title: 'Error Saving Role', description: error.message, variant: 'destructive' });
+        return false;
+    }
   }
 
   const handleFormSuccess = () => {
@@ -134,16 +150,16 @@ export default function RolesPage() {
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
+                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={role.name === 'admin'}>
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(role)}>Edit Role</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleEdit(role)} disabled={role.name === 'admin'}>Edit Role</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(role)}>Delete Role</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(role)} disabled={role.name === 'admin'}>Delete Role</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>
@@ -186,7 +202,7 @@ export default function RolesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Role Name</TableHead>
-              <TableHead>Permissions</TableHead>
+              <TableHead>Permissions Count</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>

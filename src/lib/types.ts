@@ -4,7 +4,7 @@ export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
   email: string;
-  role: 'admin' | 'requester' | 'qa_tester' | string; // Role can be a custom string now
+  role: string; // Role is a string to allow for custom roles from the DB
   photoURL?: string;
   expertise?: string;
   baseSalary?: number;

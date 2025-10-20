@@ -61,7 +61,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     defaultValues: {
       name: user?.name || '',
       email: user?.email || '',
-      role: user?.role || 'requester',
+      role: user?.role || undefined,
       password: '',
       expertise: user?.expertise || '',
       baseSalary: user?.baseSalary || 0,
@@ -69,16 +69,20 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     },
   });
 
-  const role = form.watch('role');
+  const roleValue = form.watch('role');
+  const roleName = roles?.find(r => r.id === roleValue)?.name || roleValue;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
+        const roleNameToSave = roles?.find(r => r.id === values.role)?.name || values.role;
+        const submissionValues = { ...values, role: roleNameToSave };
+
         if (isEditing && user) {
             // Server action for updating a user
             const response = await fetch(`/api/users/${user.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(values),
+              body: JSON.stringify(submissionValues),
             });
 
             const result = await response.json();
@@ -92,7 +96,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             });
         } else {
             // New server action for creating a user
-            const result = await createUser(values);
+            const result = await createUser(submissionValues);
 
             if (!result.success) {
               throw new Error(result.error);
@@ -112,6 +116,10 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             variant: 'destructive'
         });
     }
+  }
+
+  const findRoleId = (roleName: string) => {
+      return roles?.find(r => r.name === roleName)?.id || roleName;
   }
 
   return (
@@ -196,7 +204,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={rolesLoading}>
+              <Select onValueChange={field.onChange} value={findRoleId(field.value)} disabled={rolesLoading}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
@@ -204,7 +212,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                 </FormControl>
                 <SelectContent>
                   {roles?.map(role => (
-                    <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+                    <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -212,7 +220,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
             </FormItem>
           )}
         />
-        {role === 'qa_tester' && (
+        {roleName === 'qa_tester' && (
             <FormField
                 control={form.control}
                 name="expertise"
