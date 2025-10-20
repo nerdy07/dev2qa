@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { getServerEnv } from './env-validation';
 
 // Simple Firebase Admin initialization for Next.js
 let app: admin.app.App | null = null;
@@ -14,11 +15,9 @@ export function getFirebaseAdmin() {
     return app;
   }
 
-  const serviceAccountKey = process.env.ADMIN_SERVICE_ACCOUNT_KEY;
+  const serviceAccountKey = getServerEnv().FIREBASE_SERVICE_ACCOUNT_KEY;
 
-  if (!serviceAccountKey) {
-    throw new Error('ADMIN_SERVICE_ACCOUNT_KEY environment variable is not set');
-  }
+  // Environment validation is handled by getEnv()
 
   try {
     const serviceAccount = JSON.parse(serviceAccountKey);
@@ -36,7 +35,7 @@ export function getFirebaseAdmin() {
     return app;
   } catch (error: any) {
     console.error('Firebase Admin initialization error:', error);
-    throw new Error('Failed to initialize Firebase Admin SDK. Check your ADMIN_SERVICE_ACCOUNT_KEY environment variable.');
+    throw new Error('Failed to initialize Firebase Admin SDK. Check your FIREBASE_SERVICE_ACCOUNT_KEY environment variable.');
   }
 }
 

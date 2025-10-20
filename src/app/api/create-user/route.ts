@@ -1,37 +1,67 @@
 import { NextResponse } from 'next/server';
 import { getAuth, getFirestore } from '@/lib/firebase-admin-simple';
 import { sendWelcomeEmail } from '@/app/requests/actions';
+import { requireAdmin } from '@/lib/auth-middleware';
+import { rateLimit, rateLimitKeyFromRequestHeaders } from '@/lib/rate-limit';
+import { sanitizeString } from '@/lib/validation';
 import type { User } from '@/lib/types';
+import { z } from 'zod';
 
-export async function POST(request: Request) {
+const createUserSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['requester', 'qa_tester', 'admin']),
+  expertise: z.string().optional(),
+  baseSalary: z.number().min(0).optional(),
+  annualLeaveEntitlement: z.number().min(0).optional(),
+});
+
+async function createUserHandler(request: any) {
   try {
     const adminAuth = getAuth();
     const db = getFirestore();
 
     const body = await request.json();
-    const { name, email, password, role, expertise, baseSalary, annualLeaveEntitlement } = body;
 
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    // Basic rate limiting: 10 requests / 60s per uid/ip
+    const key = rateLimitKeyFromRequestHeaders(request.headers);
+    if (!rateLimit(`create-user:${key}`, { max: 10, windowMs: 60_000 })) {
+      return NextResponse.json({ message: 'Too many requests' }, { status: 429 });
     }
+    
+    // Validate input
+    const validationResult = createUserSchema.safeParse(body);
+    if (!validationResult.success) {
+      return NextResponse.json({ 
+        message: 'Validation failed', 
+        errors: validationResult.error.errors 
+      }, { status: 400 });
+    }
+
+    const { name, email, password, role, expertise, baseSalary, annualLeaveEntitlement } = validationResult.data;
+
+    // Sanitize strings defensively
+    const safeName = sanitizeString(name);
+    const safeExpertise = expertise ? sanitizeString(expertise) : undefined;
 
     // Create user in Firebase Auth
     const userRecord = await adminAuth.createUser({
       email: email,
       password: password,
-      displayName: name,
+      displayName: safeName,
       disabled: false,
     });
 
     // Create user document in Firestore
     const userDocRef = db.collection('users').doc(userRecord.uid);
     const userData: Omit<User, 'id'> = {
-        name,
+        name: safeName,
         email,
         role,
         baseSalary: baseSalary || 0,
         annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
-        expertise: role === 'qa_tester' ? expertise : '',
+        expertise: role === 'qa_tester' ? (safeExpertise || '') : '',
         disabled: false,
     };
     await userDocRef.set(userData);
@@ -70,3 +100,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
   }
 }
+
+export const POST = requireAdmin(createUserHandler);
