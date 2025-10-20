@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { User as AuthUser } from 'firebase/auth';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, getIdToken } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -167,7 +167,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         await signOut(auth);
                         setUser(null);
                     } else {
-                        const idToken = await getIdToken(authUser);
                         const userWithToken: User = {
                             id: authUser.uid,
                             name: authUser.displayName || userData.name,

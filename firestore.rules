@@ -1,108 +1,117 @@
-
 rules_version = '2';
+
+// Helper functions to reduce repetition
+function isAuth() {
+  return request.auth != null;
+}
+
+function isAdmin() {
+  return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+}
+
+function isQaTester() {
+  return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'qa_tester';
+}
+
+function isRequester() {
+  return isAuth() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'requester';
+}
+
+function isOwner(userId) {
+  return isAuth() && request.auth.uid == userId;
+}
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isUser(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-    
-    function isUserWithRole(role) {
-        return isSignedIn() && getUserData(request.auth.uid).role == role;
-    }
-
-    function isAdmin() {
-        return isUserWithRole('admin');
-    }
-
-    function isQATester() {
-        return isUserWithRole('qa_tester');
-    }
-
-    function isRequester() {
-        return isUserWithRole('requester');
-    }
-
-    // Rules for 'users' collection
+    //
+    // Users Collection
+    //
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isAdmin();
-      allow update: if isAdmin() || isUser(userId);
-      allow delete: if isAdmin();
+      // Admins can manage all users.
+      // Users can read their own data.
+      allow read: if isAdmin() || isOwner(userId);
+      allow create, update, delete: if isAdmin();
     }
-
-    // Rules for 'roles' collection
+    
+    //
+    // Roles Collection
+    //
     match /roles/{roleId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      // Only Admins can manage roles
+      allow read, write: if isAdmin();
+    }
+
+    //
+    // Teams Collection
+    //
+    match /teams/{teamId} {
+      allow read: if isAuth(); // All authenticated users can read teams
+      allow write: if isAdmin(); // Only admins can create, update, delete
+    }
+
+    //
+    // Projects Collection
+    //
+    match /projects/{projectId} {
+      allow read: if isAuth();
+      allow write: if isAdmin(); // Only admins can manage projects
     }
     
-    // Rules for 'teams' collection
-    match /teams/{teamId} {
-        allow read: if isAdmin();
-        allow create, update, delete: if isAdmin();
-    }
-
-    // Rules for 'projects' collection
-    match /projects/{projectId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
-    }
-
-    // Rules for 'requests' (Certificate Requests)
+    //
+    // Certificate Requests Collection
+    //
     match /requests/{requestId} {
-      allow read: if isSignedIn();
+      allow read: if isAdmin() || isQaTester() || (isRequester() && resource.data.requesterId == request.auth.uid);
       allow create: if isRequester();
-      allow update: if isAdmin() || isQATester() || (isRequester() && resource.data.requesterId == request.auth.uid);
+      // Allow updates from QA for status, or from requesters for feedback
+      allow update: if (isQaTester() || isAdmin()) || 
+                     (isRequester() && request.resource.data.requesterId == request.auth.uid);
       allow delete: if isAdmin();
     }
     
-    // Rules for 'designRequests'
+    //
+    // Design Requests Collection
+    //
     match /designRequests/{designId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update: if isAdmin();
+        allow read: if isAdmin() || (isAuth() && resource.data.designerId == request.auth.uid);
+        allow create: if isAuth(); // Any authenticated user can create for now
+        allow update: if isAdmin(); // Only admins can approve/reject
         allow delete: if isAdmin();
     }
 
-    // Rules for 'certificates'
+    //
+    // Certificates Collection
+    //
     match /certificates/{certificateId} {
-      allow read: if isSignedIn();
-      allow create, update: if isQATester() || isAdmin();
-      allow delete: if isAdmin();
+      allow read: if isAuth();
+      allow update: if isAdmin() || isQaTester(); // For revoking
     }
 
-    // Rules for 'comments'
+    //
+    // Comments Collection
+    //
     match /comments/{commentId} {
-      allow read, create: if isSignedIn();
-      allow update, delete: if isAdmin() || isUser(resource.data.userId);
+      allow read: if isAuth();
+      allow create: if isAuth();
     }
-    
-    // Rules for HR collections
+
+    //
+    // HR Collections
+    //
     match /infractions/{infractionId} {
-        allow read: if isAdmin() || isUser(resource.data.userId);
-        allow create, update, delete: if isAdmin();
+        allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+        allow write: if isAdmin();
     }
 
     match /bonuses/{bonusId} {
-        allow read: if isAdmin() || isUser(resource.data.userId);
-        allow create, update, delete: if isAdmin();
+        allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+        allow write: if isAdmin();
     }
 
     match /leaveRequests/{leaveId} {
-        allow read: if isAdmin() || isUser(resource.data.userId);
-        allow create: if isSignedIn();
-        allow update, delete: if isAdmin();
+        allow read: if isAdmin() || (isAuth() && resource.data.userId == request.auth.uid);
+        allow create: if isAuth();
+        allow update: if isAdmin();
     }
   }
 }
