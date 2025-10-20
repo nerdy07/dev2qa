@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { sendEmail } from '@/lib/email';
@@ -327,5 +328,74 @@ export async function notifyOnTaskAssignment(data: { recipientEmail: string, ass
         const err = error as Error;
         console.error('Error notifying user of task assignment:', err);
         return { success: false, error: err.message };
+    }
+}
+
+
+export async function notifyOnNewDesignRequest(data: { adminEmails: string[], designTitle: string, designerName: string }) {
+    try {
+        if(data.adminEmails.length === 0) return { success: true, message: 'No admins to notify.' };
+
+        await sendEmail({
+            to: data.adminEmails.join(','),
+            subject: `New Design for Review: "${data.designTitle}"`,
+            html: `
+                <h1>New Design for Approval</h1>
+                <p>A new design has been submitted by <strong>${data.designerName}</strong> and is ready for review.</p>
+                <ul>
+                    <li><strong>Design Title:</strong> ${data.designTitle}</li>
+                </ul>
+                <p>Please log in to the Dev2QA dashboard to review the details and take action.</p>
+            `
+        });
+        return { success: true };
+    } catch (error) {
+        const err = error as Error;
+        console.error('Error notifying admins on new design:', err);
+        return { success: false, error: err.message };
+    }
+}
+
+export async function sendDesignApprovedEmail(data: { recipientEmail: string; designerName: string; designTitle: string; reviewerName: string; }) {
+    try {
+        await sendEmail({
+            to: data.recipientEmail,
+            subject: `Your Design has been Approved!`,
+            html: `
+                <h1>Congratulations, ${data.designerName}!</h1>
+                <p>Your design "<strong>${data.designTitle}</strong>" has been approved by ${data.reviewerName}.</p>
+                <p>Great work!</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
+        });
+        return { success: true };
+    } catch (emailError) {
+         console.warn(`Design approval notification email failed to send to ${data.recipientEmail}.`, emailError);
+         return { success: false, error: "Database updated, but email notification failed."};
+    }
+}
+
+export async function sendDesignRejectedEmail(data: { recipientEmail: string; designerName: string; designTitle: string; comments: string; reviewerName: string; }) {
+    try {
+        await sendEmail({
+            to: data.recipientEmail,
+            subject: `Action Required: Your Design was Rejected`,
+            html: `
+                <h1>Hello, ${data.designerName},</h1>
+                <p>Your design for "<strong>${data.designTitle}</strong>" has been rejected.</p>
+                <p><strong>Feedback from ${data.reviewerName}:</strong></p>
+                <p><em>${data.comments}</em></p>
+                <p>Please review the feedback and make the necessary changes. You can view more details by logging into the Dev2QA portal.</p>
+                <br>
+                <p>Thank you,</p>
+                <p>The Dev2QA Team</p>
+            `
+        });
+         return { success: true };
+    } catch (emailError) {
+        console.warn(`Design rejection notification email failed to send to ${data.recipientEmail}.`, emailError);
+        return { success: false, error: "Database updated, but email notification failed."};
     }
 }

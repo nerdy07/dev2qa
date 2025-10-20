@@ -9,6 +9,7 @@ import {
   FilePlus2,
   FolderKanban,
   LayoutDashboard,
+  Paintbrush,
   Shield,
   ShieldCheck,
   ShieldX,
@@ -55,7 +56,8 @@ const navConfig: NavItemOrSeparator[] = [
     {
         label: "My Work",
         items: [
-            { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request', permission: ALL_PERMISSIONS.REQUESTS.CREATE },
+            { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New QA Request', permission: ALL_PERMISSIONS.REQUESTS.CREATE },
+            { href: '/dashboard/designs/new', icon: Paintbrush, label: 'New Design Request', permission: ALL_PERMISSIONS.DESIGNS.CREATE },
             { href: '/dashboard/my-records', icon: BookUser, label: 'My Records', permission: ALL_PERMISSIONS.RECORDS.READ_OWN },
             { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave', permission: ALL_PERMISSIONS.LEAVE.REQUEST },
         ]
@@ -67,6 +69,7 @@ const navConfig: NavItemOrSeparator[] = [
             { href: '/dashboard/admin/users', icon: Users, label: 'User Management', permission: ALL_PERMISSIONS.USERS.READ },
             { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
             { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects', permission: ALL_PERMISSIONS.PROJECTS.READ },
+            { href: '/dashboard/admin/design-approvals', icon: ShieldCheck, label: 'Design Approvals', permission: ALL_PERMISSIONS.DESIGNS.APPROVE },
             { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
             { href: '/dashboard/admin/diagnostics', icon: Stethoscope, label: 'AI Diagnostics', permission: ALL_PERMISSIONS.PROJECT_DIAGNOSTICS.RUN },
         ]
@@ -95,7 +98,7 @@ const NavLinks = () => {
             const filteredItems = section.items.filter(item => {
                 // A bit of custom logic for the dashboard link
                 if (item.href === '/dashboard') {
-                    if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN) || hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL)) {
+                    if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN) || hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) || hasPermission(ALL_PERMISSIONS.DESIGNS.READ_OWN)) {
                         return true;
                     }
                 }
@@ -124,7 +127,9 @@ const NavLinks = () => {
                                if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) && !hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ)) {
                                    itemLabel = 'Pending Requests';
                                } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN)) {
-                                   itemLabel = 'My Requests';
+                                   itemLabel = 'My QA Requests';
+                               } else if (hasPermission(ALL_PERMISSIONS.DESIGNS.READ_OWN)) {
+                                   itemLabel = 'My Designs';
                                }
                            }
                             

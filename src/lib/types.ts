@@ -1,5 +1,6 @@
 
 
+
 export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
@@ -89,6 +90,22 @@ export type CertificateRequest = {
   qaProcessFeedback?: string; // From Requester to QA
 };
 
+export type DesignRequest = {
+  id: string;
+  designTitle: string;
+  figmaUrl: string;
+  description: string;
+  designerId: string;
+  designerName: string;
+  designerEmail: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+  reviewerId?: string;
+  reviewerName?: string;
+  reviewComments?: string;
+};
+
 export type Certificate = {
     id: string;
     requestId: string;
@@ -154,5 +171,6 @@ export type LeaveRequest = {
   reviewedByName?: string; // Admin name
   daysCount: number;
 };
+
 
 
