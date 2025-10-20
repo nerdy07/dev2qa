@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const userPermissions = useMemo(() => {
     if (!user) return [];
-    return PERMISSIONS_BY_ROLE[user.role] || [];
+    return PERMISSIONS_BY_ROLE[user.role as keyof typeof PERMISSIONS_BY_ROLE] || [];
   }, [user]);
 
   const hasPermission = (permission: string) => {
