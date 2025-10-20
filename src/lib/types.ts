@@ -20,7 +20,7 @@ export type Task = {
   id: string;
   name: string;
   description?: string;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status: 'To Do' | 'In Progress' | 'Done';
   assigneeId?: string;
   assigneeName?: string;
   certificateRequestId?: string;

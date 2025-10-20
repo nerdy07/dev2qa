@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
-import type { Project } from '@/lib/types';
+import type { Project, Task } from '@/lib/types';
 import { ProjectForm } from '@/components/admin/project-form';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
@@ -135,6 +135,15 @@ export default function ProjectsPage() {
             default: return 'outline';
         }
     }
+
+    const calculateProgress = (project: Project): number => {
+        const allTasks = project.milestones?.flatMap(m => m.tasks || []);
+        if (!allTasks || allTasks.length === 0) {
+            return 0;
+        }
+        const completedTasks = allTasks.filter(t => t.status === 'Done').length;
+        return Math.round((completedTasks / allTasks.length) * 100);
+    }
   
     const renderContent = () => {
         if (loading) {
@@ -173,9 +182,7 @@ export default function ProjectsPage() {
         return (
             <TableBody>
                 {projects?.map((project) => {
-                  const progress = project.milestones && project.milestones.length > 0 
-                      ? (project.milestones.filter(m => m.status === 'Completed').length / project.milestones.length) * 100 
-                      : 0;
+                  const progress = calculateProgress(project);
 
                   return (
                     <TableRow key={project.id}>
@@ -190,7 +197,7 @@ export default function ProjectsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                            <Progress value={progress} className="h-2 w-24" />
-                           <span className="text-xs text-muted-foreground">{Math.round(progress)}%</span>
+                           <span className="text-xs text-muted-foreground">{progress}%</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">

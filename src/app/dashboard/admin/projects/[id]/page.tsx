@@ -4,13 +4,13 @@
 import React from 'react';
 import { useParams } from 'next/navigation';
 import { useCollection, useDocument } from '@/hooks/use-collection';
-import type { Project, CertificateRequest, Milestone } from '@/lib/types';
+import type { Project, CertificateRequest, Milestone, Task } from '@/lib/types';
 import { PageHeader } from '@/components/common/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle, CircleDot } from 'lucide-react';
+import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, UserCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
@@ -44,6 +44,24 @@ const statusVariant = (status: Project['status']) => {
     }
 }
 
+const taskStatusVariant = (status: Task['status']) => {
+    switch (status) {
+        case 'Done': return 'default';
+        case 'In Progress': return 'secondary';
+        case 'To Do':
+        default: return 'outline';
+    }
+}
+
+const taskStatusIcon = (status: Task['status']) => {
+    switch (status) {
+        case 'Done': return <CheckCircle className="h-4 w-4 text-green-500" />;
+        case 'In Progress': return <ClockIcon className="h-4 w-4 text-blue-500" />;
+        case 'To Do':
+        default: return <CircleDot className="h-4 w-4 text-muted-foreground" />;
+    }
+}
+
 export default function ProjectDetailsPage() {
     const { id } = useParams();
     const { data: project, loading: projectLoading, error: projectError } = useDocument<Project>('projects', id as string);
@@ -62,8 +80,12 @@ export default function ProjectDetailsPage() {
         if (!project || !project.milestones || project.milestones.length === 0) {
             return 0;
         }
-        const completedMilestones = project.milestones.filter(m => m.status === 'Completed').length;
-        return Math.round((completedMilestones / project.milestones.length) * 100);
+        const allTasks = project.milestones.flatMap(m => m.tasks || []);
+        if (allTasks.length === 0) {
+            return 0;
+        }
+        const completedTasks = allTasks.filter(t => t.status === 'Done').length;
+        return Math.round((completedTasks / allTasks.length) * 100);
     }, [project]);
 
 
@@ -171,9 +193,19 @@ export default function ProjectDetailsPage() {
                                                     {milestone.tasks && milestone.tasks.length > 0 ? (
                                                         <div className='space-y-2'>
                                                             {milestone.tasks.map(task => (
-                                                                <div key={task.id} className="flex items-center gap-2 text-sm p-2 bg-muted/50 rounded-md">
-                                                                    <CircleDot className="h-4 w-4 text-muted-foreground" />
-                                                                    <span>{task.name}</span>
+                                                                <div key={task.id} className="flex items-center justify-between gap-2 text-sm p-2 bg-muted/50 rounded-md">
+                                                                    <div className="flex items-center gap-2">
+                                                                        {taskStatusIcon(task.status)}
+                                                                        <span>{task.name}</span>
+                                                                    </div>
+                                                                    <div className='flex items-center gap-2 text-muted-foreground'>
+                                                                        <Badge variant={taskStatusVariant(task.status)}>{task.status}</Badge>
+                                                                        {task.assigneeName ? (
+                                                                            <span className='flex items-center gap-1'><UserCircle className='h-4 w-4' />{task.assigneeName}</span>
+                                                                        ) : (
+                                                                            <span className='italic'>Unassigned</span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -207,5 +239,3 @@ export default function ProjectDetailsPage() {
         </>
     );
 }
-
-    

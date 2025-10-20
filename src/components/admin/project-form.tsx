@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { Project, User, Milestone } from '@/lib/types';
+import type { Project, User, Milestone, Task } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
 import { CalendarIcon, Trash } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -106,7 +106,7 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
             tasks: m.tasks?.map(t => ({
                 id: t.id || crypto.randomUUID(),
                 name: t.name,
-                status: project?.milestones?.find(pm => pm.id === m.id)?.tasks?.find(pt => pt.id === t.id)?.status || 'To Do',
+                status: 'To Do',
             })) || [],
         })) || [],
     };
@@ -384,5 +384,3 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
-
-    
