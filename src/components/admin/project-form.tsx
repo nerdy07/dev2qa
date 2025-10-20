@@ -34,7 +34,7 @@ import { Calendar } from '../ui/calendar';
 
 interface ProjectFormProps {
   project?: Project;
-  onSave: (values: Omit<Project, 'id'>) => Promise<boolean>;
+  onSave: (values: Omit<Project, 'id' | 'status'> & { status: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed' }) => Promise<boolean>;
   onCancel: () => void;
 }
 

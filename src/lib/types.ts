@@ -22,7 +22,7 @@ export type Project = {
   description?: string;
   leadId?: string;
   leadName?: string;
-  status?: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed';
+  status: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed';
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
 };
