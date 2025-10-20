@@ -4,17 +4,17 @@
 import React from 'react';
 import { useParams } from 'next/navigation';
 import { useCollection, useDocument } from '@/hooks/use-collection';
-import type { Project, CertificateRequest, Milestone, Task } from '@/lib/types';
+import type { Project, CertificateRequest, Milestone, Task, User } from '@/lib/types';
 import { PageHeader } from '@/components/common/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, UserCircle } from 'lucide-react';
+import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
-import { query, where, collection } from 'firebase/firestore';
+import { query, where, collection, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import {
   Accordion,
@@ -24,6 +24,12 @@ import {
 } from "@/components/ui/accordion"
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { TaskForm } from '@/components/admin/task-form';
+import { useAuth } from '@/providers/auth-provider';
+import { useToast } from '@/hooks/use-toast';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
@@ -64,7 +70,12 @@ const taskStatusIcon = (status: Task['status']) => {
 
 export default function ProjectDetailsPage() {
     const { id } = useParams();
-    const { data: project, loading: projectLoading, error: projectError } = useDocument<Project>('projects', id as string);
+    const { user: currentUser } = useAuth();
+    const { toast } = useToast();
+    const { data: project, loading: projectLoading, error: projectError, setData: setProject } = useDocument<Project>('projects', id as string);
+
+    const [isTaskFormOpen, setIsTaskFormOpen] = React.useState(false);
+    const [selectedTask, setSelectedTask] = React.useState<{task: Task, milestoneId: string} | null>(null);
 
     const requestsQuery = React.useMemo(() => {
         if (!project) return null;
@@ -72,9 +83,12 @@ export default function ProjectDetailsPage() {
     }, [project]);
 
     const { data: requests, loading: requestsLoading, error: requestsError } = useCollection<CertificateRequest>('requests', requestsQuery);
+    const { data: users } = useCollection<User>('users');
 
     const loading = projectLoading || (project && requestsLoading);
     const error = projectError || requestsError;
+
+    const canEdit = currentUser?.role === 'admin' || currentUser?.id === project?.leadId;
 
     const projectProgress = React.useMemo(() => {
         if (!project || !project.milestones || project.milestones.length === 0) {
@@ -87,6 +101,41 @@ export default function ProjectDetailsPage() {
         const completedTasks = allTasks.filter(t => t.status === 'Done').length;
         return Math.round((completedTasks / allTasks.length) * 100);
     }, [project]);
+
+    const handleEditTask = (task: Task, milestoneId: string) => {
+        setSelectedTask({ task, milestoneId });
+        setIsTaskFormOpen(true);
+    };
+
+    const handleSaveTask = async (updatedTask: Task, milestoneId: string) => {
+        if (!project || !db) return false;
+
+        const updatedMilestones = project.milestones?.map(m => {
+            if (m.id === milestoneId) {
+                const updatedTasks = m.tasks.map(t => t.id === updatedTask.id ? updatedTask : t);
+                return { ...m, tasks: updatedTasks };
+            }
+            return m;
+        }) || [];
+
+        try {
+            const projectRef = doc(db, 'projects', project.id);
+            await updateDoc(projectRef, { milestones: updatedMilestones });
+
+            // Optimistically update local state
+            setProject({...project, milestones: updatedMilestones });
+
+            toast({ title: 'Task Updated', description: `Task "${updatedTask.name}" has been saved.`});
+            setIsTaskFormOpen(false);
+            setSelectedTask(null);
+            return true;
+        } catch(e) {
+            const error = e as Error;
+            console.error("Error updating task:", error);
+            toast({ title: 'Update Failed', description: error.message, variant: 'destructive' });
+            return false;
+        }
+    };
 
 
     if (loading) {
@@ -139,7 +188,7 @@ export default function ProjectDetailsPage() {
                              <DetailItem icon={Flag} label="Status">
                                 <Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge>
                             </DetailItem>
-                             <DetailItem icon={User} label="Project Lead">{project.leadName}</DetailItem>
+                             <DetailItem icon={UserIcon} label="Project Lead">{project.leadName}</DetailItem>
                              <DetailItem icon={Calendar} label="Start Date">
                                 {project.startDate ? format(project.startDate.toDate(), 'PPP') : 'Not set'}
                             </DetailItem>
@@ -192,7 +241,9 @@ export default function ProjectDetailsPage() {
                                                     <h4 className='font-semibold'>Tasks</h4>
                                                     {milestone.tasks && milestone.tasks.length > 0 ? (
                                                         <div className='space-y-2'>
-                                                            {milestone.tasks.map(task => (
+                                                            {milestone.tasks.map(task => {
+                                                                const assignee = users?.find(u => u.id === task.assigneeId);
+                                                                return (
                                                                 <div key={task.id} className="flex items-center justify-between gap-2 text-sm p-2 bg-muted/50 rounded-md">
                                                                     <div className="flex items-center gap-2">
                                                                         {taskStatusIcon(task.status)}
@@ -200,14 +251,25 @@ export default function ProjectDetailsPage() {
                                                                     </div>
                                                                     <div className='flex items-center gap-2 text-muted-foreground'>
                                                                         <Badge variant={taskStatusVariant(task.status)}>{task.status}</Badge>
-                                                                        {task.assigneeName ? (
-                                                                            <span className='flex items-center gap-1'><UserCircle className='h-4 w-4' />{task.assigneeName}</span>
+                                                                        {assignee ? (
+                                                                            <div className='flex items-center gap-1.5'>
+                                                                                <Avatar className="h-5 w-5">
+                                                                                    <AvatarImage src={assignee.photoURL} alt={assignee.name} />
+                                                                                    <AvatarFallback className="text-xs">{assignee.name?.[0]}</AvatarFallback>
+                                                                                </Avatar>
+                                                                                <span className='text-xs'>{assignee.name}</span>
+                                                                            </div>
                                                                         ) : (
-                                                                            <span className='italic'>Unassigned</span>
+                                                                            <span className='italic text-xs'>Unassigned</span>
+                                                                        )}
+                                                                        {canEdit && (
+                                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task, milestone.id)}>
+                                                                                <Pencil className="h-3 w-3" />
+                                                                            </Button>
                                                                         )}
                                                                     </div>
                                                                 </div>
-                                                            ))}
+                                                            )})}
                                                         </div>
                                                     ) : (
                                                         <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
@@ -236,6 +298,22 @@ export default function ProjectDetailsPage() {
                     </Card>
                 </main>
             </div>
+            
+            <Dialog open={isTaskFormOpen} onOpenChange={setIsTaskFormOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Task: {selectedTask?.task.name}</DialogTitle>
+                    </DialogHeader>
+                    {selectedTask && (
+                        <TaskForm
+                            task={selectedTask.task}
+                            milestoneId={selectedTask.milestoneId}
+                            onSave={handleSaveTask}
+                            onCancel={() => setIsTaskFormOpen(false)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
