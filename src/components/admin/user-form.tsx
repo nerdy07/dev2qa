@@ -24,14 +24,15 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import type { User } from '@/lib/types';
+import type { User, Role } from '@/lib/types';
 import { createUser } from '@/app/actions/user-actions';
+import { useCollection } from '@/hooks/use-collection';
 
 
 const formSchemaBase = z.object({
     name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
     email: z.string().email({ message: 'Invalid email address.' }),
-    role: z.enum(['requester', 'qa_tester', 'admin'], { required_error: 'Please select a role.' }),
+    role: z.string({ required_error: 'Please select a role.' }),
     expertise: z.string().optional(),
     baseSalary: z.coerce.number().min(0, 'Salary must be a positive number.').optional(),
     annualLeaveEntitlement: z.coerce.number().min(0, 'Leave must be a positive number.').default(20),
@@ -50,6 +51,7 @@ interface UserFormProps {
 
 export function UserForm({ user, onSuccess }: UserFormProps) {
   const { toast } = useToast();
+  const { data: roles, loading: rolesLoading } = useCollection<Role>('roles');
   const isEditing = !!user;
 
   const formSchema = isEditing ? editFormSchema : createFormSchema;
@@ -194,16 +196,16 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} defaultValue={field.value} disabled={rolesLoading}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="requester">Requester</SelectItem>
-                  <SelectItem value="qa_tester">QA Tester</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {roles?.map(role => (
+                    <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <FormMessage />

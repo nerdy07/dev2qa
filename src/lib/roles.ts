@@ -1,4 +1,5 @@
 
+
 export const ROLES = {
     ADMIN: 'admin',
     QA_TESTER: 'qa_tester',
@@ -15,6 +16,9 @@ export const ALL_PERMISSIONS = {
         READ: 'users:read',
         UPDATE: 'users:update',
         DELETE: 'users:delete',
+    },
+    ROLES: {
+        MANAGE: 'roles:manage',
     },
     TEAMS: {
         CREATE: 'teams:create',
@@ -81,6 +85,7 @@ const ADMIN_PERMISSIONS = [
     ALL_PERMISSIONS.USERS.READ,
     ALL_PERMISSIONS.USERS.UPDATE,
     ALL_PERMISSIONS.USERS.DELETE,
+    ALL_PERMISSIONS.ROLES.MANAGE,
     ALL_PERMISSIONS.TEAMS.CREATE,
     ALL_PERMISSIONS.TEAMS.READ,
     ALL_PERMISSIONS.TEAMS.UPDATE,

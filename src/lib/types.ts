@@ -4,12 +4,18 @@ export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
   email: string;
-  role: 'admin' | 'requester' | 'qa_tester';
+  role: 'admin' | 'requester' | 'qa_tester' | string; // Role can be a custom string now
   photoURL?: string;
   expertise?: string;
   baseSalary?: number;
   annualLeaveEntitlement?: number;
   disabled?: boolean;
+};
+
+export type Role = {
+    id: string;
+    name: string;
+    permissions: string[];
 };
 
 export type Team = {
@@ -22,6 +28,7 @@ export type Task = {
   name: string;
   description?: string;
   docUrl?: string;
+  doc?: File;
   status: 'To Do' | 'In Progress' | 'Done';
   assigneeId?: string;
   assigneeName?: string;
@@ -47,9 +54,9 @@ export type ProjectResource = {
 export type Project = {
   id: string;
   name: string;
-  description?: string;
-  leadId?: string;
-  leadName?: string;
+  description?: string | null;
+  leadId?: string | null;
+  leadName?: string | null;
   status: 'Not Started' | 'In Progress' | 'On Hold' | 'Completed';
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
@@ -145,4 +152,5 @@ export type LeaveRequest = {
   reviewedByName?: string; // Admin name
   daysCount: number;
 };
+
 
