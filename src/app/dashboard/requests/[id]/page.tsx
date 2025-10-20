@@ -29,7 +29,7 @@ import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, whe
 import { db } from '@/lib/firebase';
 import { CertificateRequest, Comment, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useCollection } from '@/hooks/use-collection';
+import { useCollection, useDocument } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { sendRequestApprovedEmail, sendRequestRejectedEmail, sendTestEmail, notifyOnNewComment } from '@/app/requests/actions';
@@ -40,9 +40,7 @@ export default function RequestDetailsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [request, setRequest] = React.useState<CertificateRequest | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const { data: request, loading, error, setData: setRequest } = useDocument<CertificateRequest>('requests', id as string);
   
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [newComment, setNewComment] = React.useState('');
@@ -66,38 +64,12 @@ export default function RequestDetailsPage() {
   );
 
   React.useEffect(() => {
-    if (!id) return;
-    if (!db) {
-        setError("Database not available.");
-        setLoading(false);
-        return;
+    if (request) {
+        setSubmissionRating(request.submissionRating || 0);
+        setQaProcessRating(request.qaProcessRating || 0);
+        setQaProcessFeedback(request.qaProcessFeedback || '');
     }
-
-    const fetchRequest = async () => {
-        try {
-            const docRef = doc(db, 'requests', id as string);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const reqData = { id: docSnap.id, ...docSnap.data() } as CertificateRequest
-                setRequest(reqData);
-                setSubmissionRating(reqData.submissionRating || 0);
-                setQaProcessRating(reqData.qaProcessRating || 0);
-                setQaProcessFeedback(reqData.qaProcessFeedback || '');
-            } else {
-                setError("Request not found.");
-            }
-        } catch (err) {
-            const error = err as Error;
-            console.error(error);
-            setError(error.message);
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    fetchRequest();
-  }, [id]);
+  }, [request]);
 
   const handleApprove = async () => {
     if (!request || !user || !db) return;
@@ -244,11 +216,11 @@ export default function RequestDetailsPage() {
   };
 
   const handleSetSubmissionRating = async (rating: number) => {
-    if (!request || rating === request.submissionRating || !db) return;
+    if (!request || rating === request.submissionRating || !db || !setRequest) return;
     try {
         const requestRef = doc(db, 'requests', request.id);
         await updateDoc(requestRef, { submissionRating: rating });
-        setRequest(prev => prev ? {...prev, submissionRating: rating} : null);
+        setRequest({ ...request, submissionRating: rating });
         toast({
             title: 'Rating Submitted',
             description: 'Thank you for rating the submission quality.',
@@ -261,7 +233,7 @@ export default function RequestDetailsPage() {
   };
 
   const handlePostQAFeedback = async () => {
-    if (!request || !user || !db || qaProcessRating === 0) {
+    if (!request || !user || !db || !setRequest || qaProcessRating === 0) {
         toast({ title: 'Rating Required', description: 'Please select a star rating before submitting.', variant: 'destructive' });
         return;
     }
@@ -272,7 +244,7 @@ export default function RequestDetailsPage() {
             qaProcessRating: qaProcessRating,
             qaProcessFeedback: qaProcessFeedback 
         });
-        setRequest(prev => prev ? {...prev, qaProcessRating, qaProcessFeedback} : null);
+        setRequest({ ...request, qaProcessRating, qaProcessFeedback });
         toast({
             title: 'Feedback Submitted',
             description: 'Thank you for your feedback!',

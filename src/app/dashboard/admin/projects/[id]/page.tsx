@@ -109,7 +109,7 @@ export default function ProjectDetailsPage() {
     };
 
     const handleSaveTask = async (updatedTask: Task, milestoneId: string) => {
-        if (!project || !db) return false;
+        if (!project || !db || !setProject) return false;
 
         const updatedMilestones = project.milestones?.map(m => {
             if (m.id === milestoneId) {
@@ -122,6 +122,9 @@ export default function ProjectDetailsPage() {
         try {
             const projectRef = doc(db, 'projects', project.id);
             await updateDoc(projectRef, { milestones: updatedMilestones });
+
+            // Optimistically update local state
+            setProject({ ...project, milestones: updatedMilestones });
 
             toast({ title: 'Task Updated', description: `Task "${updatedTask.name}" has been saved.`});
             setIsTaskFormOpen(false);

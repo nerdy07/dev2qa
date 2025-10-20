@@ -74,8 +74,8 @@ export default function NewRequestPage() {
   });
 
   const handleSuggestQATester = async () => {
-    const { taskTitle, description, associatedTeam, associatedProject } = form.getValues();
-    if (!taskTitle || !description || !associatedTeam || !associatedProject) {
+    const values = form.getValues();
+    if (!values.taskTitle || !values.description || !values.associatedTeam || !values.associatedProject) {
         toast({
             title: 'Missing Information',
             description: 'Please fill out Title, Team, Project, and Description before getting a suggestion.',
@@ -98,11 +98,15 @@ export default function NewRequestPage() {
 
     const qaTesterList = qaUsers.map(u => ({ name: u.name, expertise: u.expertise }));
 
+    // Get the names for the team and project, not just the IDs
+    const teamName = teams?.find(t => t.id === values.associatedTeam)?.name || values.associatedTeam;
+    const projectName = projects?.find(p => p.id === values.associatedProject)?.name || values.associatedProject;
+
     const result = await getQATesterSuggestion({
-      taskTitle,
-      taskDescription: description,
-      associatedTeam,
-      associatedProject,
+      taskTitle: values.taskTitle,
+      taskDescription: values.description,
+      associatedTeam: teamName,
+      associatedProject: projectName,
       qaTesterList,
     });
 
@@ -125,11 +129,16 @@ export default function NewRequestPage() {
         return;
     }
 
+    const teamName = teams?.find(t => t.id === values.associatedTeam)?.name || '';
+    const projectName = projects?.find(p => p.id === values.associatedProject)?.name || '';
+
     const requestData = {
         ...values,
         requesterId: user.id,
         requesterName: user.name,
         requesterEmail: user.email,
+        associatedTeam: teamName, // Save the name, not the ID
+        associatedProject: projectName, // Save the name, not the ID
         status: 'pending' as const,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -153,8 +162,8 @@ export default function NewRequestPage() {
             qaEmails: qaEmails,
             taskTitle: values.taskTitle,
             requesterName: user.name,
-            associatedProject: values.associatedProject,
-            associatedTeam: values.associatedTeam
+            associatedProject: projectName,
+            associatedTeam: teamName
         });
 
         if (!emailResult.success) {
@@ -232,7 +241,7 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {teams?.map(team => <SelectItem key={team.id} value={team.name}>{team.name}</SelectItem>)}
+                          {teams?.map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -252,7 +261,7 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {projects?.map(project => <SelectItem key={project.id} value={project.name}>{project.name}</SelectItem>)}
+                          {projects?.map(project => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <FormMessage />

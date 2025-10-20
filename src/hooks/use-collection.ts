@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect } from 'react';
 import { db, firebaseInitialized } from '@/lib/firebase';
@@ -76,5 +77,5 @@ export function useDocument<T>(collectionName: string, docId: string) {
       return () => unsubscribe();
     }, [collectionName, docId]);
   
-    return { data, loading, error };
+    return { data, loading, error, setData };
 }

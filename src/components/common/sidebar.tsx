@@ -98,9 +98,11 @@ const NavLinks = () => {
             const filteredItems = section.items.filter(item => {
                 // A bit of custom logic for the dashboard link
                 if (item.href === '/dashboard') {
-                    if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN) || hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) || hasPermission(ALL_PERMISSIONS.DESIGNS.READ_OWN)) {
-                        return true;
-                    }
+                    // Show dashboard if user is an admin, a QA tester, or a requester who can create requests/designs
+                    return hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ) ||
+                           hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) || 
+                           hasPermission(ALL_PERMISSIONS.REQUESTS.CREATE) || 
+                           hasPermission(ALL_PERMISSIONS.DESIGNS.CREATE);
                 }
                 return hasPermission(item.permission)
             });
@@ -124,12 +126,12 @@ const NavLinks = () => {
                            let itemLabel = item.label;
                            // Customize dashboard label based on role
                            if (item.href === '/dashboard') {
-                               if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL) && !hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ)) {
-                                   itemLabel = 'Pending Requests';
-                               } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_OWN)) {
+                               if (hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ)) {
+                                    itemLabel = "Admin Dashboard";
+                               } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL)) {
+                                   itemLabel = 'QA Dashboard';
+                               } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.CREATE)) {
                                    itemLabel = 'My QA Requests';
-                               } else if (hasPermission(ALL_PERMISSIONS.DESIGNS.READ_OWN)) {
-                                   itemLabel = 'My Designs';
                                }
                            }
                             

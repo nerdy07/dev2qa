@@ -70,7 +70,14 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
   });
 
   const roleValue = form.watch('role');
-  const roleName = roles?.find(r => r.id === roleValue)?.name || roleValue;
+  
+  const findRoleId = (roleName?: string) => {
+    if (!roleName) return undefined;
+    return roles?.find(r => r.name === roleName)?.id || roleName;
+  }
+
+  const roleId = findRoleId(roleValue);
+  const roleName = roles?.find(r => r.id === roleId)?.name || roleValue;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
@@ -118,9 +125,6 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
     }
   }
 
-  const findRoleId = (roleName: string) => {
-      return roles?.find(r => r.name === roleName)?.id || roleName;
-  }
 
   return (
     <Form {...form}>
