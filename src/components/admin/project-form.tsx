@@ -120,25 +120,27 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
     
     const submissionValues: Omit<Project, 'id'> = {
         name: values.name,
-        description: values.description,
-        leadId: values.leadId,
-        leadName: selectedUser?.name || '',
+        description: values.description || null,
+        leadId: values.leadId || null,
+        leadName: selectedUser?.name || null,
         status: values.status,
-        startDate: values.dates?.from,
-        endDate: values.dates?.to,
+        startDate: values.dates?.from || null,
+        endDate: values.dates?.to || null,
         milestones: values.milestones?.map(m => ({
             id: m.id || crypto.randomUUID(),
             name: m.name,
-            description: m.description,
+            description: m.description || null,
             status: m.status,
-            startDate: m.dates?.from,
-            endDate: m.dates?.to,
+            startDate: m.dates?.from || null,
+            endDate: m.dates?.to || null,
             tasks: m.tasks?.map(t => ({
                 id: t.id || crypto.randomUUID(),
                 name: t.name,
-                description: t.description,
-                docUrl: t.docUrl,
+                description: t.description || null,
+                docUrl: t.docUrl || null,
                 status: 'To Do',
+                assigneeId: null,
+                assigneeName: null,
             })) || [],
         })) || [],
         resources: values.resources?.map(r => ({
@@ -186,14 +188,13 @@ export function ProjectForm({ project, onSave, onCancel }: ProjectFormProps) {
             render={({ field }) => (
                 <FormItem>
                 <FormLabel>Project Lead</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={usersLoading}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
                     <FormControl>
                     <SelectTrigger>
                         <SelectValue placeholder="Assign a project lead" />
                     </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                        <SelectItem value="no-lead" disabled>Select a user</SelectItem>
                         {users?.map(user => (
                             <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                         ))}
@@ -512,4 +513,3 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
-

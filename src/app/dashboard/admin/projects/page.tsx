@@ -53,7 +53,7 @@ import Link from 'next/link';
 import { Progress } from '@/components/ui/progress';
 
 export default function ProjectsPage() {
-    const { data: projects, loading, error } = useCollection<Project>('projects');
+    const { data: projects, loading, error, setData } = useCollection<Project>('projects');
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [isAlertOpen, setIsAlertOpen] = React.useState(false);
     const [selectedProject, setSelectedProject] = React.useState<Project | undefined>(undefined);
@@ -92,35 +92,50 @@ export default function ProjectsPage() {
     }
   
     const handleSave = async (values: Omit<Project, 'id'>) => {
-      const isEditing = !!selectedProject;
-      try {
-        if (isEditing) {
-            const projectRef = doc(db!, 'projects', selectedProject.id);
-            await updateDoc(projectRef, { ...values });
-            toast({
-                title: 'Project Updated',
-                description: `The project "${values.name}" has been successfully updated.`,
-            });
-        } else {
-            await addDoc(collection(db!, 'projects'), values);
-            toast({
-                title: 'Project Created',
-                description: `The project "${values.name}" has been successfully created.`,
-            });
+        const isEditing = !!selectedProject;
+        try {
+          let docId: string;
+          if (isEditing) {
+              docId = selectedProject.id;
+              const projectRef = doc(db!, 'projects', docId);
+              await updateDoc(projectRef, values);
+              toast({
+                  title: 'Project Updated',
+                  description: `The project "${values.name}" has been successfully updated.`,
+              });
+          } else {
+              const docRef = await addDoc(collection(db!, 'projects'), values);
+              docId = docRef.id;
+              toast({
+                  title: 'Project Created',
+                  description: `The project "${values.name}" has been successfully created.`,
+              });
+          }
+          
+          // Optimistically update the UI to avoid a full refetch
+          const newProjectData: Project = { id: docId, ...values };
+          
+          if (setData && projects) {
+            if (isEditing) {
+              setData(projects.map(p => p.id === docId ? newProjectData : p));
+            } else {
+              setData([...projects, newProjectData]);
+            }
+          }
+
+          handleFormSuccess();
+          return true;
+        } catch (e) {
+          const error = e as Error;
+          console.error("Error saving project: ", error);
+          toast({
+              title: 'Error Saving Project',
+              description: error.message,
+              variant: 'destructive'
+          });
+          return false;
         }
-        handleFormSuccess();
-        return true;
-      } catch (e) {
-        const error = e as Error;
-        console.error("Error saving project: ", error);
-        toast({
-            title: 'Error Saving Project',
-            description: error.message,
-            variant: 'destructive'
-        });
-        return false;
       }
-    }
 
     const handleFormSuccess = () => {
       setIsFormOpen(false);
@@ -139,6 +154,7 @@ export default function ProjectsPage() {
     const calculateProgress = (project: Project): number => {
         const allTasks = project.milestones?.flatMap(m => m.tasks || []);
         if (!allTasks || allTasks.length === 0) {
+            if (project.status === 'Completed') return 100;
             return 0;
         }
         const completedTasks = allTasks.filter(t => t.status === 'Done').length;
