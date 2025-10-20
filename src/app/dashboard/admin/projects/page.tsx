@@ -49,6 +49,7 @@ import { addDoc, collection, deleteDoc, doc, updateDoc, serverTimestamp } from '
 import { db } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 export default function ProjectsPage() {
     const { data: projects, loading, error } = useCollection<Project>('projects');
@@ -171,7 +172,11 @@ export default function ProjectsPage() {
             <TableBody>
                 {projects?.map((project) => (
                   <TableRow key={project.id}>
-                    <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/dashboard/admin/projects/${project.id}`} className="hover:underline">
+                        {project.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>{project.leadName || 'N/A'}</TableCell>
                     <TableCell><Badge variant={statusVariant(project.status)}>{project.status || 'Not Started'}</Badge></TableCell>
                     <TableCell>{project.startDate ? format(project.startDate.toDate(), 'PPP') : 'N/A'}</TableCell>
