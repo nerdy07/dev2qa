@@ -230,22 +230,27 @@ export default function DashboardPage() {
         query(collection(db!, 'requests'), where('status', '==', 'pending'))
     );
 
-    // Data for My Approvals tab
+    // Data for My Approvals tab - Simplified query
     const myApprovalsQuery = React.useMemo(() => {
         if (!user?.id) return null;
         return query(
             collection(db!, 'requests'), 
-            where('qaTesterId', '==', user.id), 
-            where('status', '==', 'approved'),
+            where('qaTesterId', '==', user.id),
             orderBy('updatedAt', 'desc'),
             limit(50)
         );
     }, [user?.id]);
 
-    const { data: myApprovedRequests, loading: approvedLoading, error: approvedError } = useCollection<CertificateRequest>(
+    const { data: myApprovedRequestsData, loading: approvedLoading, error: approvedError } = useCollection<CertificateRequest>(
         'requests',
         myApprovalsQuery
     );
+    
+    const myApprovedRequests = React.useMemo(() => {
+        if (!myApprovedRequestsData) return [];
+        return myApprovedRequestsData.filter(req => req.status === 'approved');
+    }, [myApprovedRequestsData]);
+
 
     // State for filters
     const [searchTerm, setSearchTerm] = React.useState('');
