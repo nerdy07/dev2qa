@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useFieldArray, useForm, useFormContext } from 'react-hook-form';
+import { useFieldArray, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { Project, User, Milestone, Task, ProjectResource } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
-import { CalendarIcon, Trash, PlusCircle, ChevronsUpDown } from 'lucide-react';
+import { CalendarIcon, Trash, PlusCircle, ChevronsUpDown, Sparkles, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -35,6 +35,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import React from 'react';
 import { uploadFile } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
+import { getTaskTimelines } from '@/app/actions';
 
 interface ProjectFormProps {
   project?: Project;
@@ -55,6 +56,8 @@ const taskSchema = z.object({
     description: z.string().optional(),
     docUrl: z.string().url('Must be a valid URL.').optional().or(z.literal('')),
     doc: z.instanceof(File).optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
 });
 
 const milestoneSchema = z.object({
@@ -106,16 +109,19 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
             to: m.endDate ? m.endDate.toDate() : undefined,
           },
           tasks: m.tasks?.map(t => ({
-              ...t,
+              id: t.id,
+              name: t.name,
               description: t.description || '',
               docUrl: t.docUrl || '',
+              startDate: t.startDate ? t.startDate.toDate() : undefined,
+              endDate: t.endDate ? t.endDate.toDate() : undefined,
           })) || [] 
       })) || [],
       resources: project?.resources || [],
     },
   });
 
-  const { fields: milestoneFields, append: appendMilestone, remove: removeMilestone } = useFieldArray({
+  const { fields: milestoneFields, append: appendMilestone, remove: removeMilestone, update: updateMilestone } = useFieldArray({
     control: form.control,
     name: "milestones",
   });
@@ -124,16 +130,63 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
     control: form.control,
     name: "resources",
   });
+  
+  const [isPlanning, setIsPlanning] = React.useState<Record<number, boolean>>({});
+
+  const handleGenerateTimelines = async (milestoneIndex: number) => {
+    const milestone = form.getValues(`milestones.${milestoneIndex}`);
+    if (!milestone.dates?.from || !milestone.dates?.to) {
+        toast({ title: 'Milestone Dates Required', description: 'Please set a start and end date for the milestone first.', variant: 'destructive'});
+        return;
+    }
+    if (!milestone.tasks || milestone.tasks.length === 0) {
+        toast({ title: 'No Tasks', description: 'Please add at least one task to the milestone.', variant: 'destructive'});
+        return;
+    }
+    
+    setIsPlanning(prev => ({...prev, [milestoneIndex]: true}));
+
+    const input = {
+        milestoneStartDate: milestone.dates.from.toISOString(),
+        milestoneEndDate: milestone.dates.to.toISOString(),
+        tasks: milestone.tasks.map(t => ({ id: t.id!, description: t.description || t.name }))
+    };
+
+    const result = await getTaskTimelines(input);
+
+    if (result.success) {
+        const updatedTasks = milestone.tasks.map(originalTask => {
+            const plannedTask = result.data.tasks.find(pt => pt.id === originalTask.id);
+            if (plannedTask) {
+                return {
+                    ...originalTask,
+                    startDate: new Date(plannedTask.startDate),
+                    endDate: new Date(plannedTask.endDate),
+                };
+            }
+            return originalTask;
+        });
+
+        // Use update from useFieldArray to properly trigger re-render
+        updateMilestone(milestoneIndex, { ...milestone, tasks: updatedTasks });
+        
+        toast({ title: 'Timelines Generated', description: 'AI has scheduled the tasks for this milestone.' });
+    } else {
+        toast({ title: 'AI Planning Failed', description: result.error, variant: 'destructive' });
+    }
+
+    setIsPlanning(prev => ({...prev, [milestoneIndex]: false}));
+  };
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const selectedUser = users?.find(u => u.id === values.leadId);
     
-    // Handle file uploads
     for (const milestone of values.milestones || []) {
       for (const task of milestone.tasks || []) {
         if (task.doc) {
           try {
-            const path = `projects/${projectId}/tasks/${task.id}`; // Task ID is now guaranteed
+            const path = `projects/${projectId}/tasks/${task.id}`;
             task.docUrl = await uploadFile(task.doc, path);
           } catch (error) {
             console.error("File upload failed for task:", task.name, error);
@@ -142,7 +195,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                 description: `Could not upload document for task "${task.name}".`,
                 variant: 'destructive',
             })
-            return; // Stop the submission if an upload fails
+            return;
           }
         }
       }
@@ -164,10 +217,12 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
             startDate: m.dates?.from || null,
             endDate: m.dates?.to || null,
             tasks: m.tasks?.map(t => ({
-                id: t.id!, // ID is guaranteed by the form logic now
+                id: t.id!,
                 name: t.name,
                 description: t.description || null,
                 docUrl: t.docUrl || null,
+                startDate: t.startDate || null,
+                endDate: t.endDate || null,
                 status: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.status || 'To Do',
                 assigneeId: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeId || null,
                 assigneeName: project?.milestones?.flatMap(pm => pm.tasks).find(pt => pt.id === t.id)?.assigneeName || null,
@@ -439,17 +494,22 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                                 />
                         </div>
                         
-                        {/* Nested Task Field Array */}
                         <div className="pl-4 border-l-2 ml-2 space-y-3">
-                            <h4 className="text-md font-medium">Tasks</h4>
-                            <NestedTaskArray milestoneIndex={index} />
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-md font-medium">Tasks</h4>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => handleGenerateTimelines(index)} disabled={isPlanning[index]}>
+                                    {isPlanning[index] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                    Generate Task Timelines
+                                </Button>
+                            </div>
+                            <NestedTaskArray milestoneIndex={index} control={form.control} />
                         </div>
                     </div>
                 ))}
                 <Button
                     type="button"
                     variant="outline"
-                    onClick={() => appendMilestone({ name: '', description: '', status: 'Pending', tasks: [] })}
+                    onClick={() => appendMilestone({ id: crypto.randomUUID(), name: '', description: '', status: 'Pending', tasks: [] })}
                 >
                     Add Milestone
                 </Button>
@@ -469,18 +529,23 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
   );
 }
 
-// Helper component for nested task array
-function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
-    const { control, register } = useFormContext();
+function NestedTaskArray({ milestoneIndex, control }: { milestoneIndex: number, control: any }) {
     const { fields, append, remove } = useFieldArray({
       control,
       name: `milestones.${milestoneIndex}.tasks`,
     });
+
+    const taskDates = useWatch({
+      control,
+      name: `milestones.${milestoneIndex}.tasks`
+    });
   
     return (
       <div className='space-y-3'>
-        {fields.map((field, taskIndex) => (
-          <div key={field.id} className="p-3 border rounded-md bg-background/50 relative">
+        {fields.map((field, taskIndex) => {
+            const currentTask = taskDates?.[taskIndex];
+          return (
+            <div key={field.id} className="p-3 border rounded-md bg-background/50 relative">
              <Collapsible>
                 <div className="flex items-center gap-2">
                     <CollapsibleTrigger asChild>
@@ -504,18 +569,62 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                         <Trash className="h-4 w-4" />
                     </Button>
                 </div>
-                <CollapsibleContent className="space-y-3 pt-4">
+                <CollapsibleContent className="space-y-4 pt-4">
                     <FormField
-                    control={control}
-                    name={`milestones.${milestoneIndex}.tasks.${taskIndex}.description`}
-                    render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-xs">Task Description</FormLabel>
-                            <FormControl><Textarea placeholder="Describe what this task entails..." {...field} value={field.value ?? ''} /></FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
+                        control={control}
+                        name={`milestones.${milestoneIndex}.tasks.${taskIndex}.description`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-xs">Task Description</FormLabel>
+                                <FormControl><Textarea placeholder="Describe what this task entails..." {...field} value={field.value ?? ''} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
                     />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField
+                            control={control}
+                            name={`milestones.${milestoneIndex}.tasks.${taskIndex}.startDate`}
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel className="text-xs">Start Date</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild><FormControl>
+                                    <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                    </FormControl></PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={control}
+                            name={`milestones.${milestoneIndex}.tasks.${taskIndex}.endDate`}
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel className="text-xs">End Date</FormLabel>
+                                <Popover>
+                                    <PopoverTrigger asChild><FormControl>
+                                    <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                    </FormControl></PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={{ before: currentTask?.startDate }} initialFocus />
+                                    </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
                     <FormField
                       control={control}
                       name={`milestones.${milestoneIndex}.tasks.${taskIndex}.doc`}
@@ -536,7 +645,7 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
                 </CollapsibleContent>
              </Collapsible>
           </div>
-        ))}
+        )})}
         <Button
           type="button"
           variant="secondary"
@@ -549,5 +658,3 @@ function NestedTaskArray({ milestoneIndex }: { milestoneIndex: number }) {
       </div>
     );
   }
-
-    

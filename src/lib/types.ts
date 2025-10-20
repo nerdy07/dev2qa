@@ -33,6 +33,8 @@ export type Task = {
   assigneeId?: string;
   assigneeName?: string;
   certificateRequestId?: string;
+  startDate?: any; // Firestore Timestamp
+  endDate?: any; // Firestore Timestamp
 };
 
 export type Milestone = {
