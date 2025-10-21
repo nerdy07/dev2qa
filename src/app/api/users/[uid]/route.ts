@@ -1,24 +1,12 @@
+
 import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 
-// Initialize Firebase Admin
-async function initAdmin() {
-    try {
-        await initializeAdminApp();
-    } catch (e) {
-        // This can happen with Next.js hot-reloading. If the app is already initialized, it's fine.
-        if (!/already exists/i.test((e as Error).message)) {
-            console.error('Firebase admin initialization error', e);
-        }
-    }
-}
-
-initAdmin();
-
 // PATCH /api/users/[uid] - Update user details or activation status
 export async function PATCH(request: Request, { params }: { params: { uid: string } }) {
+  await initializeAdminApp();
   const { uid } = params;
   const body = await request.json();
 
@@ -81,6 +69,7 @@ export async function PATCH(request: Request, { params }: { params: { uid: strin
 
 // DELETE /api/users/[uid] - Delete a user
 export async function DELETE(request: Request, { params }: { params: { uid: string } }) {
+  await initializeAdminApp();
   const { uid } = params;
   
   if (!uid) {
