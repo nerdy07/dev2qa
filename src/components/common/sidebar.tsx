@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   DollarSign,
   FilePlus2,
+  FileText,
   FolderKanban,
   LayoutDashboard,
   Paintbrush,
@@ -56,32 +57,38 @@ const navConfig: NavItemOrSeparator[] = [
     {
         label: "My Work",
         items: [
-            { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New QA Request', permission: ALL_PERMISSIONS.REQUESTS.CREATE },
-            { href: '/dashboard/designs/new', icon: Paintbrush, label: 'New Design Request', permission: ALL_PERMISSIONS.DESIGNS.CREATE },
+            { href: '/dashboard/requests/new', icon: FilePlus2, label: 'New Request', permission: ALL_PERMISSIONS.REQUESTS.CREATE },
+            { href: '/dashboard/designs/new', icon: Paintbrush, label: 'New Design', permission: ALL_PERMISSIONS.DESIGNS.CREATE },
             { href: '/dashboard/my-records', icon: BookUser, label: 'My Records', permission: ALL_PERMISSIONS.RECORDS.READ_OWN },
             { href: '/dashboard/leave', icon: CalendarCheck, label: 'My Leave', permission: ALL_PERMISSIONS.LEAVE.REQUEST },
         ]
     },
     { type: 'separator' },
     {
-        label: "Admin",
+        label: "Management",
         items: [
-            { href: '/dashboard/admin/users', icon: Users, label: 'User Management', permission: ALL_PERMISSIONS.USERS.READ },
-            { href: '/dashboard/admin/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
+            { href: '/dashboard/admin/users', icon: Users, label: 'Users', permission: ALL_PERMISSIONS.USERS.READ },
+            { href: '/dashboard/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
             { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects', permission: ALL_PERMISSIONS.PROJECTS.READ },
-            { href: '/dashboard/admin/design-approvals', icon: ShieldCheck, label: 'Design Approvals', permission: ALL_PERMISSIONS.DESIGNS.APPROVE },
-            { href: '/dashboard/admin/project-insights', icon: BarChart, label: 'Project Insights', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
-            { href: '/dashboard/admin/diagnostics', icon: Stethoscope, label: 'AI Diagnostics', permission: ALL_PERMISSIONS.PROJECT_DIAGNOSTICS.RUN },
+            { href: '/dashboard/analytics', icon: BarChart, label: 'Analytics', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
         ]
     },
     { type: 'separator' },
     {
-        label: "HR",
+        label: "HR & Admin",
         items: [
             { href: '/dashboard/admin/infractions', icon: ShieldX, label: 'Infractions', permission: ALL_PERMISSIONS.INFRACTIONS.MANAGE },
             { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses', permission: ALL_PERMISSIONS.BONUSES.MANAGE },
             { href: '/dashboard/admin/payroll', icon: DollarSign, label: 'Payroll', permission: ALL_PERMISSIONS.PAYROLL.READ },
             { href: '/dashboard/admin/leave', icon: CalendarCheck, label: 'Leave Management', permission: ALL_PERMISSIONS.LEAVE_MANAGEMENT.MANAGE },
+        ]
+    },
+    { type: 'separator' },
+    {
+        label: "Quality & Design",
+        items: [
+            { href: '/dashboard/admin/design-approvals', icon: ShieldCheck, label: 'Design Approvals', permission: ALL_PERMISSIONS.DESIGNS.APPROVE },
+            { href: '/dashboard/admin/diagnostics', icon: Stethoscope, label: 'AI Diagnostics', permission: ALL_PERMISSIONS.PROJECT_DIAGNOSTICS.RUN },
         ]
     }
 ];
@@ -132,6 +139,16 @@ const NavLinks = () => {
                                    itemLabel = 'QA Dashboard';
                                } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.CREATE)) {
                                    itemLabel = 'My QA Requests';
+                               } else if (hasPermission(ALL_PERMISSIONS.PROJECTS.READ)) {
+                                   itemLabel = 'Developer Dashboard';
+                               } else if (hasPermission(ALL_PERMISSIONS.TEAMS.READ)) {
+                                   itemLabel = 'Manager Dashboard';
+                               } else if (hasPermission(ALL_PERMISSIONS.USERS.READ)) {
+                                   itemLabel = 'HR Dashboard';
+                               } else if (hasPermission(ALL_PERMISSIONS.PROJECTS.CREATE)) {
+                                   itemLabel = 'Project Manager Dashboard';
+                               } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE)) {
+                                   itemLabel = 'Senior QA Dashboard';
                                }
                            }
                             

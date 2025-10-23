@@ -11,6 +11,7 @@ export type User = {
   baseSalary?: number;
   annualLeaveEntitlement?: number;
   disabled?: boolean;
+  teamId?: string; // Reference to team
 };
 
 export type Role = {
@@ -21,7 +22,13 @@ export type Role = {
 
 export type Team = {
   id: string;
-  name:string;
+  name: string;
+  description?: string;
+  department?: string;
+  teamLeadId?: string;
+  status?: 'active' | 'inactive' | 'archived';
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Task = {

@@ -342,6 +342,290 @@ export default function DashboardPage() {
     )
   };
 
+  const DeveloperDashboard = () => {
+    const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+    const { data: myRequests, loading: requestsLoading } = useCollection<CertificateRequest>(
+      'requests',
+      query(collection(db!, 'requests'), where('requesterId', '==', user?.id))
+    );
+
+    return (
+      <>
+        <PageHeader 
+          title="Developer Dashboard" 
+          description="Manage your projects and development tasks."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Active Projects"
+            value={projects?.length || 0}
+            icon={FolderKanban}
+            description="Projects you're working on"
+          />
+          <StatCard
+            title="My Requests"
+            value={myRequests?.length || 0}
+            icon={FileText}
+            description="Certificate requests submitted"
+          />
+          <StatCard
+            title="Approved"
+            value={myRequests?.filter(r => r.status === 'approved').length || 0}
+            icon={CheckCircle}
+            description="Successfully approved requests"
+          />
+          <StatCard
+            title="Pending"
+            value={myRequests?.filter(r => r.status === 'pending').length || 0}
+            icon={Clock}
+            description="Requests awaiting review"
+          />
+        </div>
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>My Recent Requests</CardTitle>
+              <CardDescription>Your latest certificate requests and their status.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CertificateRequestsTable requests={myRequests || []} isLoading={requestsLoading} />
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  };
+
+  const ManagerDashboard = () => {
+    const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
+    const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+    const { data: requests, loading: requestsLoading } = useCollection<CertificateRequest>('requests');
+
+    return (
+      <>
+        <PageHeader 
+          title="Manager Dashboard" 
+          description="Oversee team performance and project progress."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Teams"
+            value={teams?.length || 0}
+            icon={Users}
+            description="Teams under management"
+          />
+          <StatCard
+            title="Projects"
+            value={projects?.length || 0}
+            icon={FolderKanban}
+            description="Active projects"
+          />
+          <StatCard
+            title="Total Requests"
+            value={requests?.length || 0}
+            icon={FileText}
+            description="All certificate requests"
+          />
+          <StatCard
+            title="Approval Rate"
+            value={`${Math.round(((requests?.filter(r => r.status === 'approved').length || 0) / (requests?.length || 1)) * 100)}%`}
+            icon={Percent}
+            description="Request approval rate"
+          />
+        </div>
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Performance Overview</CardTitle>
+              <CardDescription>Monitor team productivity and project status.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CertificateRequestsTable requests={requests || []} isLoading={requestsLoading} />
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  };
+
+  const HRAdminDashboard = () => {
+    const { data: users, loading: usersLoading } = useCollection<User>('users');
+    const { data: requests, loading: requestsLoading } = useCollection<CertificateRequest>('requests');
+
+    return (
+      <>
+        <PageHeader 
+          title="HR Admin Dashboard" 
+          description="Manage personnel, payroll, and HR operations."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Total Employees"
+            value={users?.length || 0}
+            icon={Users}
+            description="Active team members"
+          />
+          <StatCard
+            title="Active Requests"
+            value={requests?.filter(r => r.status === 'pending').length || 0}
+            icon={Clock}
+            description="Pending certificate requests"
+          />
+          <StatCard
+            title="Approved This Month"
+            value={requests?.filter(r => r.status === 'approved').length || 0}
+            icon={CheckCircle}
+            description="Successfully approved requests"
+          />
+          <StatCard
+            title="Team Productivity"
+            value="85%"
+            icon={Percent}
+            description="Overall team performance"
+          />
+        </div>
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>HR Operations Overview</CardTitle>
+              <CardDescription>Monitor employee performance and HR metrics.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CertificateRequestsTable requests={requests || []} isLoading={requestsLoading} />
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  };
+
+  const ProjectManagerDashboard = () => {
+    const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+    const { data: requests, loading: requestsLoading } = useCollection<CertificateRequest>('requests');
+
+    return (
+      <>
+        <PageHeader 
+          title="Project Manager Dashboard" 
+          description="Track project progress and resource allocation."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Active Projects"
+            value={projects?.length || 0}
+            icon={FolderKanban}
+            description="Projects in progress"
+          />
+          <StatCard
+            title="Project Requests"
+            value={requests?.length || 0}
+            icon={FileText}
+            description="Certificate requests"
+          />
+          <StatCard
+            title="Completion Rate"
+            value="78%"
+            icon={Percent}
+            description="Project completion rate"
+          />
+          <StatCard
+            title="Resource Utilization"
+            value="92%"
+            icon={Users}
+            description="Team resource usage"
+          />
+        </div>
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Status Overview</CardTitle>
+              <CardDescription>Monitor project progress and team performance.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CertificateRequestsTable requests={requests || []} isLoading={requestsLoading} />
+            </CardContent>
+          </Card>
+        </div>
+      </>
+    );
+  };
+
+  const SeniorQADashboard = () => {
+    const { data: pendingRequests, loading: pendingLoading } = useCollection<CertificateRequest>(
+      'requests',
+      query(collection(db!, 'requests'), where('status', '==', 'pending'))
+    );
+    const { data: approvedRequests, loading: approvedLoading } = useCollection<CertificateRequest>(
+      'requests',
+      query(collection(db!, 'requests'), where('status', '==', 'approved'))
+    );
+
+    return (
+      <>
+        <PageHeader 
+          title="Senior QA Dashboard" 
+          description="Advanced QA oversight and mentoring tools."
+        />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            title="Pending Reviews"
+            value={pendingRequests?.length || 0}
+            icon={Clock}
+            description="Requests awaiting QA review"
+          />
+          <StatCard
+            title="Approved This Month"
+            value={approvedRequests?.length || 0}
+            icon={CheckCircle}
+            description="Successfully approved requests"
+          />
+          <StatCard
+            title="QA Team Size"
+            value="8"
+            icon={Users}
+            description="QA team members"
+          />
+          <StatCard
+            title="Quality Score"
+            value="94%"
+            icon={Percent}
+            description="Overall quality rating"
+          />
+        </div>
+        <div className="mt-8">
+          <Tabs defaultValue="pending" className="w-full">
+            <TabsList>
+              <TabsTrigger value="pending">Pending Reviews</TabsTrigger>
+              <TabsTrigger value="approved">Approved Certificates</TabsTrigger>
+            </TabsList>
+            <TabsContent value="pending" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pending QA Reviews</CardTitle>
+                  <CardDescription>Certificate requests awaiting your review and approval.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CertificateRequestsTable requests={pendingRequests || []} isLoading={pendingLoading} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="approved" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Approved Certificates</CardTitle>
+                  <CardDescription>Your approved certificate requests and quality metrics.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CertificateRequestsTable requests={approvedRequests || []} isLoading={approvedLoading} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </>
+    );
+  };
+
   const renderDashboard = () => {
     switch (user?.role) {
       case 'admin':
@@ -350,6 +634,16 @@ export default function DashboardPage() {
         return <RequesterDashboard />;
       case 'qa_tester':
         return <QATesterDashboard />;
+      case 'developer':
+        return <DeveloperDashboard />;
+      case 'manager':
+        return <ManagerDashboard />;
+      case 'hr_admin':
+        return <HRAdminDashboard />;
+      case 'project_manager':
+        return <ProjectManagerDashboard />;
+      case 'senior_qa':
+        return <SeniorQADashboard />;
       default:
         // This handles the case where user is null during the initial load
         return <DashboardLoading />;

@@ -55,6 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { createUser } from '@/app/actions/user-actions';
+import { ProtectedRoute } from '@/components/common/protected-route';
 
 
 type ActionType = 'delete' | 'deactivate' | 'activate';
@@ -519,7 +520,10 @@ function RolesTable() {
 
 export default function UsersPage() {
     return (
-        <>
+        <ProtectedRoute 
+            permission={ALL_PERMISSIONS.USERS.READ}
+            roles={['admin', 'hr_admin']}
+        >
             <PageHeader
                 title="User Management"
                 description="Manage user accounts, roles, and permissions."
@@ -536,6 +540,6 @@ export default function UsersPage() {
                     <RolesTable />
                 </TabsContent>
             </Tabs>
-        </>
+        </ProtectedRoute>
     )
 }
