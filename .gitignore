@@ -57,3 +57,7 @@ pnpm-debug.log*
 # Firebase
 /.firebase/
 firebase-debug.log
+
+# Environment files
+.env
+
