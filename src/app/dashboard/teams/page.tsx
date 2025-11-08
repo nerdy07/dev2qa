@@ -42,6 +42,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Team, User } from '@/lib/types';
 import { TeamForm } from '@/components/admin/team-form';
 import { TeamDetails } from '@/components/admin/team-details';
+import { TeamMembersDialog } from '@/components/admin/team-members-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +54,8 @@ import { ALL_PERMISSIONS } from '@/lib/roles';
 import { ProtectedRoute } from '@/components/common/protected-route';
 import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 type ActionType = 'delete' | 'edit' | 'view';
 
@@ -63,10 +66,25 @@ function TeamsTable() {
   const { hasPermission } = usePermissions();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = React.useState(false);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedTeam, setSelectedTeam] = React.useState<Team | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
   const { toast } = useToast();
+
+  // Pagination
+  const {
+    currentPage,
+    totalPages,
+    currentData: paginatedTeams,
+    itemsPerPage,
+    setCurrentPage,
+    setItemsPerPage,
+  } = usePagination({
+    data: teams || [],
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
 
   const handleDelete = async (team: Team) => {
     try {
@@ -97,6 +115,11 @@ function TeamsTable() {
     } else if (action === 'view') {
       setIsDetailsOpen(true);
     }
+  };
+
+  const handleManageMembers = (team: Team) => {
+    setSelectedTeam(team);
+    setIsMembersDialogOpen(true);
   };
 
   const getTeamMembers = (teamId: string) => {
@@ -178,109 +201,129 @@ function TeamsTable() {
         </CardHeader>
         <CardContent>
           {teams && teams.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Team Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Team Lead</TableHead>
-                  <TableHead>Members</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {teams.map((team) => {
-                  const members = getTeamMembers(team.id);
-                  const teamLead = getTeamLead(team.id);
-                  
-                  return (
-                    <TableRow key={team.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center space-x-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Users className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <div className="font-medium">{team.name}</div>
-                            <div className="text-sm text-muted-foreground">
-                              {team.department || 'No department'}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[200px] truncate">
-                          {team.description || 'No description'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {teamLead ? (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Team Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Team Lead</TableHead>
+                    <TableHead>Members</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedTeams.map((team) => {
+                    const members = getTeamMembers(team.id);
+                    const teamLead = getTeamLead(team.id);
+                    
+                    return (
+                      <TableRow key={team.id}>
+                        <TableCell className="font-medium">
                           <div className="flex items-center space-x-2">
-                            <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-xs font-medium">
-                                {teamLead.name?.charAt(0) || 'U'}
-                              </span>
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Users className="h-4 w-4 text-primary" />
                             </div>
-                            <span className="text-sm">{teamLead.name}</span>
+                            <div>
+                              <div className="font-medium">{team.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {team.department || 'No department'}
+                              </div>
+                            </div>
                           </div>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">No team lead</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1">
-                          <Badge variant="secondary">
-                            {members.length} member{members.length !== 1 ? 's' : ''}
+                        </TableCell>
+                        <TableCell>
+                          <div className="max-w-[200px] truncate">
+                            {team.description || 'No description'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {teamLead ? (
+                            <div className="flex items-center space-x-2">
+                              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-xs font-medium">
+                                  {teamLead.name?.charAt(0) || 'U'}
+                                </span>
+                              </div>
+                              <span className="text-sm">{teamLead.name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">No team lead</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Badge variant="secondary">
+                              {members.length} member{members.length !== 1 ? 's' : ''}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={team.status === 'active' ? 'default' : 'secondary'}
+                          >
+                            {team.status || 'active'}
                           </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={team.status === 'active' ? 'default' : 'secondary'}
-                        >
-                          {team.status || 'active'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={() => handleAction(team, 'view')}
-                            >
-                              View Details
-                            </DropdownMenuItem>
-                            {hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) && (
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuItem
-                                onClick={() => handleAction(team, 'edit')}
+                                onClick={() => handleAction(team, 'view')}
                               >
-                                Edit Team
+                                View Details
                               </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            {hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) && (
-                              <DropdownMenuItem
-                                onClick={() => handleAction(team, 'delete')}
-                                className="text-destructive"
-                              >
-                                Delete Team
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                              {hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(team, 'edit')}
+                                >
+                                  Edit Team
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleManageMembers(team)}
+                                >
+                                  <Users className="mr-2 h-4 w-4" />
+                                  Manage Members
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              {hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) && (
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(team, 'delete')}
+                                  className="text-destructive"
+                                >
+                                  Delete Team
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="p-4 border-t">
+                <PaginationWrapper
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={teams.length}
+                  itemsPerPage={itemsPerPage}
+                  onPageChange={setCurrentPage}
+                  onItemsPerPageChange={setItemsPerPage}
+                />
+              </div>
+            </>
           ) : (
             <div className="text-center py-8">
               <Users className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -327,6 +370,18 @@ function TeamsTable() {
         </DialogContent>
       </Dialog>
 
+      {/* Team Members Dialog */}
+      {selectedTeam && (
+        <TeamMembersDialog
+          team={selectedTeam}
+          open={isMembersDialogOpen}
+          onOpenChange={(open) => {
+            setIsMembersDialogOpen(open);
+            if (!open) setSelectedTeam(undefined);
+          }}
+        />
+      )}
+
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -361,7 +416,6 @@ export default function TeamsPage() {
   return (
     <ProtectedRoute 
       permission={ALL_PERMISSIONS.TEAMS.READ}
-      roles={['admin', 'manager', 'hr_admin']}
     >
       <PageHeader
         title="Team Management"

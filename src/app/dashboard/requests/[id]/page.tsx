@@ -3,13 +3,15 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/common/page-header';
+import { BackButton } from '@/components/common/back-button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNowStrict } from 'date-fns';
 import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
+import { ALL_PERMISSIONS } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2, Mail, Loader2 } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2, RefreshCw } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -25,32 +27,38 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, addDoc, collection, serverTimestamp, query, where, orderBy, getDocs, deleteField, runTransaction } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { CertificateRequest, Comment, User } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDocument } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { sendRequestApprovedEmail, sendRequestRejectedEmail, sendTestEmail, notifyOnNewComment } from '@/app/requests/actions';
+import { sendRequestApprovedEmail, sendRequestRejectedEmail, notifyOnNewComment, notifyOnNewRequest } from '@/app/requests/actions';
+import { createInAppNotification } from '@/lib/notifications';
+import { formatFriendlyId } from '@/lib/id-generator';
+import { uploadFile } from '@/lib/storage';
+import { Image as ImageIcon, X } from 'lucide-react';
 
 export default function RequestDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const { toast } = useToast();
   
   const { data: request, loading, error, setData: setRequest } = useDocument<CertificateRequest>('requests', id as string);
   
   const [rejectionReason, setRejectionReason] = React.useState('');
   const [newComment, setNewComment] = React.useState('');
+  const [commentImage, setCommentImage] = React.useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = React.useState<string | null>(null);
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
 
   const [submissionRating, setSubmissionRating] = React.useState(0);
   const [qaProcessRating, setQaProcessRating] = React.useState(0);
   const [qaProcessFeedback, setQaProcessFeedback] = React.useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
-  const [isSendingTest, setIsSendingTest] = React.useState(false);
+  const [isResubmitting, setIsResubmitting] = React.useState(false);
 
 
   const commentsQuery = React.useMemo(() => {
@@ -75,37 +83,84 @@ export default function RequestDetailsPage() {
     if (!request || !user || !db) return;
 
     try {
-        const certCollection = collection(db, 'certificates');
-        const certDocRef = await addDoc(certCollection, {
-            requestId: request.id,
-            taskTitle: request.taskTitle,
-            associatedTeam: request.associatedTeam,
-            associatedProject: request.associatedProject,
-            requesterName: request.requesterName,
-            qaTesterName: user.name,
-            approvalDate: serverTimestamp(),
-            status: 'valid',
+        // Generate friendly ID for certificate before transaction
+        const { generateShortId } = await import('@/lib/id-generator');
+        const certShortId = generateShortId('certificate');
+        
+        // Use transaction to prevent race conditions
+        let certificateId: string;
+        await runTransaction(db, async (transaction) => {
+            const requestRef = doc(db, 'requests', request.id);
+            const requestSnap = await transaction.get(requestRef);
+            
+            if (!requestSnap.exists()) {
+                throw new Error('Request not found');
+            }
+            
+            const requestData = requestSnap.data();
+            
+            // Check if request is still pending (prevent race condition)
+            if (requestData.status !== 'pending') {
+                throw new Error(`Request has already been ${requestData.status}`);
+            }
+            
+            // Create certificate document
+            const certCollection = collection(db, 'certificates');
+            const certDocRef = doc(certCollection);
+            certificateId = certDocRef.id;
+            
+            transaction.set(certDocRef, {
+                requestId: request.id,
+                requestShortId: requestData.shortId || formatFriendlyId(request.id, 'request'),
+                taskTitle: requestData.taskTitle,
+                associatedTeam: requestData.associatedTeam,
+                associatedProject: requestData.associatedProject,
+                requesterName: requestData.requesterName,
+                qaTesterName: user.name,
+                shortId: certShortId,
+                approvalDate: serverTimestamp(),
+                status: 'valid',
+            });
+            
+            // Update request status atomically
+            transaction.update(requestRef, {
+                status: 'approved',
+                qaTesterId: user.id,
+                qaTesterName: user.name,
+                updatedAt: serverTimestamp(),
+                certificateId: certificateId,
+                certificateStatus: 'valid',
+            });
         });
 
-        const requestRef = doc(db, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'approved',
-            qaTesterId: user.id,
-            qaTesterName: user.name,
-            updatedAt: serverTimestamp(),
-            certificateId: certDocRef.id,
-            certificateStatus: 'valid',
+        // Create in-app notification for requester
+        await createInAppNotification({
+            userId: request.requesterId,
+            type: 'general',
+            title: 'Request Approved',
+            message: `Your certificate request for "${request.taskTitle}" has been approved. Certificate ${certShortId} has been generated.`,
+            read: false,
+            data: {
+                requestId: request.id,
+                certificateId: certificateId!,
+            },
         });
 
+        // Send email notification after successful transaction
         const emailResult = await sendRequestApprovedEmail({
             recipientEmail: request.requesterEmail,
             requesterName: request.requesterName,
             taskTitle: request.taskTitle,
+            requestId: request.id,
+            requestShortId: request.shortId,
+            certificateId: certificateId!,
+            certificateShortId: certShortId,
         });
 
+        const displayCertId = certShortId;
         toast({
             title: 'Request Approved',
-            description: `Certificate for "${request.taskTitle}" has been generated.`,
+            description: `Certificate ${displayCertId} for "${request.taskTitle}" has been generated.`,
         });
         if (!emailResult.success) {
             toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
@@ -115,7 +170,11 @@ export default function RequestDetailsPage() {
     } catch (e) {
         const error = e as Error;
         console.error("Error approving request: ", error);
-        toast({ title: 'Approval Failed', variant: 'destructive', description: error.message });
+        toast({ 
+            title: 'Approval Failed', 
+            variant: 'destructive', 
+            description: error.message || 'Failed to approve request. It may have already been processed by another user.' 
+        });
     }
   }
   
@@ -132,21 +191,53 @@ export default function RequestDetailsPage() {
     }
 
     try {
-        const requestRef = doc(db, 'requests', request.id);
-        await updateDoc(requestRef, {
-            status: 'rejected',
-            rejectionReason: rejectionReason,
-            qaTesterId: user.id,
-            qaTesterName: user.name,
-            updatedAt: serverTimestamp(),
+        // Use transaction to prevent race conditions
+        await runTransaction(db, async (transaction) => {
+            const requestRef = doc(db, 'requests', request.id);
+            const requestSnap = await transaction.get(requestRef);
+            
+            if (!requestSnap.exists()) {
+                throw new Error('Request not found');
+            }
+            
+            const requestData = requestSnap.data();
+            
+            // Check if request is still pending (prevent race condition)
+            if (requestData.status !== 'pending') {
+                throw new Error(`Request has already been ${requestData.status}`);
+            }
+            
+            // Update request status atomically
+            transaction.update(requestRef, {
+                status: 'rejected',
+                rejectionReason: rejectionReason,
+                qaTesterId: user.id,
+                qaTesterName: user.name,
+                updatedAt: serverTimestamp(),
+            });
         });
 
+        // Create in-app notification for requester
+        await createInAppNotification({
+            userId: request.requesterId,
+            type: 'general',
+            title: 'Request Rejected',
+            message: `Your certificate request for "${request.taskTitle}" has been rejected. Reason: ${rejectionReason}`,
+            read: false,
+            data: {
+                requestId: request.id,
+            },
+        });
+
+        // Send email notification after successful transaction
         const emailResult = await sendRequestRejectedEmail({
             recipientEmail: request.requesterEmail,
             requesterName: request.requesterName,
             taskTitle: request.taskTitle,
             reason: rejectionReason,
             rejectorName: user.name,
+            requestId: request.id,
+            requestShortId: request.shortId,
         });
         
         toast({
@@ -161,16 +252,71 @@ export default function RequestDetailsPage() {
     } catch (e) {
         const error = e as Error;
         console.error("Error rejecting request: ", error);
-        toast({ title: 'Rejection Failed', variant: 'destructive', description: error.message });
+        toast({ 
+            title: 'Rejection Failed', 
+            variant: 'destructive', 
+            description: error.message || 'Failed to reject request. It may have already been processed by another user.' 
+        });
     }
   }
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: 'Invalid File',
+          description: 'Please upload an image file.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: 'File Too Large',
+          description: 'Image must be less than 5MB.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      setCommentImage(file);
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCommentImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setCommentImage(null);
+    setCommentImagePreview(null);
+  };
+
   const handlePostComment = async () => {
-    if (!newComment.trim() || !user || !request || !db) return;
+    if (!newComment.trim() || !user || !request || !db) {
+      toast({
+        title: 'Comment Required',
+        description: 'Please enter a comment before posting.',
+        variant: 'destructive'
+      });
+      return;
+    }
 
     setIsSubmittingComment(true);
     try {
-        const commentData = {
+        let imageUrl: string | undefined;
+        
+        // Upload image if provided
+        if (commentImage) {
+          const imagePath = `comments/${request.id}/${Date.now()}_${commentImage.name}`;
+          imageUrl = await uploadFile(commentImage, imagePath);
+        }
+
+        const commentData: any = {
             requestId: request.id,
             userId: user.id,
             userName: user.name,
@@ -178,30 +324,74 @@ export default function RequestDetailsPage() {
             text: newComment,
             createdAt: serverTimestamp(),
         };
+        
+        // Only add imageUrl if it exists (Firestore doesn't accept undefined)
+        if (imageUrl) {
+            commentData.imageUrl = imageUrl;
+        }
+        
         await addDoc(collection(db, 'comments'), commentData);
 
+        // Determine who should be notified based on who commented
+        // If requester commented, notify the QA tester (if assigned)
+        // If QA/PM commented, notify the requester
         let recipientEmail: string | undefined;
 
-        if (user.role === 'requester' && request.qaTesterId) {
+        // Check if current user is the requester (permission-based check)
+        const isRequester = user.id === request.requesterId;
+        
+        // Check if current user has permission to approve requests (QA/PM)
+        const canApproveRequests = hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE);
+
+        if (isRequester && request.qaTesterId) {
+            // Requester commented - notify the assigned QA tester
             const userRef = doc(db, 'users', request.qaTesterId);
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
                 recipientEmail = userSnap.data().email;
             }
-        } else if (user.role === 'qa_tester' || user.role === 'admin') {
+        } else if (canApproveRequests && request.requesterEmail) {
+            // QA/PM commented - notify the requester
             recipientEmail = request.requesterEmail;
         }
 
-        if (recipientEmail) {
+        if (recipientEmail && recipientEmail !== user.email) {
+            // Determine recipient user ID for in-app notification
+            let recipientUserId: string | undefined;
+            if (isRequester && request.qaTesterId) {
+                recipientUserId = request.qaTesterId;
+            } else if (canApproveRequests) {
+                recipientUserId = request.requesterId;
+            }
+
+            // Create in-app notification if we have recipient user ID
+            if (recipientUserId) {
+                await createInAppNotification({
+                    userId: recipientUserId,
+                    type: 'general',
+                    title: 'New Comment',
+                    message: `${user.name} commented on "${request.taskTitle}": ${newComment.substring(0, 100)}${newComment.length > 100 ? '...' : ''}`,
+                    read: false,
+                    data: {
+                        requestId: request.id,
+                    },
+                });
+            }
+
+            // Only send notification if recipient is different from commenter
             await notifyOnNewComment({
                 recipientEmail,
                 commenterName: user.name,
                 taskTitle: request.taskTitle,
                 commentText: newComment,
+                requestId: request.id,
+                requestShortId: request.shortId,
             });
         }
       
       setNewComment('');
+      setCommentImage(null);
+      setCommentImagePreview(null);
     } catch (err) {
       const error = err as Error;
       console.error("Error posting comment: ", error);
@@ -258,24 +448,78 @@ export default function RequestDetailsPage() {
     }
   };
 
-  const handleSendTestEmail = async () => {
-    if (!user?.email) return;
-    setIsSendingTest(true);
-    const result = await sendTestEmail(user.email);
-    if (result.success) {
-      toast({
-        title: 'Test Email Sent!',
-        description: `An email has been sent to ${user.email}. Please check your inbox.`,
-      });
-    } else {
-      toast({
-        title: 'Test Failed',
-        description: result.error,
-        variant: 'destructive',
-      });
+  const handleResubmit = async () => {
+    if (!request || !user || !db) return;
+    
+    setIsResubmitting(true);
+    try {
+        // Get QA testers to notify (including users with multiple roles)
+        const qaUsersQuery = query(collection(db, 'users'), where('role', '==', 'qa_tester'));
+        const qaSnapshot = await getDocs(qaUsersQuery);
+        let qaUsers = qaSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        
+        // Also get users with qa_tester in their roles array
+        const allUsersQuery = query(collection(db, 'users'));
+        const allUsersSnapshot = await getDocs(allUsersQuery);
+        const allUsersWithQARole = allUsersSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as User))
+          .filter(u => {
+            const roles = u.roles && u.roles.length > 0 ? u.roles : (u.role ? [u.role] : []);
+            return roles.includes('qa_tester') && !qaUsers.find(qa => qa.id === u.id);
+          });
+        
+        qaUsers = [...qaUsers, ...allUsersWithQARole];
+        const qaEmails = qaUsers.map(u => u.email);
+
+        // Update request status back to pending
+        const requestRef = doc(db, 'requests', request.id);
+        await updateDoc(requestRef, {
+            status: 'pending',
+            updatedAt: serverTimestamp(),
+            // Store previous rejection reason for history
+            previousRejectionReason: request.rejectionReason || undefined,
+            // Clear previous QA tester info and current rejection reason
+            qaTesterId: deleteField(),
+            qaTesterName: deleteField(),
+            rejectionReason: deleteField(),
+        });
+
+        // Notify QA testers about the resubmission
+        await notifyOnNewRequest({
+            qaEmails: qaEmails,
+            taskTitle: request.taskTitle,
+            requesterName: request.requesterName,
+            associatedProject: request.associatedProject,
+            associatedTeam: request.associatedTeam,
+        });
+
+        // Update local state
+        setRequest({
+            ...request,
+            status: 'pending',
+            qaTesterId: undefined,
+            qaTesterName: undefined,
+            rejectionReason: undefined,
+        });
+
+        toast({
+            title: 'Request Resubmitted',
+            description: `Your request "${request.taskTitle}" has been resubmitted and sent to QA testers for review.`,
+        });
+
+    } catch (e) {
+        const error = e as Error;
+        console.error("Error resubmitting request: ", e);
+        toast({
+            title: 'Resubmission Failed',
+            variant: 'destructive',
+            description: error.message,
+        });
+    } finally {
+        setIsResubmitting(false);
     }
-    setIsSendingTest(false);
   };
+
 
   const statusVariant = (status: 'pending' | 'approved' | 'rejected') => {
     switch (status) {
@@ -340,7 +584,7 @@ export default function RequestDetailsPage() {
     </Alert>;
   }
 
-  const isActionable = user?.role === 'qa_tester' && request.status === 'pending';
+  const isActionable = hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE) && request.status === 'pending';
   const createdAtDate = (request.createdAt as any)?.toDate() || new Date();
 
   const StarRating = ({ rating, setRating, disabled = false }: { rating: number, setRating?: (r: number) => void, disabled?: boolean }) => {
@@ -377,14 +621,29 @@ export default function RequestDetailsPage() {
 
   return (
     <>
-      <PageHeader title={request.taskTitle} />
+      <PageHeader title={request.taskTitle}>
+        <BackButton />
+      </PageHeader>
       
       {request.status === 'rejected' && request.rejectionReason && (
         <Alert variant="destructive" className="mb-6">
             <ThumbsDown className="h-4 w-4" />
             <AlertTitle>Request Rejected by {request.qaTesterName}</AlertTitle>
-            <AlertDescription>
-                <strong>Reason:</strong> {request.rejectionReason}
+            <AlertDescription className="flex items-center justify-between">
+                <div>
+                    <strong>Reason:</strong> {request.rejectionReason}
+                </div>
+                {user?.id === request.requesterId && (
+                    <Button
+                        onClick={handleResubmit}
+                        disabled={isResubmitting}
+                        size="sm"
+                        className="ml-4"
+                    >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isResubmitting ? 'animate-spin' : ''}`} />
+                        {isResubmitting ? 'Resubmitting...' : 'Resubmit Request'}
+                    </Button>
+                )}
             </AlertDescription>
         </Alert>
       )}
@@ -410,6 +669,9 @@ export default function RequestDetailsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-6 text-sm">
+                        <DetailItem icon={Hash} label="Request ID">
+                            {request.shortId || formatFriendlyId(request.id, 'request')}
+                        </DetailItem>
                         <DetailItem icon={Hash} label="Status">
                             <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
                         </DetailItem>
@@ -468,6 +730,22 @@ export default function RequestDetailsPage() {
                                     <Badge variant="secondary" className='capitalize text-xs'>{comment.userRole.replace('_', ' ')}</Badge>
                                     </div>
                                     <p className="text-muted-foreground whitespace-pre-wrap mt-1">{comment.text}</p>
+                                    {comment.imageUrl && (
+                                      <div className="mt-2">
+                                        <a 
+                                          href={comment.imageUrl} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer"
+                                          className="inline-block"
+                                        >
+                                          <img 
+                                            src={comment.imageUrl} 
+                                            alt="Comment attachment" 
+                                            className="max-w-full max-h-64 rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                                          />
+                                        </a>
+                                      </div>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -488,33 +766,58 @@ export default function RequestDetailsPage() {
                             onChange={(e) => setNewComment(e.target.value)}
                             className="min-h-[80px]"
                         />
-                        <Button onClick={handlePostComment} disabled={isSubmittingComment || !newComment.trim()}>
+                        {commentImagePreview && (
+                          <div className="relative inline-block">
+                            <img 
+                              src={commentImagePreview} 
+                              alt="Preview" 
+                              className="max-h-32 rounded-md border"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                              onClick={handleRemoveImage}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageChange}
+                              className="hidden"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              asChild
+                            >
+                              <span className="cursor-pointer">
+                                <ImageIcon className="h-4 w-4 mr-2" />
+                                Attach Image
+                              </span>
+                            </Button>
+                          </label>
+                          <Button 
+                            onClick={handlePostComment} 
+                            disabled={isSubmittingComment || !newComment.trim()}
+                          >
                             {isSubmittingComment ? "Posting..." : "Post Comment"}
                             <Send className="ml-2 h-4 w-4" />
-                        </Button>
+                          </Button>
+                        </div>
                     </div>
                 </CardFooter>
             </Card>
         </div>
 
         <div className="lg:col-span-1 space-y-6">
-            {user?.role === 'admin' && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Admin Tools</CardTitle>
-                        <CardDescription>Actions available only to administrators.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button onClick={handleSendTestEmail} disabled={isSendingTest} className="w-full">
-                            {isSendingTest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
-                            {isSendingTest ? 'Sending...' : 'Send Test Email'}
-                        </Button>
-                    </CardContent>
-                    <CardFooter>
-                        <p className="text-xs text-muted-foreground">This will send a test email to your own email address ({user.email}) to verify the Brevo configuration.</p>
-                    </CardFooter>
-                </Card>
-            )}
 
             {isActionable && (
                 <Card>

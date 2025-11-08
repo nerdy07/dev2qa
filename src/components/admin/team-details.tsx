@@ -23,6 +23,7 @@ import { ALL_PERMISSIONS } from '@/lib/roles';
 import { useToast } from '@/hooks/use-toast';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { format } from 'date-fns';
 
 interface TeamDetailsProps {
   team: Team;
@@ -206,16 +207,27 @@ export function TeamDetails({ team, onEdit, onDelete, onClose }: TeamDetailsProp
         <CardContent>
           {teamRequests.length > 0 ? (
             <div className="space-y-3">
-              {teamRequests.slice(0, 5).map((request) => (
+              {teamRequests
+                .sort((a, b) => {
+                  const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+                  const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+                  return dateB - dateA; // Most recent first
+                })
+                .slice(0, 5)
+                .map((request) => (
                 <div key={request.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <FileText className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium">{request.title}</p>
+                      <p className="font-medium">{request.taskTitle || 'Untitled Request'}</p>
                       <p className="text-sm text-muted-foreground">
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {request.createdAt ? (
+                          typeof request.createdAt.toDate === 'function' 
+                            ? format(request.createdAt.toDate(), 'MMM d, yyyy')
+                            : format(new Date(request.createdAt), 'MMM d, yyyy')
+                        ) : 'No date'}
                       </p>
                     </div>
                   </div>

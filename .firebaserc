@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "certitrack-fe7zw"
+  },
+  "targets": {
+    "certitrack-fe7zw": {
+      "hosting": {
+        "certitrack-fe7zw": [
+          "certitrack-fe7zw"
+        ]
+      }
+    }
   }
 }

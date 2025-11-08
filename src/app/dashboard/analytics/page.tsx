@@ -18,11 +18,11 @@ import {
 import { Team, User, CertificateRequest, Project } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
 import { useAuth } from '@/providers/auth-provider';
-import { usePermissions } from '@/hooks/use-permissions';
 import { ALL_PERMISSIONS } from '@/lib/roles';
 import { ProtectedRoute } from '@/components/common/protected-route';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { formatDistanceToNow } from 'date-fns';
 
 function StatCard({ 
   title, 
@@ -69,7 +69,7 @@ function TeamPerformanceCard({ team, members, requests, projects }: {
     members.some(member => member.id === r.requesterId)
   );
   const teamProjects = projects.filter(p => 
-    members.some(member => member.id === p.assignedTo)
+    members.some(member => member.id === p.leadId)
   );
   
   const approvedRequests = teamRequests.filter(r => r.status === 'approved').length;
@@ -121,7 +121,7 @@ function AnalyticsDashboard() {
   const { data: users, loading: usersLoading } = useCollection<User>('users');
   const { data: requests, loading: requestsLoading } = useCollection<CertificateRequest>('requests');
   const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
-  const { hasPermission } = usePermissions();
+  const { hasPermission } = useAuth();
 
   const loading = teamsLoading || usersLoading || requestsLoading || projectsLoading;
 
@@ -181,7 +181,7 @@ function AnalyticsDashboard() {
         teamMembers.some(member => member.id === r.requesterId)
       ) || [],
       projects: projects?.filter(p => 
-        teamMembers.some(member => member.id === p.assignedTo)
+        teamMembers.some(member => member.id === p.leadId)
       ) || []
     };
   }) || [];
@@ -275,22 +275,36 @@ function AnalyticsDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {requests?.slice(0, 5).map((request) => (
-              <div key={request.id} className="flex items-center space-x-4">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Activity className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{request.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {request.status} • {new Date(request.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <Badge variant={request.status === 'approved' ? 'default' : 'secondary'}>
-                  {request.status}
-                </Badge>
-              </div>
-            ))}
+            {requests && requests.length > 0 ? (
+              [...requests]
+                .sort((a, b) => {
+                  const dateA = (a.createdAt as any)?.toDate?.()?.getTime() || 0;
+                  const dateB = (b.createdAt as any)?.toDate?.()?.getTime() || 0;
+                  return dateB - dateA;
+                })
+                .slice(0, 5)
+                .map((request) => {
+                  const createdAt = (request.createdAt as any)?.toDate?.() || new Date();
+                  return (
+                    <div key={request.id} className="flex items-center space-x-4">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Activity className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{request.taskTitle}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(createdAt, { addSuffix: true })}
+                        </p>
+                      </div>
+                      <Badge variant={request.status === 'approved' ? 'default' : request.status === 'rejected' ? 'destructive' : 'secondary'}>
+                        {request.status}
+                      </Badge>
+                    </div>
+                  );
+                })
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -302,7 +316,6 @@ export default function AnalyticsPage() {
   return (
     <ProtectedRoute 
       permission={ALL_PERMISSIONS.PROJECT_INSIGHTS.READ}
-      roles={['admin', 'manager', 'hr_admin', 'project_manager']}
     >
       <PageHeader
         title="Team Analytics"

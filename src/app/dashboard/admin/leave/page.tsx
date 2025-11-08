@@ -23,6 +23,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendLeaveApprovalEmail, sendLeaveRejectionEmail } from '@/app/requests/actions';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -51,6 +53,23 @@ export default function LeaveManagementPage() {
       rejected: searchedRequests.filter(req => req.status === 'rejected'),
     };
   }, [searchedRequests]);
+
+  // Pagination for each tab
+  const pendingPagination = usePagination({
+    data: filteredRequests.pending,
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
+  const approvedPagination = usePagination({
+    data: filteredRequests.approved,
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
+  const rejectedPagination = usePagination({
+    data: filteredRequests.rejected,
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
 
   const handleApprove = async (request: LeaveRequest) => {
     if (!currentUser || !db) return;
@@ -240,13 +259,61 @@ export default function LeaveManagementPage() {
             </div>
         </div>
         <TabsContent value="pending" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.pending} status="pending" /></CardContent></Card>
+          <Card>
+            <CardContent className="p-0">
+              <RequestsTable requests={pendingPagination.currentData} status="pending" />
+            </CardContent>
+            {filteredRequests.pending.length > 0 && (
+              <div className="p-4 border-t">
+                <PaginationWrapper
+                  currentPage={pendingPagination.currentPage}
+                  totalPages={pendingPagination.totalPages}
+                  totalItems={filteredRequests.pending.length}
+                  itemsPerPage={pendingPagination.itemsPerPage}
+                  onPageChange={pendingPagination.setCurrentPage}
+                  onItemsPerPageChange={pendingPagination.setItemsPerPage}
+                />
+              </div>
+            )}
+          </Card>
         </TabsContent>
         <TabsContent value="approved" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.approved} status="approved" /></CardContent></Card>
+          <Card>
+            <CardContent className="p-0">
+              <RequestsTable requests={approvedPagination.currentData} status="approved" />
+            </CardContent>
+            {filteredRequests.approved.length > 0 && (
+              <div className="p-4 border-t">
+                <PaginationWrapper
+                  currentPage={approvedPagination.currentPage}
+                  totalPages={approvedPagination.totalPages}
+                  totalItems={filteredRequests.approved.length}
+                  itemsPerPage={approvedPagination.itemsPerPage}
+                  onPageChange={approvedPagination.setCurrentPage}
+                  onItemsPerPageChange={approvedPagination.setItemsPerPage}
+                />
+              </div>
+            )}
+          </Card>
         </TabsContent>
         <TabsContent value="rejected" className="mt-4">
-          <Card><CardContent className="p-0"><RequestsTable requests={filteredRequests.rejected} status="rejected" /></CardContent></Card>
+          <Card>
+            <CardContent className="p-0">
+              <RequestsTable requests={rejectedPagination.currentData} status="rejected" />
+            </CardContent>
+            {filteredRequests.rejected.length > 0 && (
+              <div className="p-4 border-t">
+                <PaginationWrapper
+                  currentPage={rejectedPagination.currentPage}
+                  totalPages={rejectedPagination.totalPages}
+                  totalItems={filteredRequests.rejected.length}
+                  itemsPerPage={rejectedPagination.itemsPerPage}
+                  onPageChange={rejectedPagination.setCurrentPage}
+                  onItemsPerPageChange={rejectedPagination.setItemsPerPage}
+                />
+              </div>
+            )}
+          </Card>
         </TabsContent>
       </Tabs>
 

@@ -9,7 +9,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:roles": "tsx scripts/check-production-roles.ts",
+    "check:version": "tsx scripts/check-production-version.ts",
+    "migrate:project-files": "tsx scripts/migrate-project-resources-to-files.ts"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.13.0",

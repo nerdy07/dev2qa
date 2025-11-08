@@ -10,12 +10,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive, CalendarClock } from 'lucide-react';
+import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive, CalendarClock, Download, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
 import { query, where, collection, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import type { CompanyFile } from '@/lib/types';
+import { getDownloadURL, ref } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 import {
   Accordion,
   AccordionContent,
@@ -31,6 +34,7 @@ import { TaskForm } from '@/components/admin/task-form';
 import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
+import { ALL_PERMISSIONS } from '@/lib/roles';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
@@ -85,11 +89,20 @@ export default function ProjectDetailsPage() {
 
     const { data: requests, loading: requestsLoading, error: requestsError } = useCollection<CertificateRequest>('requests', requestsQuery);
     const { data: users } = useCollection<User>('users');
+    
+    // Query files associated with this project
+    const projectFilesQuery = React.useMemo(() => {
+        if (!project || !db) return null;
+        return query(collection(db, 'files'), where('projectId', '==', project.id));
+    }, [project]);
+    
+    const { data: projectFiles, loading: projectFilesLoading } = useCollection<CompanyFile>('files', projectFilesQuery);
 
     const loading = projectLoading || (project && requestsLoading);
     const error = projectError || requestsError;
 
-    const canEdit = currentUser?.role === 'admin' || currentUser?.id === project?.leadId;
+    const { hasRole, hasPermission } = useAuth();
+    const canEdit = hasPermission(ALL_PERMISSIONS.PROJECTS.UPDATE) || currentUser?.id === project?.leadId;
 
     const projectProgress = React.useMemo(() => {
         if (!project || !project.milestones || project.milestones.length === 0) {
@@ -223,13 +236,24 @@ export default function ProjectDetailsPage() {
                            {project.resources && project.resources.length > 0 ? (
                                 <div className="space-y-3">
                                     {project.resources.map(resource => (
-                                        <a key={resource.id} href={resource.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors">
-                                            <FileArchive className="h-5 w-5 text-muted-foreground" />
-                                            <div className="flex-1">
+                                        <a 
+                                            key={resource.id} 
+                                            href={resource.url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="flex items-start gap-3 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors group"
+                                        >
+                                            <FileArchive className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                            <div className="flex-1 min-w-0">
                                                 <p className="font-medium text-sm">{resource.name}</p>
-                                                <p className="text-xs text-primary truncate">{resource.url}</p>
+                                                <p 
+                                                    className="text-xs text-primary break-all word-break break-words" 
+                                                    title={resource.url}
+                                                >
+                                                    {resource.url}
+                                                </p>
                                             </div>
-                                            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                                            <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
                                         </a>
                                     ))}
                                 </div>
@@ -314,6 +338,95 @@ export default function ProjectDetailsPage() {
                                     <Target className="mx-auto h-12 w-12" />
                                     <p className="mt-4">No milestones have been defined for this project yet.</p>
                                 </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Project Files</CardTitle>
+                            <CardDescription>Files and links associated with this project.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {projectFilesLoading ? (
+                                <div className="space-y-2">
+                                    {[...Array(3)].map((_, i) => (
+                                        <div key={i} className="h-16 bg-muted animate-pulse rounded-md" />
+                                    ))}
+                                </div>
+                            ) : projectFiles && projectFiles.length > 0 ? (
+                                <div className="space-y-3">
+                                    {projectFiles.map((file) => (
+                                        <div
+                                            key={file.id}
+                                            className="flex items-start gap-3 p-3 rounded-md bg-muted/50 hover:bg-muted transition-colors group"
+                                        >
+                                            {file.type === 'upload' ? (
+                                                <Upload className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                            ) : (
+                                                <Link2 className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-sm">{file.name}</p>
+                                                {file.description && (
+                                                    <p className="text-xs text-muted-foreground mt-1">{file.description}</p>
+                                                )}
+                                                <div className="flex items-center gap-2 mt-2">
+                                                    {file.type === 'upload' ? (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {file.fileSize ? `${(file.fileSize / 1024 / 1024).toFixed(2)} MB` : 'File'}
+                                                        </span>
+                                                    ) : (
+                                                        <a
+                                                            href={file.fileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-xs text-primary hover:underline flex items-center gap-1"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <ExternalLink className="h-3 w-3" />
+                                                            Open Link
+                                                        </a>
+                                                    )}
+                                                    <span className="text-xs text-muted-foreground">•</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {file.createdAt ? format(file.createdAt.toDate(), 'PPp') : 'Unknown date'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {file.type === 'upload' && file.fileUrl && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 flex-shrink-0"
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                            // If it's a Firebase Storage URL, get a fresh download URL
+                                                            let downloadUrl = file.fileUrl!;
+                                                            if (file.fileUrl?.includes('firebasestorage.googleapis.com')) {
+                                                                // Extract the path from the URL and get a fresh download URL
+                                                                const pathMatch = file.fileUrl.match(/\/o\/(.+)\?/);
+                                                                if (pathMatch && storage) {
+                                                                    const fileRef = ref(storage, decodeURIComponent(pathMatch[1]));
+                                                                    downloadUrl = await getDownloadURL(fileRef);
+                                                                }
+                                                            }
+                                                            window.open(downloadUrl, '_blank');
+                                                        } catch (error) {
+                                                            console.error('Error downloading file:', error);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Download className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">
+                                    No files have been uploaded for this project yet.
+                                </p>
                             )}
                         </CardContent>
                     </Card>

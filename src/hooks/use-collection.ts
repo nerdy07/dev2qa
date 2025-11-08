@@ -19,37 +19,66 @@ export function useCollection<T>(collectionName: string, firestoreQuery?: Query 
     }
 
     if (firestoreQuery === null) {
-        setLoading(true);
+        setLoading(false);
         setData(null);
+        setError(null);
         return;
     }
 
+    // Use a stable query reference
     const q = firestoreQuery || query(collection(db!, collectionName));
     
+    // Don't reset loading state if we already have data
+    // This prevents flickering when the query is recreated but we already have data
+    // The onSnapshot callback will update the data immediately when new documents are added
+    setError(null);
+    
+    let isMounted = true;
+    
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      if (!isMounted) return;
+      
       const docs: T[] = [];
       querySnapshot.forEach((doc) => {
         docs.push({ id: doc.id, ...doc.data() } as T);
       });
       setData(docs);
       setLoading(false);
+      setError(null); // Clear any previous errors on success
     }, (err: any) => {
+      if (!isMounted) return;
+      
       if (err.code === 'permission-denied') {
         const permissionError = new FirestorePermissionError({
-          path: (q as any)._query.path.segments.join('/'),
+          path: (q as any)._query?.path?.segments?.join('/') || collectionName,
           operation: 'list',
         });
         errorEmitter.emit('permission-error', permissionError);
-        // We still set a generic error for the component's internal state
+        // Set error but DON'T clear existing data - keep what was loaded
+        // This prevents files from disappearing when permission errors occur
         setError(new Error('You do not have permission to view this data.'));
+        // Use functional update to access current state value
+        setData(currentData => {
+          // Only set empty data if we don't have any data yet
+          if (currentData === null) {
+            return [];
+          }
+          // Keep existing data to prevent files from disappearing
+          return currentData;
+        });
+        setLoading(false);
+        console.warn('Permission denied for collection:', collectionName, 'but keeping existing data');
       } else {
         console.error(err);
         setError(err);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [collectionName, firestoreQuery]);
 
   return { data, loading, error, setData };

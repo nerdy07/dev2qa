@@ -1,17 +1,30 @@
 
-
+export type EmployeeDocument = {
+  id: string;
+  name: string;
+  url: string;
+  type: string;
+  uploadedAt: any; // Firestore Timestamp
+};
 
 export type User = {
   id: string; // This will be the Firebase Auth UID
   name: string;
   email: string;
-  role: string; // Role is a string to allow for custom roles from the DB
+  permissions: string[]; // Direct permissions array - no role layer
+  isAdmin?: boolean; // Computed field: true if user has admin permissions
+  isProjectManager?: boolean; // Computed field: true if user has project manager permissions
   photoURL?: string;
   expertise?: string;
   baseSalary?: number;
   annualLeaveEntitlement?: number;
   disabled?: boolean;
   teamId?: string; // Reference to team
+  startDate?: any; // Firestore Timestamp
+  documents?: EmployeeDocument[]; // Employee documents
+  // Legacy fields for backward compatibility (deprecated)
+  role?: string; // Deprecated: use permissions instead
+  roles?: string[]; // Deprecated: use permissions instead
 };
 
 export type Role = {
@@ -41,6 +54,7 @@ export type Task = {
   assigneeId?: string;
   assigneeName?: string;
   certificateRequestId?: string;
+  testLinks?: string[]; // Links added when marking task as Done
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
 };
@@ -116,6 +130,8 @@ export type DesignRequest = {
 export type Certificate = {
     id: string;
     requestId: string;
+    requestShortId?: string;
+    shortId?: string;
     taskTitle: string;
     associatedTeam: string;
     associatedProject: string;
@@ -162,6 +178,23 @@ export type Bonus = {
   issuedByName: string;
 };
 
+export type InfractionType = {
+  id: string;
+  name: string;
+  deduction: number;
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+export type BonusType = {
+  id: string;
+  name: string;
+  amount: number;
+  currency: 'NGN' | 'PERCENTAGE';
+  createdAt?: any;
+  updatedAt?: any;
+};
+
 export type LeaveRequest = {
   id: string;
   userId: string;
@@ -179,6 +212,113 @@ export type LeaveRequest = {
   daysCount: number;
 };
 
+export type Transaction = {
+  id: string;
+  type: 'income' | 'expense';
+  category: string;
+  description: string;
+  amount: number;
+  currency: 'NGN' | 'USD' | 'EUR' | string;
+  date: any; // Firestore Timestamp
+  createdById?: string;
+  createdByName?: string;
+  receiptUrl?: string;
+  notes?: string;
+  projectId?: string;
+  projectName?: string;
+};
 
+export type RequisitionItem = {
+  itemName: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  estimatedUnitPrice?: number;
+  estimatedTotal?: number;
+  category?: string;
+  priority?: 'low' | 'medium' | 'high';
+  supplier?: string;
+  specifications?: string;
+};
 
+export type Requisition = {
+  id: string;
+  shortId?: string;
+  title: string;
+  description?: string;
+  requesterId: string;
+  requesterName: string;
+  requesterEmail: string;
+  requesterDepartment?: string;
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'fulfilled' | 'partially_fulfilled' | 'cancelled';
+  items?: RequisitionItem[];
+  totalEstimatedAmount?: number;
+  currency?: 'NGN' | 'USD' | 'EUR';
+  urgency?: 'low' | 'medium' | 'high' | 'urgent';
+  priority?: 'normal' | 'urgent' | 'critical';
+  justification?: string;
+  requiredByDate?: any; // Firestore Timestamp
+  requestedAt?: any; // Firestore Timestamp (for backward compatibility)
+  createdAt?: any; // Firestore Timestamp
+  updatedAt?: any; // Firestore Timestamp
+  submittedAt?: any; // Firestore Timestamp
+  reviewedAt?: any; // Firestore Timestamp
+  reviewedById?: string;
+  reviewedByName?: string;
+  rejectionReason?: string;
+  fulfilledAt?: any; // Firestore Timestamp
+  fulfilledById?: string;
+  fulfilledByName?: string;
+  fulfillmentNotes?: string;
+  accountNumber?: string; // Bank account number for money requisitions
+  bankName?: string; // Bank name for money requisitions
+};
 
+export type Notification = {
+  id: string;
+  userId: string;
+  type: 'leaderboard_top_user' | 'leaderboard_new_top' | 'general';
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: any; // Firestore Timestamp
+  data?: {
+    topUserId?: string;
+    leaderboardType?: 'qa' | 'requester';
+    previousTopUserId?: string;
+  };
+};
+
+export type Achievement = {
+  id: string;
+  userId: string;
+  type: 'top_qa_tester' | 'top_requester' | 'first_approval' | 'milestone_10' | 'milestone_50' | 'milestone_100';
+  title: string;
+  description: string;
+  icon?: string;
+  earnedAt: any; // Firestore Timestamp
+  badgeUrl?: string;
+};
+
+export type CompanyFile = {
+  id: string;
+  name: string;
+  description?: string;
+  type: 'upload' | 'link'; // 'upload' for direct file uploads, 'link' for external URLs
+  fileUrl?: string; // URL for uploaded files or external links
+  fileSize?: number; // Size in bytes (for uploads)
+  mimeType?: string; // MIME type (for uploads)
+  folderType: 'project' | 'general'; // 'project' = file belongs to a project, 'general' = company-wide file (policies, etc.)
+  projectId?: string; // Project ID if folderType is 'project'
+  projectName?: string; // Project name (denormalized for easier display)
+  category?: string; // Optional category/folder for general files (e.g., "Company Policies", "HR Documents", "Legal")
+  visibility: 'all_staff' | 'restricted'; // Who can view this file: 'all_staff' = anyone with files:read_staff, 'restricted' = requires files:read_all permission
+  uploadedBy: string; // User ID
+  uploadedByName: string; // User name
+  uploadedByEmail: string; // User email
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+  tags?: string[]; // Optional tags for search/filtering
+  downloadCount?: number; // Track downloads (for uploads)
+  resourceId?: string; // Optional link back to project resource entry
+};

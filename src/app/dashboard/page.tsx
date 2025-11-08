@@ -1,10 +1,11 @@
 
 'use client';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
 import { PageHeader } from '@/components/common/page-header';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { Users, Shield, FolderKanban, FileText, FilePlus2, TriangleAlert, CheckCircle, Clock, XCircle, Percent } from 'lucide-react';
+import { Users, Shield, FolderKanban, FileText, FilePlus2, TriangleAlert, CheckCircle, Clock, XCircle, Percent, Trophy } from 'lucide-react';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -19,20 +20,49 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Badge } from '@/components/ui/badge';
+import { format, formatDistanceToNow } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
+import { usePermissions } from '@/hooks/use-permissions';
+import { ALL_PERMISSIONS } from '@/lib/roles';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
+  const { hasPermission } = usePermissions();
 
   const AdminDashboard = () => {
     const { data: users, loading: usersLoading } = useCollection<User>('users');
     const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
     const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
     
-    // For Recent Requests Table - this is already optimized with limit(5)
+    // Filter teams based on user's team membership or permissions
+    const myTeams = React.useMemo(() => {
+      if (!teams || !user) return [];
+      
+      // If user has permission to manage teams (CREATE/UPDATE/DELETE) or is admin, show all teams
+      const canViewAllTeams = hasPermission(ALL_PERMISSIONS.TEAMS.CREATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) ||
+                              user.isAdmin;
+      
+      if (canViewAllTeams) {
+        return teams;
+      }
+      
+      // Otherwise, only show teams the user belongs to
+      return teams.filter(team => team.id === user.teamId);
+    }, [teams, user, hasPermission]);
+    
+    // For Recent Requests Table - make query stable to prevent navigation blocking
+    const recentRequestsQuery = React.useMemo(() => {
+      if (!db) return null;
+      return query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(5));
+    }, []);
+    
     const { data: recentRequests, loading: recentRequestsLoading, error: recentRequestsError } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db!, 'requests'), orderBy('createdAt', 'desc'), limit(5))
+        recentRequestsQuery
     );
 
     // State for our new stats, fetched efficiently
@@ -101,7 +131,11 @@ export default function DashboardPage() {
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title="Total Users" value={users?.length.toString() || '0'} icon={Users} />
-          <StatCard title="Total Teams" value={teams?.length.toString() || '0'} icon={Shield} />
+          <StatCard 
+            title={myTeams.length === teams?.length ? "Total Teams" : "My Teams"} 
+            value={myTeams.length.toString()} 
+            icon={Shield} 
+          />
           <StatCard title="Total Projects" value={projects?.length.toString() || '0'} icon={FolderKanban} />
           <StatCard title="Total Requests" value={stats.total.toString()} icon={FileText} />
         </div>
@@ -121,7 +155,11 @@ export default function DashboardPage() {
   const RequesterDashboard = () => {
     const myRequestsQuery = React.useMemo(() => {
         if (!user?.id) return null;
-        return query(collection(db!, 'requests'), where('requesterId', '==', user.id));
+        return query(
+          collection(db!, 'requests'), 
+          where('requesterId', '==', user.id),
+          orderBy('createdAt', 'desc')
+        );
     }, [user?.id]);
     
     const { data: myRequests, loading, error } = useCollection<CertificateRequest>(
@@ -133,14 +171,28 @@ export default function DashboardPage() {
 
     const stats = React.useMemo(() => {
         if (!myRequests || myRequests.length === 0) {
-            return { total: 0, approved: 0, pending: 0, rejected: 0, approvalRate: 0 };
+            return { total: 0, approved: 0, pending: 0, rejected: 0, approvalRate: 0, actionRequired: 0 };
         }
         const approved = myRequests.filter(r => r.status === 'approved').length;
         const pending = myRequests.filter(r => r.status === 'pending').length;
         const rejected = myRequests.filter(r => r.status === 'rejected').length;
+        const actionRequired = myRequests.filter(r => r.status === 'rejected' && !r.qaProcessRating).length;
         const totalConsidered = approved + rejected;
         const approvalRate = totalConsidered > 0 ? Math.round((approved / totalConsidered) * 100) : 0;
-        return { total: myRequests.length, approved, pending, rejected, approvalRate };
+        return { total: myRequests.length, approved, pending, rejected, approvalRate, actionRequired };
+    }, [myRequests]);
+
+    // Get recent items for quick access
+    const recentPending = React.useMemo(() => {
+      return myRequests?.filter(r => r.status === 'pending').slice(0, 3) || [];
+    }, [myRequests]);
+
+    const recentApproved = React.useMemo(() => {
+      return myRequests?.filter(r => r.status === 'approved').slice(0, 3) || [];
+    }, [myRequests]);
+
+    const needsAction = React.useMemo(() => {
+      return myRequests?.filter(r => r.status === 'rejected' && !r.qaProcessRating).slice(0, 3) || [];
     }, [myRequests]);
 
     React.useEffect(() => {
@@ -200,23 +252,226 @@ export default function DashboardPage() {
 
     return (
         <>
-        <PageHeader title="My Certificate Requests" description="Track the status of your submitted requests.">
-            <Button asChild>
-                <Link href="/dashboard/requests/new">
-                    <FilePlus2 className="mr-2 h-4 w-4" />
-                    New Request
-                </Link>
+        <PageHeader 
+          title={`Welcome back, ${user?.name}!`} 
+          description="Here's an overview of your work and what needs your attention."
+        >
+          <div className="flex gap-2">
+            <Button asChild variant="outline">
+              <Link href="/dashboard/my-work">
+                View All Work
+              </Link>
             </Button>
+            <Button asChild>
+              <Link href="/dashboard/requests/new">
+                <FilePlus2 className="mr-2 h-4 w-4" />
+                New Request
+              </Link>
+            </Button>
+          </div>
         </PageHeader>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Total Requests" value={stats.total.toString()} icon={FileText} />
-            <StatCard title="Approved" value={stats.approved.toString()} icon={CheckCircle} />
-            <StatCard title="Pending" value={stats.pending.toString()} icon={Clock} />
-            <StatCard title="Approval Rate" value={`${stats.approvalRate}%`} icon={Percent} description='Based on completed requests' />
+
+        {/* Quick Stats */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+          <StatCard 
+            title="Action Required" 
+            value={stats.actionRequired.toString()} 
+            icon={TriangleAlert}
+            description="Items need feedback"
+            className={stats.actionRequired > 0 ? "border-orange-200 bg-orange-50/50" : ""}
+          />
+          <StatCard title="In Progress" value={stats.pending.toString()} icon={Clock} description="Awaiting review" />
+          <StatCard title="Completed" value={stats.approved.toString()} icon={CheckCircle} description="Approved requests" />
+          <StatCard title="Success Rate" value={`${stats.approvalRate}%`} icon={Percent} description="Based on completed" />
         </div>
-        <div className="mt-8">
-            <CertificateRequestsTable requests={myRequests || []} isLoading={loading} />
+
+        {/* Action Required Section */}
+        {needsAction.length > 0 && (
+          <Card className="mb-6 border-orange-200 bg-orange-50/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <TriangleAlert className="h-5 w-5 text-orange-600" />
+                    Action Required
+                  </CardTitle>
+                  <CardDescription>These requests were rejected and need your feedback</CardDescription>
+                </div>
+                <Button asChild variant="outline">
+                  <Link href="/dashboard/my-work">View All</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                {needsAction.map(request => (
+                  <Card 
+                    key={request.id} 
+                    className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-orange-500"
+                    onClick={() => router.push(`/dashboard/requests/${request.id}`)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base line-clamp-2">{request.taskTitle}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-2 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <FolderKanban className="h-3 w-3" />
+                        <span className="truncate">{request.associatedProject || 'No project'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>{format((request.createdAt as any)?.toDate() || new Date(), 'MMM d, yyyy')}</span>
+                      </div>
+                      <Badge variant="destructive" className="mt-2">Rejected - Needs Feedback</Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Two Column Layout */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* In Progress */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>In Progress</CardTitle>
+                  <CardDescription>Requests currently under review</CardDescription>
+                </div>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/dashboard/my-work?status=pending">View All</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentPending.length > 0 ? (
+                <div className="space-y-4">
+                  {recentPending.map(request => (
+                    <div
+                      key={request.id}
+                      className="flex items-start justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                      onClick={() => router.push(`/dashboard/requests/${request.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium truncate">{request.taskTitle}</h4>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <FolderKanban className="h-3 w-3" />
+                            {request.associatedProject || 'No project'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDistanceToNow((request.createdAt as any)?.toDate() || new Date(), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                      <Badge variant="secondary">Pending</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Clock className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No pending requests</p>
+                  <Button asChild variant="outline" className="mt-4">
+                    <Link href="/dashboard/requests/new">Create Request</Link>
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recently Completed */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Recently Completed</CardTitle>
+                  <CardDescription>Your approved certificates</CardDescription>
+                </div>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/dashboard/my-work?status=approved">View All</Link>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {recentApproved.length > 0 ? (
+                <div className="space-y-4">
+                  {recentApproved.map(request => (
+                    <div
+                      key={request.id}
+                      className="flex items-start justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent transition-colors"
+                      onClick={() => router.push(`/dashboard/requests/${request.id}`)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium truncate">{request.taskTitle}</h4>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <FolderKanban className="h-3 w-3" />
+                            {request.associatedProject || 'No project'}
+                          </span>
+                          {request.certificateId && (
+                            <Link 
+                              href={`/dashboard/certificates/${request.certificateId}`}
+                              className="text-primary hover:underline text-xs"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              View Certificate
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                      <Badge className="bg-green-500 hover:bg-green-600">
+                        <CheckCircle className="mr-1 h-3 w-3" />Approved
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No completed requests yet</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Quick Actions */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+            <CardDescription>Common tasks you might want to perform</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Button asChild variant="outline" className="h-auto py-6 flex-col items-start">
+                <Link href="/dashboard/requests/new">
+                  <FilePlus2 className="h-6 w-6 mb-2" />
+                  <span className="font-semibold">New Certificate Request</span>
+                  <span className="text-xs text-muted-foreground mt-1">Submit a new QA certificate request</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-auto py-6 flex-col items-start">
+                <Link href="/dashboard/my-work">
+                  <FileText className="h-6 w-6 mb-2" />
+                  <span className="font-semibold">View All My Work</span>
+                  <span className="text-xs text-muted-foreground mt-1">See all requests and designs</span>
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="h-auto py-6 flex-col items-start">
+                <Link href="/dashboard/leaderboards">
+                  <Trophy className="h-6 w-6 mb-2" />
+                  <span className="font-semibold">View Leaderboards</span>
+                  <span className="text-xs text-muted-foreground mt-1">Check team performance</span>
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         </>
     )
   };
@@ -224,17 +479,22 @@ export default function DashboardPage() {
   const QATesterDashboard = () => {
     const { user } = useAuth();
     
-    // Data for Pending Requests tab
+    // Data for Pending Requests tab - Make query stable
+    const pendingRequestsQuery = React.useMemo(() => {
+        if (!db) return null;
+        return query(collection(db, 'requests'), where('status', '==', 'pending'));
+    }, []);
+    
     const { data: pendingRequests, loading: pendingLoading, error: pendingError } = useCollection<CertificateRequest>(
         'requests',
-        query(collection(db!, 'requests'), where('status', '==', 'pending'))
+        pendingRequestsQuery
     );
 
     // Data for My Approvals tab - Simplified query
     const myApprovalsQuery = React.useMemo(() => {
-        if (!user?.id) return null;
+        if (!user?.id || !db) return null;
         return query(
-            collection(db!, 'requests'), 
+            collection(db, 'requests'), 
             where('qaTesterId', '==', user.id),
             orderBy('updatedAt', 'desc'),
             limit(50)
@@ -344,9 +604,16 @@ export default function DashboardPage() {
 
   const DeveloperDashboard = () => {
     const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+    
+    // Make query stable
+    const myRequestsQuery = React.useMemo(() => {
+        if (!user?.id || !db) return null;
+        return query(collection(db, 'requests'), where('requesterId', '==', user.id));
+    }, [user?.id]);
+    
     const { data: myRequests, loading: requestsLoading } = useCollection<CertificateRequest>(
       'requests',
-      query(collection(db!, 'requests'), where('requesterId', '==', user?.id))
+      myRequestsQuery
     );
 
     return (
@@ -401,6 +668,24 @@ export default function DashboardPage() {
     const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
     const { data: requests, loading: requestsLoading } = useCollection<CertificateRequest>('requests');
 
+    // Filter teams based on user's team membership or permissions
+    const myTeams = React.useMemo(() => {
+      if (!teams || !user) return [];
+      
+      // If user has permission to manage teams (CREATE/UPDATE/DELETE) or is admin, show all teams
+      const canViewAllTeams = hasPermission(ALL_PERMISSIONS.TEAMS.CREATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) ||
+                              user.isAdmin;
+      
+      if (canViewAllTeams) {
+        return teams;
+      }
+      
+      // Otherwise, only show teams the user belongs to
+      return teams.filter(team => team.id === user.teamId);
+    }, [teams, user, hasPermission]);
+
     return (
       <>
         <PageHeader 
@@ -409,10 +694,10 @@ export default function DashboardPage() {
         />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            title="Teams"
-            value={teams?.length || 0}
+            title={myTeams.length === teams?.length ? "Teams" : "My Teams"}
+            value={myTeams.length || 0}
             icon={Users}
-            description="Teams under management"
+            description={myTeams.length === teams?.length ? "Teams under management" : "Teams you belong to"}
           />
           <StatCard
             title="Projects"
@@ -551,13 +836,24 @@ export default function DashboardPage() {
   };
 
   const SeniorQADashboard = () => {
+    // Make queries stable
+    const pendingRequestsQuery = React.useMemo(() => {
+        if (!db) return null;
+        return query(collection(db, 'requests'), where('status', '==', 'pending'));
+    }, []);
+    
+    const approvedRequestsQuery = React.useMemo(() => {
+        if (!db) return null;
+        return query(collection(db, 'requests'), where('status', '==', 'approved'));
+    }, []);
+    
     const { data: pendingRequests, loading: pendingLoading } = useCollection<CertificateRequest>(
       'requests',
-      query(collection(db!, 'requests'), where('status', '==', 'pending'))
+      pendingRequestsQuery
     );
     const { data: approvedRequests, loading: approvedLoading } = useCollection<CertificateRequest>(
       'requests',
-      query(collection(db!, 'requests'), where('status', '==', 'approved'))
+      approvedRequestsQuery
     );
 
     return (
@@ -626,29 +922,385 @@ export default function DashboardPage() {
     );
   };
 
-  const renderDashboard = () => {
-    switch (user?.role) {
-      case 'admin':
-        return <AdminDashboard />;
-      case 'requester':
-        return <RequesterDashboard />;
-      case 'qa_tester':
-        return <QATesterDashboard />;
-      case 'developer':
-        return <DeveloperDashboard />;
-      case 'manager':
-        return <ManagerDashboard />;
-      case 'hr_admin':
-        return <HRAdminDashboard />;
-      case 'project_manager':
-        return <ProjectManagerDashboard />;
-      case 'senior_qa':
-        return <SeniorQADashboard />;
-      default:
-        // This handles the case where user is null during the initial load
-        return <DashboardLoading />;
-    }
+  // Dynamic Dashboard based on permissions
+  const DynamicDashboard = () => {
+    // Get auth context for debugging
+    const { user: authUser } = useAuth();
+    
+    // Check what permissions the user has to determine what to show
+    const canViewUsers = hasPermission(ALL_PERMISSIONS.USERS.READ);
+    const canViewTeams = hasPermission(ALL_PERMISSIONS.TEAMS.READ);
+    const canViewProjects = hasPermission(ALL_PERMISSIONS.PROJECTS.READ);
+    const canViewAllRequests = hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL);
+    const canCreateRequests = hasPermission(ALL_PERMISSIONS.REQUESTS.CREATE);
+    const canApproveRequests = hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE);
+    const canViewPayroll = hasPermission(ALL_PERMISSIONS.PAYROLL.READ);
+    const canViewExpenses = hasPermission(ALL_PERMISSIONS.EXPENSES.READ);
+    const canViewAnalytics = hasPermission(ALL_PERMISSIONS.PROJECT_INSIGHTS.READ);
+    const canViewAllDesigns = hasPermission(ALL_PERMISSIONS.DESIGNS.READ_ALL);
+    const canApproveDesigns = hasPermission(ALL_PERMISSIONS.DESIGNS.APPROVE);
+    const canViewRequisitions = hasPermission(ALL_PERMISSIONS.REQUISITIONS.READ_ALL);
+    const canViewOwnRequisitions = hasPermission(ALL_PERMISSIONS.REQUISITIONS.READ_OWN);
+    const canViewLeaderboards = hasPermission(ALL_PERMISSIONS.LEADERBOARDS.READ);
+
+    // Data fetching
+    const { data: users, loading: usersLoading } = useCollection<User>('users');
+    const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
+    const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+    
+    // Filter teams based on user's team membership or permissions
+    const myTeams = React.useMemo(() => {
+      if (!teams || !user) return [];
+      
+      // If user has permission to manage teams (CREATE/UPDATE/DELETE) or is admin, show all teams
+      const canViewAllTeams = hasPermission(ALL_PERMISSIONS.TEAMS.CREATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) || 
+                              hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) ||
+                              user.isAdmin;
+      
+      if (canViewAllTeams) {
+        return teams;
+      }
+      
+      // Otherwise, only show teams the user belongs to
+      return teams.filter(team => team.id === user.teamId);
+    }, [teams, user, hasPermission]);
+    
+    // Requests queries based on permissions
+    const allRequestsQuery = React.useMemo(() => {
+      if (!db || !canViewAllRequests) return null;
+      return query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(10));
+    }, [canViewAllRequests]);
+
+    const myRequestsQuery = React.useMemo(() => {
+      if (!user?.id || !db || !canCreateRequests) return null;
+      return query(collection(db, 'requests'), where('requesterId', '==', user.id), orderBy('createdAt', 'desc'), limit(10));
+    }, [user?.id, canCreateRequests]);
+
+    const pendingRequestsQuery = React.useMemo(() => {
+      if (!db || !canApproveRequests) return null;
+      return query(collection(db, 'requests'), where('status', '==', 'pending'), orderBy('createdAt', 'desc'), limit(10));
+    }, [canApproveRequests]);
+
+    const { data: allRequests, loading: allRequestsLoading } = useCollection<CertificateRequest>('requests', allRequestsQuery);
+    const { data: myRequests, loading: myRequestsLoading } = useCollection<CertificateRequest>('requests', myRequestsQuery);
+    const { data: pendingRequests, loading: pendingRequestsLoading } = useCollection<CertificateRequest>('requests', pendingRequestsQuery);
+
+    // Stats calculation
+    const [stats, setStats] = React.useState({ 
+      totalRequests: 0, 
+      approvedRequests: 0, 
+      pendingRequests: 0, 
+      rejectedRequests: 0 
+    });
+    const [statsLoading, setStatsLoading] = React.useState(true);
+
+    React.useEffect(() => {
+      const fetchStats = async () => {
+        if (!db) return;
+        try {
+          const requestsCollection = collection(db, 'requests');
+          const [totalSnapshot, approvedSnapshot, pendingSnapshot, rejectedSnapshot] = await Promise.all([
+            getCountFromServer(requestsCollection),
+            getCountFromServer(query(requestsCollection, where('status', '==', 'approved'))),
+            getCountFromServer(query(requestsCollection, where('status', '==', 'pending'))),
+            getCountFromServer(query(requestsCollection, where('status', '==', 'rejected')))
+          ]);
+
+          setStats({
+            totalRequests: totalSnapshot.data().count,
+            approvedRequests: approvedSnapshot.data().count,
+            pendingRequests: pendingSnapshot.data().count,
+            rejectedRequests: rejectedSnapshot.data().count,
+          });
+        } catch (err) {
+          console.error("Failed to fetch dashboard stats:", err);
+        } finally {
+          setStatsLoading(false);
+        }
+      };
+
+      if (canViewAllRequests || canApproveRequests) {
+        fetchStats();
+      } else {
+        setStatsLoading(false);
+      }
+    }, [canViewAllRequests, canApproveRequests]);
+
+    const loading = usersLoading || teamsLoading || projectsLoading || statsLoading || 
+                    (canViewAllRequests && allRequestsLoading) || 
+                    (canCreateRequests && myRequestsLoading) || 
+                    (canApproveRequests && pendingRequestsLoading);
+
+    if (loading) return <DashboardLoading />;
+
+    // Calculate user-specific stats
+    const myApprovedCount = myRequests?.filter(r => r.status === 'approved').length || 0;
+    const myPendingCount = myRequests?.filter(r => r.status === 'pending').length || 0;
+
+    return (
+      <>
+        <PageHeader 
+          title="My Dashboard" 
+          description="Your personalized workspace with insights and quick actions based on your permissions."
+        />
+        
+        {/* Stats Grid - Show relevant stats based on permissions */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {canViewUsers && (
+            <StatCard
+              title="Total Users"
+              value={users?.length || 0}
+              icon={Users}
+              description="Active team members"
+            />
+          )}
+          {canViewTeams && (
+            <StatCard
+              title={myTeams.length === teams?.length ? "Teams" : "My Teams"}
+              value={myTeams.length || 0}
+              icon={Shield}
+              description={myTeams.length === teams?.length ? "Active teams" : "Teams you belong to"}
+            />
+          )}
+          {canViewProjects && (
+            <StatCard
+              title="Active Projects"
+              value={projects?.length || 0}
+              icon={FolderKanban}
+              description="Projects in progress"
+            />
+          )}
+          {(canViewAllRequests || canApproveRequests) && (
+            <>
+              <StatCard
+                title="Total Requests"
+                value={stats.totalRequests}
+                icon={FileText}
+                description="All certificate requests"
+              />
+              <StatCard
+                title="Pending Reviews"
+                value={stats.pendingRequests}
+                icon={Clock}
+                description="Awaiting approval"
+              />
+              <StatCard
+                title="Approved"
+                value={stats.approvedRequests}
+                icon={CheckCircle}
+                description="Successfully approved"
+              />
+            </>
+          )}
+          {canCreateRequests && !canViewAllRequests && (
+            <>
+              <StatCard
+                title="My Requests"
+                value={myRequests?.length || 0}
+                icon={FileText}
+                description="Your certificate requests"
+              />
+              <StatCard
+                title="Approved"
+                value={myApprovedCount}
+                icon={CheckCircle}
+                description="Your approved requests"
+              />
+              <StatCard
+                title="Pending"
+                value={myPendingCount}
+                icon={Clock}
+                description="Your pending requests"
+              />
+            </>
+          )}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-6">
+          {canCreateRequests && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/requests/new')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FilePlus2 className="h-5 w-5" />
+                  New Request
+                </CardTitle>
+                <CardDescription>Create a new certificate request</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          {canViewProjects && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/admin/projects')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderKanban className="h-5 w-5" />
+                  View Projects
+                </CardTitle>
+                <CardDescription>Manage and track projects</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          {canViewTeams && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/teams')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  View Teams
+                </CardTitle>
+                <CardDescription>Manage teams and members</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          {canViewUsers && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/admin/users')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Manage Users
+                </CardTitle>
+                <CardDescription>View and manage user accounts</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          {canViewAnalytics && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/analytics')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Percent className="h-5 w-5" />
+                  Analytics
+                </CardTitle>
+                <CardDescription>View project insights and analytics</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+          {canViewLeaderboards && (
+            <Card className="cursor-pointer hover:bg-accent transition-colors" onClick={() => router.push('/dashboard/leaderboards')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5" />
+                  Leaderboards
+                </CardTitle>
+                <CardDescription>View top performers</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+        </div>
+
+        {/* Recent Requests Section */}
+        {(canViewAllRequests || canApproveRequests || canCreateRequests) && (
+          <div className="mt-8">
+            <Tabs defaultValue={canApproveRequests ? "pending" : "my-requests"} className="w-full">
+              <TabsList>
+                {canApproveRequests && <TabsTrigger value="pending">Pending Reviews</TabsTrigger>}
+                {canCreateRequests && <TabsTrigger value="my-requests">My Requests</TabsTrigger>}
+                {canViewAllRequests && <TabsTrigger value="all">All Requests</TabsTrigger>}
+              </TabsList>
+              
+              {canApproveRequests && (
+                <TabsContent value="pending" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Pending Reviews</CardTitle>
+                          <CardDescription>Certificate requests awaiting your approval</CardDescription>
+                        </div>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href="/dashboard/admin/requests">View All</Link>
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <CertificateRequestsTable requests={pendingRequests || []} isLoading={pendingRequestsLoading} />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
+              
+              {canCreateRequests && (
+                <TabsContent value="my-requests" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>My Requests</CardTitle>
+                          <CardDescription>Your certificate requests and their status</CardDescription>
+                        </div>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href="/dashboard/my-work">View All</Link>
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <CertificateRequestsTable requests={myRequests || []} isLoading={myRequestsLoading} />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
+              
+              {canViewAllRequests && (
+                <TabsContent value="all" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>All Requests</CardTitle>
+                          <CardDescription>All certificate requests in the system</CardDescription>
+                        </div>
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href="/dashboard/admin/requests">View All</Link>
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <CertificateRequestsTable requests={allRequests || []} isLoading={allRequestsLoading} />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
+            </Tabs>
+          </div>
+        )}
+
+        {/* Show empty state if user has no relevant permissions */}
+        {!canViewUsers && !canViewTeams && !canViewProjects && !canViewAllRequests && 
+         !canCreateRequests && !canApproveRequests && !canViewAnalytics && !canViewLeaderboards && (
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle>Welcome to My Dashboard</CardTitle>
+              <CardDescription>
+                Your dashboard will show relevant information based on your permissions. 
+                Contact your administrator if you need access to additional features.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No dashboard content available</p>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mt-4 text-xs space-y-1 p-4 bg-muted rounded">
+                    <p className="font-semibold">Debug Info:</p>
+                    <p>User Roles: {authUser?.roles?.join(', ') || authUser?.role || 'None'}</p>
+                    <p>Can View Users: {canViewUsers ? 'Yes' : 'No'}</p>
+                    <p>Can View Teams: {canViewTeams ? 'Yes' : 'No'}</p>
+                    <p>Can View Projects: {canViewProjects ? 'Yes' : 'No'}</p>
+                    <p>Can Create Requests: {canCreateRequests ? 'Yes' : 'No'}</p>
+                    <p>Can Approve Requests: {canApproveRequests ? 'Yes' : 'No'}</p>
+                    <p>Can View All Requests: {canViewAllRequests ? 'Yes' : 'No'}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </>
+    );
   };
 
-  return <div className="flex-1 space-y-4">{renderDashboard()}</div>;
+  if (!user) {
+    return <DashboardLoading />;
+  }
+
+  return <div className="flex-1 space-y-4"><DynamicDashboard /></div>;
 }

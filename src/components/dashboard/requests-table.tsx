@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -28,13 +29,13 @@ interface CertificateRequestsTableProps {
   isLoading?: boolean;
 }
 
-export function CertificateRequestsTable({ requests, isLoading = false }: CertificateRequestsTableProps) {
+export const CertificateRequestsTable = React.memo(function CertificateRequestsTable({ requests, isLoading = false }: CertificateRequestsTableProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
 
-  const handleRowClick = (id: string) => {
+  const handleRowClick = useCallback((id: string) => {
     router.push(`/dashboard/requests/${id}`);
-  };
+  }, [router]);
 
   const statusVariant = (status: CertificateRequest['status']) => {
     switch (status) {
@@ -90,7 +91,7 @@ export function CertificateRequestsTable({ requests, isLoading = false }: Certif
                         <DropdownMenuItem onClick={() => handleRowClick(request.id)}>
                             View Details
                         </DropdownMenuItem>
-                        {user?.role === 'requester' && request.status === 'approved' && request.certificateId && (
+                        {hasRole('requester') && request.status === 'approved' && request.certificateId && (
                             <DropdownMenuItem onClick={() => router.push(`/dashboard/certificates/${request.certificateId}`)}>
                                 View Certificate
                             </DropdownMenuItem>
@@ -127,4 +128,4 @@ export function CertificateRequestsTable({ requests, isLoading = false }: Certif
         </Table>
     </div>
   );
-}
+});

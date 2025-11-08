@@ -39,18 +39,22 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
-import type { Project, Task } from '@/lib/types';
+import type { Project, ProjectResource, Task } from '@/lib/types';
 import { ProjectForm } from '@/components/admin/project-form';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { collection, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { addDoc, collection, deleteDoc, doc, setDoc, updateDoc, getDocs, query, where, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/providers/auth-provider';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 export default function ProjectsPage() {
     const { data: projects, loading, error, setData } = useCollection<Project>('projects');
@@ -59,6 +63,102 @@ export default function ProjectsPage() {
     const [selectedProject, setSelectedProject] = React.useState<Project | undefined>(undefined);
     const [newProjectId, setNewProjectId] = React.useState<string | undefined>(undefined);
     const { toast } = useToast();
+    const { hasPermission, user } = useAuth();
+    
+    // Check permissions for actions
+    const canCreate = hasPermission(ALL_PERMISSIONS.PROJECTS.CREATE);
+    const canUpdate = hasPermission(ALL_PERMISSIONS.PROJECTS.UPDATE);
+    const canDelete = hasPermission(ALL_PERMISSIONS.PROJECTS.DELETE);
+
+    const syncProjectResourcesWithCompanyFiles = React.useCallback(
+      async (projectId: string, projectName: string, resources: ProjectResource[] = []) => {
+        if (!db) return;
+
+        const filesRef = collection(db, 'files');
+        const snapshot = await getDocs(query(filesRef, where('projectId', '==', projectId)));
+
+        const existingFiles = new Map<string, { docId: string; data: any }>();
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.resourceId) {
+            existingFiles.set(data.resourceId as string, { docId: docSnap.id, data });
+          }
+        });
+
+        const uploaderId = user?.id || auth?.currentUser?.uid || null;
+        const uploaderName = user?.name || auth?.currentUser?.displayName || 'System';
+        const uploaderEmail = user?.email || auth?.currentUser?.email || '';
+
+        const resourceIds = new Set<string>();
+
+        for (const resource of resources) {
+          const resourceId = resource.id || crypto.randomUUID();
+          resourceIds.add(resourceId);
+
+          const existing = existingFiles.get(resourceId);
+          if (existing) {
+            const updates: Record<string, unknown> = {};
+            if (existing.data.name !== resource.name) updates.name = resource.name;
+            if (existing.data.fileUrl !== resource.url) updates.fileUrl = resource.url;
+            if (existing.data.projectName !== projectName) updates.projectName = projectName;
+            if (existing.data.folderType !== 'project') updates.folderType = 'project';
+            if (existing.data.visibility !== 'all_staff') updates.visibility = 'all_staff';
+            if (Object.keys(updates).length > 0) {
+              updates.updatedAt = serverTimestamp();
+              await updateDoc(doc(db, 'files', existing.docId), updates);
+            }
+          } else {
+            if (!uploaderId) {
+              console.warn('Unable to create company file entry for project resource; uploader information missing.');
+              continue;
+            }
+
+            await addDoc(filesRef, {
+              name: resource.name,
+              type: 'link',
+              fileUrl: resource.url,
+              folderType: 'project',
+              projectId,
+              projectName,
+              visibility: 'all_staff',
+              uploadedBy: uploaderId,
+              uploadedByName: uploaderName,
+              uploadedByEmail: uploaderEmail,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+              resourceId,
+              tags: ['project-resource'],
+            });
+          }
+        }
+
+        const deletions: Promise<void>[] = [];
+        existingFiles.forEach((info, resourceId) => {
+          if (!resourceIds.has(resourceId)) {
+            deletions.push(deleteDoc(doc(db, 'files', info.docId)));
+          }
+        });
+
+        if (deletions.length > 0) {
+          await Promise.allSettled(deletions);
+        }
+      },
+      [user?.id, user?.name, user?.email]
+    );
+
+    // Pagination
+    const {
+        currentPage,
+        totalPages,
+        currentData: paginatedProjects,
+        itemsPerPage,
+        setCurrentPage,
+        setItemsPerPage,
+    } = usePagination({
+        data: projects || [],
+        itemsPerPage: 20,
+        initialPage: 1,
+    });
   
     const handleAddNew = () => {
       setSelectedProject(undefined);
@@ -71,17 +171,43 @@ export default function ProjectsPage() {
     };
 
     const handleEdit = (project: Project) => {
+      if (!canUpdate) {
+        toast({
+          title: 'Access Denied',
+          description: 'You do not have permission to edit projects.',
+          variant: 'destructive',
+        });
+        return;
+      }
       setSelectedProject(project);
       setNewProjectId(project.id); // For editing, use the existing ID
       setIsFormOpen(true);
     };
     
     const handleDelete = (project: Project) => {
+      if (!canDelete) {
+        toast({
+          title: 'Access Denied',
+          description: 'You do not have permission to delete projects.',
+          variant: 'destructive',
+        });
+        return;
+      }
       setSelectedProject(project);
       setIsAlertOpen(true);
     }
     
     const confirmDelete = async () => {
+      if (!canDelete) {
+        toast({
+          title: 'Access Denied',
+          description: 'You do not have permission to delete projects.',
+          variant: 'destructive',
+        });
+        setIsAlertOpen(false);
+        return;
+      }
+      
       if (selectedProject) {
         try {
             await deleteDoc(doc(db!, 'projects', selectedProject.id));
@@ -89,6 +215,9 @@ export default function ProjectsPage() {
                 title: 'Project Deleted',
                 description: `The project "${selectedProject.name}" has been deleted.`,
             });
+            // Close dialog on success - Firestore real-time listener will update the list automatically
+            setIsAlertOpen(false);
+            setSelectedProject(undefined);
         } catch(e) {
             const error = e as Error;
             console.error("Error deleting project: ", error);
@@ -96,15 +225,34 @@ export default function ProjectsPage() {
                 title: 'Error Deleting Project',
                 description: error.message,
                 variant: 'destructive',
-            })
+            });
+            // Keep dialog open on error so user can retry
         }
       }
-      setIsAlertOpen(false);
-      setSelectedProject(undefined);
     }
   
     const handleSave = async (values: Omit<Project, 'id'>, id: string) => {
         const isEditing = !!selectedProject;
+        
+        // Check permissions before saving
+        if (isEditing && !canUpdate) {
+          toast({
+            title: 'Access Denied',
+            description: 'You do not have permission to update projects.',
+            variant: 'destructive',
+          });
+          return false;
+        }
+        
+        if (!isEditing && !canCreate) {
+          toast({
+            title: 'Access Denied',
+            description: 'You do not have permission to create projects.',
+            variant: 'destructive',
+          });
+          return false;
+        }
+        
         try {
           const projectRef = doc(db!, 'projects', id);
           if (isEditing) {
@@ -119,6 +267,17 @@ export default function ProjectsPage() {
                   title: 'Project Created',
                   description: `The project "${values.name}" has been successfully created.`,
               });
+          }
+
+          try {
+            await syncProjectResourcesWithCompanyFiles(id, values.name, values.resources || []);
+          } catch (syncError) {
+            console.error('Error syncing project resources with company files:', syncError);
+            toast({
+              title: 'Project Saved with Warnings',
+              description: 'The project was saved, but some resources could not be added to Company Files automatically.',
+              variant: 'destructive',
+            });
           }
           
           const newProjectData: Project = { 
@@ -217,7 +376,7 @@ export default function ProjectsPage() {
 
         return (
             <TableBody>
-                {projects?.map((project) => {
+                {paginatedProjects?.map((project) => {
                   const progress = calculateProgress(project);
 
                   return (
@@ -247,9 +406,15 @@ export default function ProjectsPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem asChild><Link href={`/dashboard/admin/projects/${project.id}`}>View Details</Link></DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleEdit(project)}>Edit</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(project)}>Delete</DropdownMenuItem>
+                            {canUpdate && (
+                              <DropdownMenuItem onClick={() => handleEdit(project)}>Edit</DropdownMenuItem>
+                            )}
+                            {canDelete && (
+                              <>
+                                {canUpdate && <DropdownMenuSeparator />}
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(project)}>Delete</DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -266,16 +431,17 @@ export default function ProjectsPage() {
           title="Project Management"
           description="Create and manage all company projects."
         >
-          <Dialog open={isFormOpen} onOpenChange={(open) => {
-              if (!open) handleFormSuccess();
-              else setIsFormOpen(open);
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={handleAddNew}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Project
-              </Button>
-            </DialogTrigger>
+          {canCreate && (
+            <Dialog open={isFormOpen} onOpenChange={(open) => {
+                if (!open) handleFormSuccess();
+                else setIsFormOpen(open);
+            }}>
+              <DialogTrigger asChild>
+                <Button onClick={handleAddNew}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Project
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{selectedProject ? 'Edit Project' : 'Create New Project'}</DialogTitle>
@@ -290,6 +456,7 @@ export default function ProjectsPage() {
               )}
             </DialogContent>
           </Dialog>
+          )}
         </PageHeader>
         <Card>
           <Table>
@@ -305,6 +472,18 @@ export default function ProjectsPage() {
             </TableHeader>
             {renderContent()}
           </Table>
+          {projects && projects.length > 0 && (
+            <div className="p-4">
+              <PaginationWrapper
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={projects.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+            </div>
+          )}
         </Card>
   
         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>

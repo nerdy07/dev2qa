@@ -40,11 +40,15 @@ if (
         storage = getStorage(app);
         firebaseInitialized = true;
     } catch(e) {
-        console.error("Firebase initialization failed:", e);
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Firebase initialization failed:", e);
+        }
         // Let firebaseInitialized remain false
     }
 } else {
-    console.warn("Firebase configuration is incomplete. Please check your .env file. The app will show a configuration guide.");
+    if (process.env.NODE_ENV === 'development') {
+      console.warn("Firebase configuration is incomplete. Please check your .env file. The app will show a configuration guide.");
+    }
 }
 
 export { app, auth, db, storage, firebaseInitialized };

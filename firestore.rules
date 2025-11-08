@@ -9,18 +9,51 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // Dynamic admin check: uses the isAdmin field stored on user document
+      // This field is computed when permissions are assigned/updated based on whether
+      // the user has any admin permissions (admin:read, users:create, users:delete, roles:manage)
+      // This makes the system fully dynamic - any user with admin permissions will be recognized as admin
+      // Handle case where isAdmin field might not exist (for existing users before migration)
+      // If field doesn't exist, default to false (non-admin)
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userData.isAdmin == true; // Only true if explicitly set to true
+    }
+    
+    // Helper function to check if user has roles:manage permission
+    // Note: Firestore can't dynamically check permissions from roles collection,
+    // so we check if user has 'roles:manage' in their permissions array (if stored)
+    // or fallback to admin check
+    // Since Firestore rules don't support array.contains() efficiently, we'll just use admin check
+    function hasRolesManagePermission() {
+      // For now, just use admin check since permissions are stored in roles collection
+      // which Firestore rules can't query dynamically
+      return isAdmin();
+    }
+
+    function hasProjectManagerPermissions() {
+      // Dynamic project manager check: uses the isProjectManager field stored on user document
+      // This field is computed when permissions are assigned/updated based on whether
+      // the user has any project manager permissions (projects:create, projects:delete, projects:update)
+      // This makes the system fully dynamic - any user with project manager permissions will be recognized
+      // Handle case where isProjectManager field might not exist (for existing users before migration)
+      // If field doesn't exist, default to false (non-project-manager)
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return userData.isProjectManager == true; // Only true if explicitly set to true
     }
 
     match /users/{userId} {
-      allow read, update: if isOwner(userId) || isAdmin();
-      allow create: if request.auth != null; // Temporarily allow any authenticated user to create users
+      // Allow users to read their own profile or admins to read any profile
+      allow get: if isOwner(userId) || isAdmin();
+      // Allow authenticated users to list users (for displaying assignee names, etc.)
+      allow list: if request.auth != null;
+      allow update: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin(); // Only admins can create users
       allow delete: if isAdmin();
     }
     
     match /roles/{roleId} {
       allow read: if request.auth != null;
-      allow write: if isAdmin();
+      allow write: if isAdmin() || hasRolesManagePermission();
     }
     match /roles {
       allow list: if request.auth != null;
@@ -33,7 +66,19 @@ service cloud.firestore {
     }
 
     match /projects/{projectId} {
-      allow read, write: if isAdmin();
+      // Allow authenticated users to read projects (needed to see assigned tasks)
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+      // Allow updates if:
+      // 1. User is admin or project manager (full update access)
+      // 2. User is authenticated and only updating milestones/tasks (task status updates)
+      // Note: The application should validate that users can only update tasks assigned to them
+      // Firestore rules can't easily validate nested array updates, so we rely on app-level validation
+      allow update: if isAdmin() || hasProjectManagerPermissions() || (request.auth != null && request.auth.uid != null);
+      // Admins and project managers can create projects
+      allow create: if isAdmin() || hasProjectManagerPermissions();
+      // Admins and project managers can delete projects
+      allow delete: if isAdmin() || hasProjectManagerPermissions();
     }
 
     match /requests/{requestId} {
@@ -52,15 +97,169 @@ service cloud.firestore {
     match /designRequests/{docId} {
         allow read, write: if request.auth != null;
     }
+    
+    match /designs/{docId} {
+        // Allow read if user is the designer or admin
+        allow get: if request.auth != null && (resource.data.designerId == request.auth.uid || isAdmin());
+        allow list: if request.auth != null; // List permission - individual docs filtered by query
+        allow create: if request.auth != null && request.resource.data.designerId == request.auth.uid;
+        allow update, delete: if request.auth != null && (resource.data.designerId == request.auth.uid || isAdmin());
+    }
 
     match /infractions/{docId} {
-      allow read, write: if isAdmin();
+      // Users can read their own infractions, admins can read all
+      allow get: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if request.auth != null; // List permission - filtered by query
+      allow create, update, delete: if isAdmin(); // Only admins can modify
     }
     match /bonuses/{docId} {
-      allow read, write: if isAdmin();
+      // Users can read their own bonuses, admins can read all
+      allow get: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if request.auth != null; // List permission - filtered by query
+      allow create, update, delete: if isAdmin(); // Only admins can modify
     }
     match /leaveRequests/{docId} {
       allow read, write: if request.auth != null;
+    }
+    
+    match /employeeDocuments/{docId} {
+      // Only admins can manage employee documents
+      allow read, write: if isAdmin();
+    }
+    
+    match /transactions/{docId} {
+      // Only admins can manage transactions
+      allow read, write: if isAdmin();
+    }
+    match /transactions {
+      // Allow admins to list transactions
+      allow list: if isAdmin();
+    }
+    
+    match /infractionTypes/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    
+    match /bonusTypes/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+    
+    match /requisitions/{docId} {
+      // Users can read their own requisitions, admins can read all
+      allow get: if request.auth != null && (resource.data.requesterId == request.auth.uid || isAdmin());
+      allow list: if request.auth != null; // List permission - filtered by query
+      allow create: if request.auth != null && request.resource.data.requesterId == request.auth.uid;
+      
+      // Requester can update their own requisition if:
+      // 1. It's their requisition
+      // 2. Current status is 'draft'
+      // 3. They're only changing status to 'pending' or 'cancelled' (submitting/cancelling)
+      allow update: if request.auth != null && (
+        // Admin can update any requisition
+        isAdmin() ||
+        // Requester can submit or cancel their own draft requisitions
+        (resource.data.requesterId == request.auth.uid && 
+         resource.data.status == 'draft' &&
+         (request.resource.data.status == 'pending' || request.resource.data.status == 'cancelled'))
+      );
+      
+      // Only admins can delete requisitions
+      allow delete: if isAdmin();
+    }
+    
+    match /leaderboardLikes/{likeDocId} {
+      // Allow authenticated users to read like counts (everyone can see likes)
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to create/update like documents
+      allow create, update: if request.auth != null;
+      
+      // Allow users to delete like documents (for unliking)
+      allow delete: if request.auth != null;
+      
+      // Subcollection for tracking which users liked
+      match /userLikes/{userId} {
+        // Users can read all user likes (to see if someone liked)
+        allow read: if request.auth != null;
+        
+        // Users can only create their own like document
+        allow create: if request.auth != null && request.auth.uid == userId;
+        
+        // Users can only delete their own like document (unlike)
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Allow authenticated users to create notifications
+      // The app logic controls who gets notified (e.g., requesters notify QA, approvers notify requesters)
+      // We validate that the notification has required fields and the creator is authenticated
+      allow create: if request.auth != null && 
+                     request.auth.uid != null &&
+                     request.resource.data.userId != null &&
+                     request.resource.data.title != null &&
+                     request.resource.data.message != null &&
+                     request.resource.data.type != null;
+    }
+    
+    // Files collection - company file storage
+    match /files/{fileId} {
+      // List files: Allow all authenticated users. Document filtering happens via get rules below.
+      allow list: if request.auth != null && request.auth.uid != null;
+      
+      // Helper function to safely check if user is admin
+      // This prevents errors when user document doesn't exist
+      function isAdminSafe() {
+        return exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      }
+      
+      // Read individual file:
+      // - Users with files:read_all permission can read all files (checked via isAdmin for now, but should be hasFilesReadAll)
+      // - Users can always read files they created (to see their own uploads/links)
+      // - Staff can read files with visibility 'all_staff' (anyone with files:read_staff permission)
+      // - Users cannot read files with visibility 'restricted' (unless they have files:read_all permission or are creator)
+      // IMPORTANT: For list operations to work, we need to handle cases where isAdmin() might fail
+      // We check if user can read based on ownership or visibility first, then check admin status
+      // NOTE: Currently checking isAdmin as a proxy for files:read_all permission. In the future,
+      // we should add a hasFilesReadAll computed field to user documents for more accurate permission checking.
+      // Allow get if user is authenticated and:
+      // 1. User owns the file (uploadedBy matches), OR
+      // 2. File is visible to all staff (anyone with files:read_staff permission), OR
+      // 3. User has admin permissions (proxy for files:read_all permission)
+      // Note: We check ownership first as it's the fastest and most common case
+      // Use safe admin check to prevent errors when user document doesn't exist
+      allow get: if request.auth != null && request.auth.uid != null && (
+        resource.data.uploadedBy == request.auth.uid ||
+        resource.data.visibility == 'all_staff' ||
+        (resource.data.visibility == 'restricted' && isAdminSafe())
+      );
+      
+      // Create rules: Any authenticated user with files:create permission (checked in app)
+      // But we validate that the uploader is the authenticated user
+      allow create: if request.auth != null && 
+        request.auth.uid != null &&
+        request.resource.data.uploadedBy == request.auth.uid &&
+        request.resource.data.uploadedByEmail != null &&
+        request.resource.data.uploadedByName != null;
+      
+      // Update rules: Admins can update any file, users can update their own files
+      // Use safe admin check to prevent errors when user document doesn't exist
+      allow update: if request.auth != null && request.auth.uid != null && (
+        isAdminSafe() ||
+        resource.data.uploadedBy == request.auth.uid
+      );
+      
+      // Delete rules: Admins or original uploaders can delete files
+      allow delete: if request.auth != null && request.auth.uid != null && (isAdminSafe() || resource.data.uploadedBy == request.auth.uid);
     }
   }
 }

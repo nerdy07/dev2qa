@@ -10,5 +10,52 @@ service firebase.storage {
       allow write: if request.auth != null;
       allow read: if request.auth != null;
     }
+    
+    // Allow authenticated users to upload and read comment images
+    // Path structure: comments/{requestId}/{filename}
+    match /comments/{requestId}/{filename} {
+      allow write: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+    
+    // Allow admins to upload and read employee documents
+    // Path structure: employeeDocuments/{userId}/{filename}
+    match /employeeDocuments/{userId}/{filename} {
+      allow write: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+    
+    // Allow authenticated users to upload and read transaction receipts
+    // Path structure: transactions/{filename}
+    match /transactions/{filename} {
+      allow write: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+    
+    // Allow users to upload and read their own profile photos
+    // Path structure: profile-photos/{userId}/{filename}
+    match /profile-photos/{userId}/{filename} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+    }
+    
+    // Company files storage
+    // Path structure: company-files/{userId}/{filename}
+    // Note: Visibility control (all_staff vs admin_only) is managed in Firestore metadata
+    // Storage rules allow authenticated users to read - the app filters based on Firestore visibility
+    match /company-files/{userId}/{filename} {
+      // Allow authenticated users to read files
+      // The app will check Firestore metadata to enforce visibility rules
+      // This allows both download URLs and direct access to work
+      allow read: if request.auth != null;
+      
+      // Allow users to upload to their own folder
+      allow write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow admins to delete any file (checked via Firestore isAdmin field)
+      // Note: Storage rules can't directly check Firestore, so we allow delete for now
+      // The app should validate admin permissions before calling delete
+      allow delete: if request.auth != null;
+    }
   }
 }

@@ -65,15 +65,13 @@ export function RoleGuard({
   fallback,
   requireAll = false 
 }: RoleGuardProps) {
-  const { user } = useAuth();
+  const { hasRole } = useAuth();
   
   const hasRequiredRole = () => {
-    if (!user?.role) return false;
-    
     if (requireAll) {
-      return roles.every(role => user.role === role);
+      return roles.every(role => hasRole(role));
     } else {
-      return roles.includes(user.role);
+      return hasRole(roles);
     }
   };
 

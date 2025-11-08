@@ -62,25 +62,69 @@ export function TeamForm({ team, onSuccess }: TeamFormProps) {
     },
   });
 
+  // Reset form when team prop changes (important for editing)
+  React.useEffect(() => {
+    if (team) {
+      form.reset({
+        name: team.name || '',
+        description: team.description || '',
+        department: team.department || '',
+        teamLeadId: team.teamLeadId || '',
+        status: team.status || 'active',
+      });
+    } else {
+      form.reset({
+        name: '',
+        description: '',
+        department: '',
+        teamLeadId: '',
+        status: 'active',
+      });
+    }
+  }, [team, form]);
+
   const onSubmit = async (values: TeamFormValues) => {
     try {
+      // Prepare data - handle teamLeadId explicitly
+      // If it's empty string (from __none__), use null to clear it in Firestore
+      // Otherwise use the actual value
+      const teamLeadId = values.teamLeadId && values.teamLeadId.trim() !== '' && values.teamLeadId !== '__none__'
+        ? values.teamLeadId 
+        : null;
+      
+      // Debug: log the values being saved
+      console.log('Saving team with values:', {
+        name: values.name,
+        teamLeadId: teamLeadId,
+        rawTeamLeadId: values.teamLeadId
+      });
+      
+      const teamData: any = {
+        name: values.name,
+        description: values.description || null,
+        department: values.department || null,
+        status: values.status || 'active',
+        teamLeadId: teamLeadId,
+        updatedAt: new Date().toISOString(),
+      };
+
       if (team) {
-        // Update existing team
-        await updateDoc(doc(db!, 'teams', team.id), {
-          ...values,
-          updatedAt: new Date().toISOString(),
-        });
+        // Update existing team - explicitly set teamLeadId (even if null)
+        console.log('Updating team:', team.id, 'with data:', teamData);
+        await updateDoc(doc(db!, 'teams', team.id), teamData);
+        console.log('Team updated successfully');
         toast({
           title: "Team updated",
           description: `Team "${values.name}" has been updated successfully.`,
         });
       } else {
         // Create new team
-        await addDoc(collection(db!, 'teams'), {
-          ...values,
+        console.log('Creating new team with data:', teamData);
+        const docRef = await addDoc(collection(db!, 'teams'), {
+          ...teamData,
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         });
+        console.log('Team created with ID:', docRef.id);
         toast({
           title: "Team created",
           description: `Team "${values.name}" has been created successfully.`,
@@ -149,7 +193,7 @@ export function TeamForm({ team, onSuccess }: TeamFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Department</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value || ''}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select department" />
@@ -178,29 +222,43 @@ export function TeamForm({ team, onSuccess }: TeamFormProps) {
         <FormField
           control={form.control}
           name="teamLeadId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Team Lead</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team lead" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {potentialTeamLeads.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} ({user.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                Select a team lead for this team.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            // Handle the display value - use __none__ if empty, otherwise use actual value
+            const displayValue = !field.value || field.value === '' ? '__none__' : field.value;
+            
+            return (
+              <FormItem>
+                <FormLabel>Team Lead</FormLabel>
+                <Select 
+                  onValueChange={(value) => {
+                    // Convert __none__ to empty string, otherwise use the actual ID
+                    const newValue = value === '__none__' ? '' : value;
+                    console.log('Team lead selected:', { value, newValue });
+                    field.onChange(newValue);
+                  }} 
+                  value={displayValue}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select team lead" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="__none__">No team lead</SelectItem>
+                    {potentialTeamLeads.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} ({user.role})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Select a team lead for this team.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField
@@ -209,7 +267,7 @@ export function TeamForm({ team, onSuccess }: TeamFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value || 'active'}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />

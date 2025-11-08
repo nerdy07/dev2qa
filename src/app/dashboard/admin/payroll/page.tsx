@@ -21,6 +21,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StatCard } from '@/components/dashboard/stat-card';
+import { DollarSign, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Download } from 'lucide-react';
 
 type PayrollEntry = {
   user: User;
@@ -32,8 +37,32 @@ type PayrollEntry = {
   bonuses: Bonus[];
 };
 
+// Format currency with compact notation for very large numbers
 const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+  // Handle invalid numbers
+  if (isNaN(amount) || !isFinite(amount)) {
+    return '₦0.00';
+  }
+
+  // Use compact notation for amounts over 1 billion (1e9) for better readability
+  if (Math.abs(amount) >= 1e9) {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      notation: 'compact',
+      compactDisplay: 'short',
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 0
+    }).format(amount);
+  }
+
+  // For regular amounts, use standard formatting with maximumFractionDigits
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2
+  }).format(amount);
 };
 
 export default function PayrollPage() {

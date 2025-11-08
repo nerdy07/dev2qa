@@ -1,11 +1,11 @@
-
 'use client';
 
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { DateRange } from 'react-day-picker';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays, getYear } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -15,10 +15,11 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
 import { LEAVE_TYPES } from '@/lib/constants';
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, serverTimestamp, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { notifyAdminsOnLeaveRequest } from '@/app/requests/actions';
-import { User } from '@/lib/types';
+import { User, LeaveRequest } from '@/lib/types';
+import { useCollection } from '@/hooks/use-collection';
 
 const formSchema = z.object({
   leaveType: z.string({ required_error: 'Please select a leave type.' }),
@@ -39,6 +40,18 @@ interface LeaveRequestFormProps {
 export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  
+  // Get user's leave requests to calculate remaining entitlement
+  const leaveRequestsQuery = React.useMemo(() => {
+    if (!currentUser?.id) return null;
+    return query(
+      collection(db!, 'leaveRequests'),
+      where('userId', '==', currentUser.id),
+      orderBy('requestedAt', 'desc')
+    );
+  }, [currentUser?.id]);
+  
+  const { data: userLeaveRequests } = useCollection<LeaveRequest>('leaveRequests', leaveRequestsQuery);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -61,6 +74,31 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
     if (daysCount <= 0) {
         toast({ title: 'Invalid Date Range', description: 'The leave must be for at least one day.', variant: 'destructive' });
         return;
+    }
+
+    // Check leave entitlement
+    const totalEntitlement = currentUser.annualLeaveEntitlement || 0;
+    const currentYear = getYear(new Date());
+    
+    // Calculate leave taken this year (approved requests, excluding unpaid leave)
+    const leaveTaken = userLeaveRequests
+      ?.filter(req => {
+        const requestYear = req.startDate?.toDate?.()?.getFullYear();
+        return req.status === 'approved' && 
+               requestYear === currentYear && 
+               req.leaveType !== 'Unpaid Leave';
+      })
+      .reduce((acc, req) => acc + (req.daysCount || 0), 0) || 0;
+    
+    const leaveRemaining = totalEntitlement - leaveTaken;
+    
+    if (daysCount > leaveRemaining && values.leaveType !== 'Unpaid Leave') {
+      toast({
+        title: 'Insufficient Leave Balance',
+        description: `You have ${leaveRemaining} days remaining out of ${totalEntitlement} days. You cannot request ${daysCount} days.`,
+        variant: 'destructive',
+      });
+      return;
     }
 
     try {
@@ -138,16 +176,48 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         <FormField
           control={form.control}
           name="dates"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Start & End Date</FormLabel>
-              <DateRangePicker
-                date={field.value}
-                setDate={field.onChange}
-              />
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const daysCount = field.value?.from && field.value?.to 
+              ? differenceInCalendarDays(field.value.to, field.value.from) + 1 
+              : 0;
+            
+            // Calculate remaining leave
+            const totalEntitlement = currentUser?.annualLeaveEntitlement || 0;
+            const currentYear = getYear(new Date());
+            const leaveTaken = userLeaveRequests
+              ?.filter(req => {
+                const requestYear = req.startDate?.toDate?.()?.getFullYear();
+                return req.status === 'approved' && 
+                       requestYear === currentYear && 
+                       req.leaveType !== 'Unpaid Leave';
+              })
+              .reduce((acc, req) => acc + (req.daysCount || 0), 0) || 0;
+            const leaveRemaining = totalEntitlement - leaveTaken;
+            
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel>Start & End Date</FormLabel>
+                <DateRangePicker
+                  date={field.value}
+                  setDate={field.onChange}
+                />
+                {field.value?.from && field.value?.to && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {daysCount} day{daysCount !== 1 ? 's' : ''}
+                    </p>
+                    {totalEntitlement > 0 && (
+                      <p className={`text-xs ${leaveRemaining < daysCount ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                        Remaining: {leaveRemaining} / {totalEntitlement} days
+                        {leaveRemaining < daysCount && ' (Insufficient balance - unpaid leave may be available)'}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField

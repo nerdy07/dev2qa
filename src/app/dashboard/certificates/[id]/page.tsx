@@ -8,16 +8,19 @@ import { format } from 'date-fns';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Certificate } from '@/lib/types';
+import { formatFriendlyId } from '@/lib/id-generator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useDocument } from '@/hooks/use-collection';
 import { useAuth } from '@/providers/auth-provider';
+import { ALL_PERMISSIONS } from '@/lib/roles';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { BackButton } from '@/components/common/back-button';
 
 const Dev2QALogo = () => (
     <div className="flex items-center gap-3 font-sans">
@@ -166,7 +169,8 @@ export default function CertificatePage() {
     const approvalDate = (certificate.approvalDate as any)?.toDate() || new Date();
     const revocationDate = (certificate.revocationDate as any)?.toDate();
     const isRevoked = certificate.status === 'revoked';
-    const canRevoke = user?.role === 'admin' || user?.role === 'qa_tester';
+    const { hasPermission } = useAuth();
+    const canRevoke = hasPermission(ALL_PERMISSIONS.CERTIFICATES.REVOKE);
 
     const RevokedStamp = () => (
         <div className="absolute inset-0 flex items-center justify-center bg-destructive/10 backdrop-blur-[2px] z-20 print:bg-transparent print:backdrop-blur-none">
@@ -181,7 +185,30 @@ export default function CertificatePage() {
     );
 
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-accent/90 p-4 font-sans print:bg-white print:p-0">
+        <>
+            <style jsx global>{`
+                @media print {
+                    body {
+                        background: white !important;
+                    }
+                    .print\\:hidden {
+                        display: none !important;
+                    }
+                    img {
+                        max-width: 100% !important;
+                        height: auto !important;
+                        object-fit: contain !important;
+                    }
+                    .logo-image {
+                        image-rendering: -webkit-optimize-contrast;
+                        image-rendering: crisp-edges;
+                    }
+                }
+            `}</style>
+            <div className="mb-4 print:hidden">
+              <BackButton />
+            </div>
+            <div className="flex min-h-screen flex-col items-center justify-center bg-accent/90 p-4 font-sans print:bg-white print:p-0">
 
             <div className="w-full max-w-5xl flex justify-end gap-2 mb-4 print:hidden z-10">
                 {canRevoke && !isRevoked && (
@@ -227,7 +254,12 @@ export default function CertificatePage() {
 
                     <div className="absolute inset-0 flex flex-col p-16 z-10">
                         <header className="flex justify-between items-start mb-8">
-                            <Dev2QALogo />
+                            <div className="flex items-center gap-3 font-sans">
+                                <div className="w-9 h-9 print:w-10 print:h-10">
+                                    <Image src="/logo.jpg" alt="Dev2QA Logo" width={36} height={36} className="rounded-md logo-image" />
+                                </div>
+                                <p className="font-semibold tracking-[0.2em] text-accent">DEV2QA</p>
+                            </div>
                             <div className="text-right font-sans">
                                 <p className="font-semibold text-lg">{format(approvalDate, 'MMMM do, yyyy')}</p>
                                 <p className="text-xs text-muted-foreground">Date of Issue</p>
@@ -263,7 +295,7 @@ export default function CertificatePage() {
                             <QualitySeal />
 
                             <div className="text-center w-60">
-                                <div className="font-semibold text-lg pb-1">ID: {certificate.id.substring(0, 10)}...</div>
+                                <div className="font-semibold text-lg pb-1">ID: {certificate.shortId || formatFriendlyId(certificate.id, 'certificate')}</div>
                                 <div className="w-full h-px bg-border/50 mx-auto mt-1"></div>
                                 <p className="text-sm text-muted-foreground mt-2">Certificate ID</p>
                             </div>
@@ -272,5 +304,6 @@ export default function CertificatePage() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

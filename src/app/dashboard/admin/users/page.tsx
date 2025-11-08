@@ -4,7 +4,7 @@
 import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MoreHorizontal, TriangleAlert, UserCheck, UserX } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, TriangleAlert, UserCheck, UserX, FileText } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -43,6 +43,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { User, Role } from '@/lib/types';
 import { UserForm } from '@/components/admin/user-form';
 import { RoleForm } from '@/components/admin/role-form';
+import { UserDocumentsDialog } from '@/components/admin/user-documents-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -56,6 +57,8 @@ import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestor
 import { db } from '@/lib/firebase';
 import { createUser } from '@/app/actions/user-actions';
 import { ProtectedRoute } from '@/components/common/protected-route';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 
 type ActionType = 'delete' | 'deactivate' | 'activate';
@@ -65,6 +68,7 @@ function UsersTable() {
   const { user: currentUser, sendPasswordReset } = useAuth();
   const { hasPermission } = usePermissions();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [isDocumentsDialogOpen, setIsDocumentsDialogOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
@@ -73,6 +77,20 @@ function UsersTable() {
   const canCreate = hasPermission(ALL_PERMISSIONS.USERS.CREATE);
   const canUpdate = hasPermission(ALL_PERMISSIONS.USERS.UPDATE);
   const canDelete = hasPermission(ALL_PERMISSIONS.USERS.DELETE);
+
+  // Pagination
+  const {
+    currentPage,
+    totalPages,
+    currentData: paginatedUsers,
+    itemsPerPage,
+    setCurrentPage,
+    setItemsPerPage,
+  } = usePagination({
+    data: users || [],
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
 
 
   const handleEdit = (user: User) => {
@@ -124,21 +142,41 @@ function UsersTable() {
             successMessage = `User ${selectedUser.name} has been ${newStatus ? 'deactivated' : 'activated'}.`;
         }
         
-        const result = await response.json();
-
+        // Check if response is ok before trying to parse JSON
         if (!response.ok) {
-            throw new Error(result.message || 'An unknown error occurred.');
+            // Try to get error message from response
+            let errorMessage = 'An unknown error occurred.';
+            try {
+                const errorResult = await response.json();
+                errorMessage = errorResult.message || errorMessage;
+            } catch (jsonError) {
+                // If JSON parsing fails, use status text
+                errorMessage = response.statusText || `HTTP ${response.status} error`;
+            }
+            throw new Error(errorMessage);
         }
+
+        // Parse JSON only if response is ok
+        const result = await response.json();
 
         toast({ title: 'Success', description: successMessage });
         
+        // Firestore's real-time listener will automatically update the UI
+        // But we can do an optimistic update for immediate feedback
         if (users && setData) {
             if (actionToConfirm === 'delete') {
+                // Optimistically remove the user from the list
                 setData(users.filter(u => u.id !== selectedUser.id));
             } else {
+                // Optimistically update the user status
                 setData(users.map(u => u.id === selectedUser.id ? { ...u, disabled: actionToConfirm === 'deactivate' } : u));
             }
         }
+        
+        // Close dialog immediately
+        setIsAlertOpen(false);
+        setSelectedUser(undefined);
+        setActionToConfirm(null);
         
     } catch (err) {
         const error = err as Error;
@@ -148,10 +186,14 @@ function UsersTable() {
             description: error.message,
             variant: 'destructive',
         });
+        // Keep dialog open on error so user can retry
     } finally {
-        setIsAlertOpen(false);
-        setSelectedUser(undefined);
-        setActionToConfirm(null);
+        // Only close if not already closed (on success)
+        if (actionToConfirm) {
+            setIsAlertOpen(false);
+            setSelectedUser(undefined);
+            setActionToConfirm(null);
+        }
     }
   }
 
@@ -227,7 +269,7 @@ function UsersTable() {
 
     return (
       <TableBody>
-        {users?.map((user) => (
+        {paginatedUsers?.map((user) => (
           <TableRow key={user.id} className={cn(user.disabled && 'text-muted-foreground opacity-60')}>
             <TableCell className="font-medium">{user.name}</TableCell>
             <TableCell>{user.email}</TableCell>
@@ -250,6 +292,13 @@ function UsersTable() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                   {canUpdate && <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>}
+                  {canUpdate && <DropdownMenuItem onClick={() => {
+                    setSelectedUser(user);
+                    setIsDocumentsDialogOpen(true);
+                  }}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Manage Documents
+                  </DropdownMenuItem>}
                   {canUpdate && <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>}
                   {(canUpdate || canDelete) && <DropdownMenuSeparator />}
                   {canUpdate && (user.disabled ? (
@@ -310,7 +359,31 @@ function UsersTable() {
           </TableHeader>
           {renderContent()}
         </Table>
+        {users && users.length > 0 && (
+          <div className="p-4">
+            <PaginationWrapper
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={users.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </div>
+        )}
       </Card>
+
+      {selectedUser && (
+        <UserDocumentsDialog
+          user={selectedUser}
+          open={isDocumentsDialogOpen}
+          onOpenChange={(open) => {
+            setIsDocumentsDialogOpen(open);
+            if (!open) setSelectedUser(undefined);
+          }}
+        />
+      )}
+
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
           <AlertDialogContent>
               <AlertDialogHeader>
@@ -498,9 +571,9 @@ function RolesTable() {
             </TableHeader>
             {renderContent()}
             </Table>
-        </Card>
+      </Card>
 
-        <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -522,7 +595,6 @@ export default function UsersPage() {
     return (
         <ProtectedRoute 
             permission={ALL_PERMISSIONS.USERS.READ}
-            roles={['admin', 'hr_admin']}
         >
             <PageHeader
                 title="User Management"

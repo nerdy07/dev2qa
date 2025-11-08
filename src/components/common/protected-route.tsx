@@ -23,30 +23,21 @@ export function ProtectedRoute({
   requireAll = false,
   redirectTo = '/dashboard'
 }: ProtectedRouteProps) {
-  const { user, hasPermission, loading } = useAuth();
+  const { user, hasPermission, hasRole, loading, rolesLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    // Wait for auth and roles to finish loading before checking permissions
+    if (loading || rolesLoading) return;
 
+    // Redirect to login page if user is not authenticated
     if (!user) {
       router.push('/');
       return;
     }
 
-    // Check role-based access
-    if (roles.length > 0) {
-      const hasRequiredRole = requireAll 
-        ? roles.every(role => user.role === role)
-        : roles.includes(user.role);
-      
-      if (!hasRequiredRole) {
-        router.push(redirectTo);
-        return;
-      }
-    }
-
-    // Check permission-based access
+    // Only check permissions - NO hardcoded role checks
+    // If roles prop is provided, it's ignored - permissions are the source of truth
     if (permission || permissions.length > 0) {
       const hasRequiredPermission = () => {
         if (permissions.length > 0) {
@@ -62,9 +53,22 @@ export function ProtectedRoute({
         return;
       }
     }
-  }, [user, hasPermission, loading, router, permission, permissions, roles, requireAll, redirectTo]);
+    
+    // If only roles are specified (no permissions), check roles from Firestore
+    // This is a fallback for backward compatibility, but should be avoided
+    if (roles.length > 0 && !permission && permissions.length === 0) {
+      const hasRequiredRole = requireAll 
+        ? roles.every(role => hasRole(role))
+        : hasRole(roles);
+      
+      if (!hasRequiredRole) {
+        router.push(redirectTo);
+        return;
+      }
+    }
+  }, [user, hasPermission, hasRole, loading, rolesLoading, router, permission, permissions, roles, requireAll, redirectTo]);
 
-  if (loading) {
+  if (loading || rolesLoading) {
     return (
       <div className="flex-1 space-y-4 p-4">
         <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
@@ -84,7 +88,23 @@ export function ProtectedRoute({
   }
 
   if (!user) {
-    return null;
+    // Show loading skeleton while redirecting
+    return (
+      <div className="flex-1 space-y-4 p-4">
+        <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-8">
+          <div className="grid gap-1">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-5 w-80" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-[109px] w-full" />
+          <Skeleton className="h-[109px] w-full" />
+          <Skeleton className="h-[109px] w-full" />
+          <Skeleton className="h-[109px] w-full" />
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

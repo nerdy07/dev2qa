@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 export default function DashboardLayout({
   children,
@@ -18,9 +19,9 @@ export default function DashboardLayout({
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex h-screen w-full bg-background">
+    <div className="flex h-screen w-full bg-background" suppressHydrationWarning>
       <Sidebar />
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col" suppressHydrationWarning>
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <MobileSidebar />
@@ -30,7 +31,9 @@ export default function DashboardLayout({
             </Link>
           </div>
 
-          <DropdownMenu>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-auto p-1">
                 <Avatar className="h-8 w-8">
@@ -54,7 +57,8 @@ export default function DashboardLayout({
                     <span>Log out</span>
                 </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
+            </DropdownMenu>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

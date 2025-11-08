@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/common/page-header';
+import { BackButton } from '@/components/common/back-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -94,7 +95,9 @@ export default function NewDesignRequestPage() {
       <PageHeader
         title="New Design Request"
         description="Fill out the form below to submit a design for approval."
-      />
+      >
+        <BackButton />
+      </PageHeader>
       <Card>
         <CardContent className="p-6">
           <Form {...form}>
