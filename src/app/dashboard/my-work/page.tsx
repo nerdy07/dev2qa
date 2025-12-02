@@ -458,6 +458,7 @@ export default function MyWorkPage() {
     }
 
     try {
+      const requiresCertificate = task.certificateRequired !== false;
       // Find the team - try to match by project or use a default
       const associatedTeam = project.name || 'General';
       
@@ -485,17 +486,22 @@ export default function MyWorkPage() {
         : undefined;
 
       // Build request data - only include taskLink if it's defined (Firestore doesn't allow undefined)
+      const requestDescription = task.description || (requiresCertificate
+        ? `Certificate request for completed task: ${task.name}`
+        : `QA review request for completed task: ${task.name}`);
+
       const requestDataBase: Omit<CertificateRequest, 'id' | 'taskLink'> = {
         taskTitle: task.name,
         associatedTeam: associatedTeam,
         associatedProject: project.name || '',
-        description: task.description || `Certificate request for completed task: ${task.name}`,
+        description: requestDescription,
         requesterId: user.id,
         requesterName: user.name,
         requesterEmail: user.email,
         status: 'pending',
         createdAt: serverTimestamp() as any,
         updatedAt: serverTimestamp() as any,
+        certificateRequired: requiresCertificate,
       };
 
       // Only add taskLink if it exists (avoid undefined values in Firestore)
@@ -543,12 +549,17 @@ export default function MyWorkPage() {
         requesterName: user.name,
         associatedProject: project.name || '',
         associatedTeam: associatedTeam,
+        certificateRequired: requiresCertificate,
       });
 
-        toast({
-          title: 'Task Completed & Request Created!',
-          description: `Task "${task.name}" marked as Done. Certificate request ${shortId} has been automatically created and sent to QA testers for review.${suggestedQATester ? ` Suggested QA tester: ${suggestedQATester}` : ''}`,
-        });
+      const toastDescription = requiresCertificate
+        ? `Task "${task.name}" marked as Done. Certificate request ${shortId} has been created and sent to QA for approval.${suggestedQATester ? ` Suggested QA tester: ${suggestedQATester}` : ''}`
+        : `Task "${task.name}" marked as Done. QA sign-off request ${shortId} has been created (no completion certificate required).${suggestedQATester ? ` Suggested QA tester: ${suggestedQATester}` : ''}`;
+
+      toast({
+        title: 'Task Completed',
+        description: toastDescription,
+      });
     } catch (err) {
       const error = err as Error;
       console.error('Error creating certificate request:', error);
@@ -577,13 +588,10 @@ export default function MyWorkPage() {
     return type === 'request' ? <FileText className="h-4 w-4" /> : <FolderKanban className="h-4 w-4" />;
   };
 
-  const handleItemClick = (item: WorkItem) => {
-    if (item.type === 'request') {
-      router.push(`/dashboard/requests/${item.id}`);
-    } else {
-      router.push(`/dashboard/designs/${item.id}`);
-    }
-  };
+  const getItemHref = (item: WorkItem) =>
+    item.type === 'request'
+      ? `/dashboard/requests/${item.id}`
+      : `/dashboard/designs/${item.id}`;
 
   // Only show loading skeleton on true initial load - don't block navigation
   if (isInitialLoad) {
@@ -837,41 +845,45 @@ export default function MyWorkPage() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {actionRequiredItems.map(item => (
-                <Card 
-                  key={item.id} 
-                  className="cursor-pointer hover:shadow-md transition-shadow border-l-4 border-l-orange-500"
-                  onClick={() => handleItemClick(item)}
+                <Link
+                  key={item.id}
+                  href={getItemHref(item)}
+                  className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        {getTypeIcon(item.type)}
-                        <CardTitle className="text-base">{item.title}</CardTitle>
+                  <Card className="border-l-4 border-l-orange-500 transition-shadow group-hover:shadow-md">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          {getTypeIcon(item.type)}
+                          <CardTitle className="text-base text-foreground group-hover:text-primary">
+                            {item.title}
+                          </CardTitle>
+                        </div>
+                        {getStatusBadge(item.status)}
                       </div>
-                      {getStatusBadge(item.status)}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <div className="space-y-2 text-sm">
-                      {item.project && (
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2 text-sm">
+                        {item.project && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <FolderKanban className="h-3 w-3" />
+                            <span>{item.project}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 text-muted-foreground">
-                          <FolderKanban className="h-3 w-3" />
-                          <span>{item.project}</span>
+                          <Calendar className="h-3 w-3" />
+                          <span>{format(item.date, 'MMM d, yyyy')}</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        <span>{format(item.date, 'MMM d, yyyy')}</span>
+                        {item.status === 'rejected' && item.type === 'request' && (
+                          <div className="flex items-center gap-2 text-orange-600 text-xs font-medium">
+                            <MessageSquare className="h-3 w-3" />
+                            <span>Please provide feedback</span>
+                          </div>
+                        )}
                       </div>
-                      {item.status === 'rejected' && item.type === 'request' && (
-                        <div className="flex items-center gap-2 text-orange-600 text-xs font-medium">
-                          <MessageSquare className="h-3 w-3" />
-                          <span>Please provide feedback</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           </CardContent>
@@ -904,19 +916,19 @@ export default function MyWorkPage() {
             </TabsList>
 
         <TabsContent value="all" className="mt-6">
-          <WorkItemsGrid items={filteredItems} onItemClick={handleItemClick} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
+          <WorkItemsGrid items={filteredItems} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
         </TabsContent>
 
         <TabsContent value="pending" className="mt-6">
-          <WorkItemsGrid items={pendingItems} onItemClick={handleItemClick} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
+          <WorkItemsGrid items={pendingItems} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
         </TabsContent>
 
         <TabsContent value="approved" className="mt-6">
-          <WorkItemsGrid items={approvedItems} onItemClick={handleItemClick} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
+          <WorkItemsGrid items={approvedItems} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
         </TabsContent>
 
         <TabsContent value="rejected" className="mt-6">
-          <WorkItemsGrid items={rejectedItems} onItemClick={handleItemClick} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
+          <WorkItemsGrid items={rejectedItems} getStatusBadge={getStatusBadge} getTypeIcon={getTypeIcon} />
         </TabsContent>
           </Tabs>
         </CardContent>
@@ -997,6 +1009,9 @@ function TasksList({
                 <div className="flex items-center gap-2 mb-2">
                   {getStatusIcon(task.status)}
                   <CardTitle className="text-base">{task.name}</CardTitle>
+                  <Badge variant={task.certificateRequired === false ? 'secondary' : 'outline'} className="text-xs font-medium">
+                    {task.certificateRequired === false ? 'QA Sign-off' : 'Certificate'}
+                  </Badge>
                 </div>
                 {task.description && (
                   <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
@@ -1080,17 +1095,19 @@ function TasksList({
   );
 }
 
-function WorkItemsGrid({ 
-  items, 
-  onItemClick, 
-  getStatusBadge, 
-  getTypeIcon 
-}: { 
+function WorkItemsGrid({
+  items,
+  getStatusBadge,
+  getTypeIcon,
+}: {
   items: WorkItem[];
-  onItemClick: (item: WorkItem) => void;
   getStatusBadge: (status: string) => React.ReactNode;
   getTypeIcon: (type: string) => React.ReactNode;
 }) {
+  const [visibleCount, setVisibleCount] = React.useState(9);
+  const visibleItems = React.useMemo(() => items.slice(0, visibleCount), [items, visibleCount]);
+  const hasMore = items.length > visibleCount;
+
   if (items.length === 0) {
     return (
       <Card>
@@ -1103,61 +1120,78 @@ function WorkItemsGrid({
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {items.map(item => (
-        <Card 
-          key={item.id} 
-          className="cursor-pointer hover:shadow-lg transition-all hover:border-primary/50"
-          onClick={() => onItemClick(item)}
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {visibleItems.map((item) => (
+        <Link
+          key={item.id}
+          href={getItemHref(item)}
+          className="group block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div className="text-muted-foreground flex-shrink-0">
-                  {getTypeIcon(item.type)}
+          <Card className="transition-all group-hover:border-primary/50 group-hover:shadow-lg">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="text-muted-foreground flex-shrink-0">
+                    {getTypeIcon(item.type)}
+                  </div>
+                  <CardTitle className="text-base truncate text-foreground group-hover:text-primary">
+                    {item.title}
+                  </CardTitle>
                 </div>
-                <CardTitle className="text-base truncate">{item.title}</CardTitle>
+                {getStatusBadge(item.status)}
               </div>
-              {getStatusBadge(item.status)}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            <div className="space-y-1.5 text-sm">
-              {item.project && (
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div className="space-y-1.5 text-sm">
+                {item.project && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate">{item.project}</span>
+                  </div>
+                )}
+                {item.team && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <UsersIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="truncate">{item.team}</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="truncate">{item.project}</span>
+                  <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span>{format(item.date, 'MMM d, yyyy')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({formatDistanceToNow(item.date, { addSuffix: true })})
+                  </span>
+                </div>
+              </div>
+              {item.type === 'request' && item.request && (
+                <div className="pt-2 border-t">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Certificate Request</span>
+                    {item.request.certificateId && (
+                      <Badge variant="outline" className="text-xs">
+                        Certificate Issued
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               )}
-              {item.team && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <UsersIcon className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="truncate">{item.team}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>{format(item.date, 'MMM d, yyyy')}</span>
-                <span className="text-xs text-muted-foreground">
-                  ({formatDistanceToNow(item.date, { addSuffix: true })})
-                </span>
-              </div>
-            </div>
-            {item.type === 'request' && item.request && (
-              <div className="pt-2 border-t">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Certificate Request</span>
-                  {item.request.certificateId && (
-                    <Badge variant="outline" className="text-xs">
-                      Certificate Issued
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        </Link>
+        ))}
+      </div>
+      {hasMore && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => setVisibleCount((count) => Math.min(count + 6, items.length))}
+            className="px-lg"
+          >
+            Load more work items
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

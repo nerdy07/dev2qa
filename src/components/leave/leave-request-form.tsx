@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { DateRange } from 'react-day-picker';
-import { differenceInCalendarDays, getYear } from 'date-fns';
+import { differenceInCalendarDays, getYear, format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -20,6 +20,8 @@ import { db } from '@/lib/firebase';
 import { notifyAdminsOnLeaveRequest } from '@/app/requests/actions';
 import { User, LeaveRequest } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { createInAppNotificationsForUsers } from '@/lib/notifications';
 
 const formSchema = z.object({
   leaveType: z.string({ required_error: 'Please select a leave type.' }),
@@ -114,15 +116,54 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         requestedAt: serverTimestamp(),
       };
       
-      await addDoc(collection(db, 'leaveRequests'), leaveData);
+      const leaveRequestRef = await addDoc(collection(db, 'leaveRequests'), leaveData);
 
-      // Notify Admins
+      // Find users with leave:manage permission
+      const leaveManagersQuery = query(
+        collection(db, 'users'),
+        where('permissions', 'array-contains', ALL_PERMISSIONS.LEAVE_MANAGEMENT.MANAGE)
+      );
+      const leaveManagersSnapshot = await getDocs(leaveManagersQuery);
+      const leaveManagerUsers = leaveManagersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as User))
+        .filter(user => !user.disabled); // Exclude disabled users
+      
+      const leaveManagerIds = leaveManagerUsers.map(user => user.id);
+      const leaveManagerEmails = leaveManagerUsers.map(user => user.email);
+
+      // Create in-app notifications for users with leave:manage permission
+      if (leaveManagerIds.length > 0) {
+        const notificationResult = await createInAppNotificationsForUsers(
+          leaveManagerIds,
+          {
+            type: 'general',
+            title: 'New Leave Request',
+            message: `${currentUser.name} has submitted a ${values.leaveType} leave request for ${daysCount} day(s) (${format(values.dates.from, 'MMM d')} - ${format(values.dates.to, 'MMM d')}).`,
+            read: false,
+            data: {
+              leaveRequestId: leaveRequestRef.id,
+            },
+          }
+        );
+
+        if (!notificationResult.success) {
+          console.warn('Failed to create some in-app notifications:', notificationResult.error);
+        }
+      }
+
+      // Send email notifications (backward compatibility - includes admins and leave managers)
+      // Also query for admins by role for backward compatibility
       const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
       const adminSnapshot = await getDocs(adminQuery);
-      const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
+      const adminEmails = adminSnapshot.docs
+        .map(doc => (doc.data() as User).email)
+        .filter(email => email); // Filter out undefined emails
+      
+      // Combine admin emails with leave manager emails, removing duplicates
+      const allRecipientEmails = Array.from(new Set([...adminEmails, ...leaveManagerEmails]));
       
       const emailResult = await notifyAdminsOnLeaveRequest({ 
-        adminEmails,
+        adminEmails: allRecipientEmails,
         userName: currentUser.name,
         leaveType: values.leaveType,
         startDate: values.dates.from.toISOString(),
@@ -136,7 +177,7 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         description: `Your request for ${daysCount} day(s) off has been sent for approval.`,
       });
       if (!emailResult.success) {
-        toast({ title: 'Admin Notification Failed', description: emailResult.error, variant: 'destructive' });
+        toast({ title: 'Email Notification Failed', description: emailResult.error, variant: 'destructive' });
       }
 
       onSuccess();

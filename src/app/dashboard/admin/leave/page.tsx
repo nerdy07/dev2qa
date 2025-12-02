@@ -25,6 +25,8 @@ import { db } from '@/lib/firebase';
 import { sendLeaveApprovalEmail, sendLeaveRejectionEmail } from '@/app/requests/actions';
 import { usePagination } from '@/hooks/use-pagination';
 import { PaginationWrapper } from '@/components/common/pagination-wrapper';
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
 
 export default function LeaveManagementPage() {
   const { user: currentUser } = useAuth();
@@ -172,7 +174,7 @@ export default function LeaveManagementPage() {
                 {status === 'pending' && <TableHead>Reason</TableHead>}
                 {status !== 'pending' && <TableHead>Reviewed By</TableHead>}
                 {status === 'rejected' && <TableHead>Rejection Reason</TableHead>}
-                {status === 'pending' && <TableHead className="text-right">Actions</TableHead>}
+                <TableHead className="text-right">Actions</TableHead>
             </TableRow>
         </TableHeader>
         <TableBody>
@@ -183,14 +185,14 @@ export default function LeaveManagementPage() {
                     <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-12" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                    {status === 'pending' && <TableCell><div className="flex justify-end gap-2"><Skeleton className="h-8 w-8" /><Skeleton className="h-8 w-8" /></div></TableCell>}
+                    <TableCell><div className="flex justify-end gap-2"><Skeleton className="h-8 w-8" />{status === 'pending' && <Skeleton className="h-8 w-8" />}</div></TableCell>
                 </TableRow>
             ))}
             {!loading && requests.length === 0 && (
-                <TableRow><TableCell colSpan={status === 'pending' ? 6 : 5} className="h-24 text-center">No requests found in this category.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={status === 'pending' ? 7 : 6} className="h-24 text-center">No requests found in this category.</TableCell></TableRow>
             )}
             {!loading && requests.map(req => (
-                <TableRow key={req.id}>
+                <TableRow key={req.id} className="hover:bg-muted/50 cursor-pointer" onClick={() => window.location.href = `/dashboard/admin/leave/${req.id}`}>
                     <TableCell className="font-medium">{req.userName}</TableCell>
                     <TableCell>{req.leaveType}</TableCell>
                     <TableCell>{req.startDate ? format(req.startDate.toDate(), 'PPP') : ''} - {req.endDate ? format(req.endDate.toDate(), 'PPP') : ''}</TableCell>
@@ -201,25 +203,53 @@ export default function LeaveManagementPage() {
                     {status === 'rejected' && <TableCell className="text-destructive text-sm max-w-xs truncate">{req.rejectionReason}</TableCell>}
                     
                     {status === 'pending' && (
-                        <TableCell className="text-right">
-                          <TooltipProvider delayDuration={0}>
-                              <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleApprove(req)}>
-                                          <Check className="h-4 w-4" />
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Approve</p></TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                  <TooltipTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => openRejectionDialog(req)}>
-                                          <ThumbsDown className="h-4 w-4" />
-                                      </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent><p>Reject</p></TooltipContent>
-                              </Tooltip>
-                          </TooltipProvider>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            <TooltipProvider delayDuration={0}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Link href={`/dashboard/admin/leave/${req.id}`}>
+                                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                        </Link>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>View Details</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-primary hover:text-primary" onClick={() => handleApprove(req)}>
+                                            <Check className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Approve</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => openRejectionDialog(req)}>
+                                            <ThumbsDown className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Reject</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                    )}
+                    {status !== 'pending' && (
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <TooltipProvider delayDuration={0}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Link href={`/dashboard/admin/leave/${req.id}`}>
+                                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                        </Link>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>View Details</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         </TableCell>
                     )}
                 </TableRow>

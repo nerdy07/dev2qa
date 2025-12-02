@@ -37,6 +37,8 @@ import { uploadFile } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 import { getTaskTimelines } from '@/app/actions';
 import { notifyAdminsOnLeaveRequest, notifyOnProjectUpdate } from '@/app/requests/actions';
+import { Switch } from '../ui/switch';
+import { useAuth } from '@/providers/auth-provider';
 
 interface ProjectFormProps {
   project?: Project;
@@ -59,6 +61,7 @@ const taskSchema = z.object({
     doc: z.instanceof(File).optional(),
     startDate: z.date().optional(),
     endDate: z.date().optional(),
+    certificateRequired: z.boolean().default(false),
 });
 
 const milestoneSchema = z.object({
@@ -90,6 +93,8 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
   const isEditing = !!project;
   const { data: users, loading: usersLoading } = useCollection<User>('users');
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canConfigureCertificates = Boolean(user?.isProjectManager);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -116,6 +121,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
               docUrl: t.docUrl || '',
               startDate: t.startDate ? t.startDate.toDate() : undefined,
               endDate: t.endDate ? t.endDate.toDate() : undefined,
+              certificateRequired: t.certificateRequired ?? false,
           })) || [] 
       })) || [],
       resources: project?.resources || [],
@@ -216,6 +222,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                     status: existingTask?.status || 'To Do',
                     assigneeId: existingTask?.assigneeId || null,
                     assigneeName: existingTask?.assigneeName || null,
+                        certificateRequired: t.certificateRequired ?? false,
                 }
             }) || [],
         })) || [],
@@ -500,7 +507,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
                         
                         <div className="pl-4 border-l-2 ml-2 space-y-3">
                             <h4 className="text-md font-medium">Tasks</h4>
-                            <NestedTaskArray milestoneIndex={index} control={form.control} />
+            <NestedTaskArray milestoneIndex={index} control={form.control} canConfigureCertificates={canConfigureCertificates} />
                         </div>
                     </div>
                 ))}
@@ -528,7 +535,7 @@ export function ProjectForm({ project, projectId, onSave, onCancel }: ProjectFor
   );
 }
 
-function NestedTaskArray({ milestoneIndex, control }: { milestoneIndex: number, control: any }) {
+function NestedTaskArray({ milestoneIndex, control, canConfigureCertificates }: { milestoneIndex: number, control: any, canConfigureCertificates: boolean }) {
     const { fields, append, remove } = useFieldArray({
       control,
       name: `milestones.${milestoneIndex}.tasks`,
@@ -641,6 +648,33 @@ function NestedTaskArray({ milestoneIndex, control }: { milestoneIndex: number, 
                         </FormItem>
                       )}
                     />
+                    <FormField
+                        control={control}
+                        name={`milestones.${milestoneIndex}.tasks.${taskIndex}.certificateRequired`}
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="text-xs">Completion Certificate Required</FormLabel>
+                                <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                                    <div className="max-w-[70%]">
+                                        <span className="text-sm font-medium block">Flag for certificate</span>
+                                        <FormDescription className="text-xs">
+                                            When enabled, marking this task as Done will request a QA completion certificate.
+                                            {!canConfigureCertificates && ' (Project manager access required to change)'}
+                                        </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                        <Switch
+                                            checked={field.value ?? false}
+                                            onCheckedChange={canConfigureCertificates ? field.onChange : undefined}
+                                            disabled={!canConfigureCertificates}
+                                            aria-label="Toggle certificate requirement"
+                                        />
+                                    </FormControl>
+                                </div>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                 </CollapsibleContent>
              </Collapsible>
           </div>
@@ -649,7 +683,7 @@ function NestedTaskArray({ milestoneIndex, control }: { milestoneIndex: number, 
           type="button"
           variant="secondary"
           size="sm"
-          onClick={() => append({ id: crypto.randomUUID(), name: '', description: '', docUrl: '' })}
+          onClick={() => append({ id: crypto.randomUUID(), name: '', description: '', docUrl: '', certificateRequired: false })}
           className="mt-2"
         >
           Add Task

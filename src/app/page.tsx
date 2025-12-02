@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -42,6 +43,21 @@ const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(1, { message: 'Password is required.' }),
 });
+
+const productHighlights = [
+  {
+    title: 'End-to-end delivery tracking',
+    description: 'Follow every task from request through QA sign-off and completion certificate issuance.',
+  },
+  {
+    title: 'Permission-aware workflows',
+    description: 'Surface the right actions per role so project managers, QA, and execs stay aligned.',
+  },
+  {
+    title: 'Automated notifications',
+    description: 'Keep stakeholders informed with reminders, approvals, and follow-up nudges—automatically.',
+  },
+];
 
 export default function LoginPage() {
   const { login, sendPasswordReset, user, loading } = useAuth();
@@ -157,18 +173,89 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 dark:bg-background">
-      <div className="mb-8 flex items-center gap-2 font-semibold text-primary">
-        <Image src="/logo.jpg" alt="Dev2QA Logo" width={28} height={28} />
-        <h1 className="text-2xl">Dev2QA</h1>
-      </div>
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Welcome Back!</CardTitle>
-          <CardDescription>
-            Sign in to your account to continue.
-          </CardDescription>
-        </CardHeader>
+    <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted/40 dark:from-background dark:via-background dark:to-muted/30">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12 sm:px-8">
+        <div className="flex items-center gap-2 font-semibold text-primary">
+          <Image src="/logo.jpg" alt="Dev2QA Logo" width={28} height={28} priority />
+          <span className="text-2xl">Dev2QA</span>
+        </div>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+          <section
+            aria-labelledby="onboarding-heading"
+            className="flex flex-col gap-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-sm backdrop-blur"
+          >
+            <div className="space-y-3">
+              <p className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                Built for Product & QA Delivery Teams
+              </p>
+              <h1 id="onboarding-heading" className="text-3xl font-bold tracking-tight md:text-4xl">
+                Ship with certainty. Celebrate with certificates.
+              </h1>
+              <p className="text-base text-muted-foreground md:text-lg">
+                Dev2QA unifies project oversight, QA sign-off, and certificate governance so your team can move fast
+                without breaking compliance.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {productHighlights.map((highlight) => (
+                <div
+                  key={highlight.title}
+                  className="rounded-lg border border-border/50 bg-background/60 p-4 shadow-sm transition hover:border-primary/50"
+                >
+                  <h2 className="text-sm font-semibold tracking-wide text-primary uppercase">{highlight.title}</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">{highlight.description}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-4 rounded-lg border border-border/60 bg-muted/40 p-4 text-sm text-muted-foreground md:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Getting started</h3>
+                <ul className="mt-2 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    Use your company email to sign in. New joiners can request access below.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    QA testers approve tasks directly from reminders—no spreadsheet chasing.
+                  </li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-background/70 p-4 shadow-inner">
+                <h3 className="text-sm font-semibold text-foreground">Need help?</h3>
+                <p className="mt-2">
+                  Reach our support desk at{' '}
+                  <a href="mailto:support@echobitstech.com" className="font-medium text-primary underline-offset-4 hover:underline">
+                    support@echobitstech.com
+                  </a>{' '}
+                  or message #dev2qa-support on Slack.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-lg bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-primary">Request access</h3>
+                <p className="text-sm text-primary/90">
+                  Not onboarded yet? Submit a request and we’ll set up your permissions within one business day.
+                </p>
+              </div>
+              <Button type="button" variant="default" className="w-full sm:w-auto" asChild>
+                <Link href="/request-access">Request access</Link>
+              </Button>
+            </div>
+          </section>
+
+          <Card className="w-full shadow-lg" asChild>
+            <div>
+              <CardHeader>
+                <CardTitle className="text-2xl">Sign in to Dev2QA</CardTitle>
+                <CardDescription>
+                  Access your projects, QA queues, and company dashboards.
+                </CardDescription>
+              </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
@@ -317,7 +404,10 @@ export default function LoginPage() {
             </CardFooter>
           </form>
         </Form>
-      </Card>
-    </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </main>
   );
 }

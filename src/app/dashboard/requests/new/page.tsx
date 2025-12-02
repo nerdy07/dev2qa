@@ -167,6 +167,7 @@ export default function NewRequestPage() {
 
     const requestsCollectionRef = collection(db, 'requests');
     const docRef = doc(requestsCollectionRef);
+    const requestId = docRef.id;
     
     // Generate friendly ID before creating document
     const { generateShortId } = await import('@/lib/id-generator');
@@ -183,6 +184,7 @@ export default function NewRequestPage() {
         shortId: shortId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        certificateRequired: true,
     };
 
     try {
@@ -216,7 +218,8 @@ export default function NewRequestPage() {
             taskTitle: values.taskTitle,
             requesterName: user.name,
             associatedProject: projectName,
-            associatedTeam: teamName
+            associatedTeam: teamName,
+            certificateRequired: true,
         });
 
         if (!emailResult.success) {

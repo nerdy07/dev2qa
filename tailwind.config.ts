@@ -24,6 +24,11 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        surface: {
+          DEFAULT: "hsl(var(--surface))",
+          elevated: "hsl(var(--surface-elevated))",
+          muted: "hsl(var(--surface-muted))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
@@ -35,6 +40,18 @@ const config = {
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
@@ -53,6 +70,19 @@ const config = {
           foreground: "hsl(var(--card-foreground))",
         },
         gold: 'hsl(var(--gold))',
+      },
+      spacing: {
+        '2xs': 'var(--space-2xs)',
+        xs: 'var(--space-xs)',
+        sm: 'var(--space-sm)',
+        md: 'var(--space-md)',
+        lg: 'var(--space-lg)',
+        xl: 'var(--space-xl)',
+      },
+      boxShadow: {
+        soft: '0 8px 20px hsla(var(--shadow-sm))',
+        lifted: '0 12px 32px hsla(var(--shadow-md))',
+        float: '0 18px 42px hsla(var(--shadow-lg))',
       },
       borderRadius: {
         lg: "var(--radius)",

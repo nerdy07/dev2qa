@@ -116,6 +116,15 @@ export const ALL_PERMISSIONS = {
         UPDATE: 'files:update',
         DELETE: 'files:delete',
     },
+    INVOICES: {
+        MANAGE: 'invoices:manage', // Full access: create, read, update, delete, send
+    },
+    CLIENTS: {
+        CREATE: 'clients:create',
+        READ: 'clients:read',
+        UPDATE: 'clients:update',
+        DELETE: 'clients:delete',
+    },
 } as const;
 
 // Granular Admin Permission Groups
@@ -216,6 +225,23 @@ export const ADMIN_PERMISSION_GROUPS = {
         description: 'Access to admin dashboard and section',
         permissions: [
             ALL_PERMISSIONS.ADMIN_SECTION.READ,
+        ],
+    },
+    INVOICE_MANAGEMENT: {
+        label: 'Invoice Management',
+        description: 'Create, send, and manage invoices',
+        permissions: [
+            ALL_PERMISSIONS.INVOICES.MANAGE,
+        ],
+    },
+    CLIENT_MANAGEMENT: {
+        label: 'Client Management',
+        description: 'Manage client information and profiles',
+        permissions: [
+            ALL_PERMISSIONS.CLIENTS.CREATE,
+            ALL_PERMISSIONS.CLIENTS.READ,
+            ALL_PERMISSIONS.CLIENTS.UPDATE,
+            ALL_PERMISSIONS.CLIENTS.DELETE,
         ],
     },
 } as const;
@@ -399,6 +425,11 @@ const PROJECT_MANAGER_PERMISSIONS = [
     ALL_PERMISSIONS.FILES.CREATE,
     ALL_PERMISSIONS.FILES.READ_ALL,
     ALL_PERMISSIONS.FILES.UPDATE,
+    ALL_PERMISSIONS.INVOICES.MANAGE,
+    ALL_PERMISSIONS.CLIENTS.CREATE,
+    ALL_PERMISSIONS.CLIENTS.READ,
+    ALL_PERMISSIONS.CLIENTS.UPDATE,
+    ALL_PERMISSIONS.CLIENTS.DELETE,
 ];
 
 const SENIOR_QA_PERMISSIONS = [

@@ -4,17 +4,18 @@ import { sendEmail } from '@/lib/email';
 import { wrapEmailContent, emailButton } from '@/lib/email-template';
 import { format } from 'date-fns';
 
-export async function sendRequestApprovedEmail(data: { recipientEmail: string; requesterName: string; taskTitle: string; requestId: string; requestShortId?: string; certificateId?: string; certificateShortId?: string }) {
+export async function sendRequestApprovedEmail(data: { recipientEmail: string; requesterName: string; taskTitle: string; requestId: string; requestShortId?: string; certificateId?: string; certificateShortId?: string; certificateRequired?: boolean }) {
     try {
         const { getAbsoluteUrl } = await import('@/lib/email-template');
-        const linkPath = data.certificateId
+        const requiresCertificate = data.certificateRequired !== false;
+        const linkPath = requiresCertificate && data.certificateId
             ? `/dashboard/certificates/${data.certificateId}`
             : `/dashboard/requests/${data.requestId}`;
         const linkUrl = getAbsoluteUrl(linkPath);
-        const buttonText = data.certificateId ? 'View Certificate' : 'View Request';
+        const buttonText = requiresCertificate && data.certificateId ? 'View Certificate' : 'View Request';
         
         const displayRequestId = data.requestShortId || `REQ-${data.requestId.slice(0, 6)}`;
-        const displayCertId = data.certificateShortId || (data.certificateId ? `CERT-${data.certificateId.slice(0, 6)}` : '');
+        const displayCertId = data.certificateShortId || (requiresCertificate && data.certificateId ? `CERT-${data.certificateId.slice(0, 6)}` : '');
         
         const content = `
             <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">Congratulations, ${data.requesterName}!</h1>
@@ -22,15 +23,19 @@ export async function sendRequestApprovedEmail(data: { recipientEmail: string; r
                 Your request <strong>${displayRequestId}</strong> for the task "<strong>${data.taskTitle}</strong>" has been approved.
             </p>
             <p style="font-size: 16px; margin-bottom: 20px;">
-                ${data.certificateId ? `Your certificate ${displayCertId} is ready!` : 'You can view your certificate by logging into the Dev2QA portal.'}
+                ${
+                    requiresCertificate && data.certificateId
+                        ? `Your certificate ${displayCertId} is ready!`
+                        : 'A QA reviewer has signed off on your task (no completion certificate was required).'
+                }
             </p>
             ${emailButton(linkUrl, buttonText)}
         `;
         
         await sendEmail({
             to: data.recipientEmail,
-            subject: `Your Certificate Request has been Approved!`,
-            html: wrapEmailContent(content, 'Certificate Request Approved')
+            subject: requiresCertificate ? `Your Certificate Request has been Approved!` : `Your Task Has Been Approved by QA`,
+            html: wrapEmailContent(content, requiresCertificate ? 'Certificate Request Approved' : 'QA Review Approved')
         });
         return { success: true };
     } catch (emailError) {
@@ -192,15 +197,17 @@ export async function notifyOnNewRequest(data: {
     requesterName: string;
     associatedProject: string;
     associatedTeam: string;
+    certificateRequired?: boolean;
 }) {
     try {
         const { getAbsoluteUrl } = await import('@/lib/email-template');
         const dashboardUrl = getAbsoluteUrl('/dashboard');
+        const requiresCertificate = data.certificateRequired !== false;
         
         const content = `
-            <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">New Certificate Request</h1>
+            <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">${requiresCertificate ? 'New Certificate Request' : 'New QA Sign-off Request'}</h1>
             <p style="font-size: 16px; margin-bottom: 20px;">
-                <strong>${data.requesterName}</strong> has submitted a new certificate request for the task "<strong>${data.taskTitle}</strong>".
+                <strong>${data.requesterName}</strong> has submitted a ${requiresCertificate ? 'certificate' : 'QA sign-off'} request for the task "<strong>${data.taskTitle}</strong>".
             </p>
             <div style="background-color: #f0f5fa; border-radius: 6px; padding: 15px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Project:</strong> ${data.associatedProject}</p>
@@ -215,8 +222,8 @@ export async function notifyOnNewRequest(data: {
         const emailPromises = data.qaEmails.map(email => 
             sendEmail({
                 to: email,
-                subject: `New Certificate Request: ${data.taskTitle}`,
-                html: wrapEmailContent(content, 'New Certificate Request')
+                subject: `${requiresCertificate ? 'New Certificate Request' : 'QA Sign-off Needed'}: ${data.taskTitle}`,
+                html: wrapEmailContent(content, requiresCertificate ? 'New Certificate Request' : 'New QA Sign-off Request')
             })
         );
         
@@ -225,6 +232,76 @@ export async function notifyOnNewRequest(data: {
     } catch (error) {
         console.warn('Failed to send notification emails to QA testers.', error);
         return { success: false, error: 'Email notification failed.' };
+    }
+}
+
+export async function notifyOnPendingRequestReminder(data: {
+    qaEmails: string[];
+    requests: Array<{
+        requestId: string;
+        shortId?: string;
+        taskTitle: string;
+        requesterName: string;
+        associatedProject: string;
+        associatedTeam: string;
+        certificateRequired?: boolean;
+        createdAt: string;
+    }>;
+}) {
+    if (!data.qaEmails || data.qaEmails.length === 0) {
+        return { success: false, error: 'No QA recipients found.' };
+    }
+
+    if (!data.requests || data.requests.length === 0) {
+        return { success: false, error: 'No pending requests to notify about.' };
+    }
+
+    try {
+        const { getAbsoluteUrl } = await import('@/lib/email-template');
+        const dashboardUrl = getAbsoluteUrl('/dashboard/requests');
+
+        const listItems = data.requests.map((request) => {
+            const displayId = request.shortId || `REQ-${request.requestId.slice(0, 6)}`;
+            const submittedOn = format(new Date(request.createdAt), 'PPP');
+            const tag = request.certificateRequired !== false ? 'Certificate' : 'QA Sign-off';
+
+            return `
+                <li style="margin-bottom: 12px;">
+                    <strong>${displayId}</strong> &mdash; ${request.taskTitle}<br/>
+                    <span style="color: #4b5563;">Submitted by ${request.requesterName} on ${submittedOn}</span><br/>
+                    <span style="color: #6b7280; font-size: 13px;">Project: ${request.associatedProject} &bull; Team: ${request.associatedTeam} &bull; Type: ${tag}</span>
+                </li>
+            `;
+        }).join('');
+
+        const content = `
+            <h1 style="color: #dc2626; margin-top: 0; font-size: 24px;">Pending Requests Need Attention</h1>
+            <p style="font-size: 16px; margin-bottom: 20px;">
+                The following ${data.requests.length === 1 ? 'request has' : `${data.requests.length} requests have`} been waiting for approval for over 3 days. Please review and take action.
+            </p>
+            <ul style="padding-left: 20px; color: #111827; font-size: 15px;">
+                ${listItems}
+            </ul>
+            ${emailButton(dashboardUrl, 'Review Pending Requests')}
+            <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">
+                This is an automated reminder. Once a request is approved or rejected, reminders will stop.
+            </p>
+        `;
+
+        await Promise.all(
+            data.qaEmails.map((email) =>
+                sendEmail({
+                    to: email,
+                    subject: `Follow-up: ${data.requests.length} pending request${data.requests.length === 1 ? '' : 's'} need approval`,
+                    html: wrapEmailContent(content, 'Pending Requests Reminder'),
+                })
+            )
+        );
+
+        return { success: true };
+    } catch (error) {
+        console.warn('Failed to send pending request reminder emails.', error);
+        return { success: false, error: 'Reminder emails failed.' };
     }
 }
 
@@ -562,6 +639,63 @@ export async function notifyOnTaskAssignment(data: {
   } catch (error) {
     console.warn(`Task assignment notification email failed to send to ${data.recipientEmail}.`, error);
     return { success: false, error: 'Email notification failed.' };
+  }
+}
+
+export async function sendInvoiceEmail(data: {
+  recipientEmail: string;
+  clientName: string;
+  invoiceNumber: string;
+  invoiceId: string;
+  totalAmount: number;
+  currency: string;
+  dueDate: string;
+  invoiceUrl: string;
+}) {
+  try {
+    const { getAbsoluteUrl } = await import('@/lib/email-template');
+    const publicInvoiceUrl = getAbsoluteUrl(`/invoices/${data.invoiceId}`);
+    const pdfUrl = getAbsoluteUrl(`/api/invoices/${data.invoiceId}/pdf`);
+    
+    const content = `
+      <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">Invoice ${data.invoiceNumber}</h1>
+      <p style="font-size: 16px; margin-bottom: 20px;">
+        Hello ${data.clientName},
+      </p>
+      <p style="font-size: 16px; margin-bottom: 20px;">
+        Please find attached your invoice <strong>${data.invoiceNumber}</strong> for your review.
+      </p>
+      <div style="background-color: #f0f5fa; border-radius: 6px; padding: 15px; margin: 20px 0;">
+        <p style="margin: 5px 0;"><strong>Invoice Number:</strong> ${data.invoiceNumber}</p>
+        <p style="margin: 5px 0;"><strong>Total Amount:</strong> ${new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: data.currency,
+        }).format(data.totalAmount)}</p>
+        <p style="margin: 5px 0;"><strong>Due Date:</strong> ${format(new Date(data.dueDate), 'PPP')}</p>
+      </div>
+      <p style="font-size: 16px; margin-bottom: 20px;">
+        You can view and download the invoice PDF using the links below.
+      </p>
+      <div style="margin: 20px 0;">
+        ${emailButton(publicInvoiceUrl, 'View Invoice Online')}
+      </div>
+      <p style="font-size: 14px; margin-top: 20px; color: #6b7280;">
+        <a href="${pdfUrl}" style="color: #2563eb; text-decoration: none;">Download PDF Invoice</a>
+      </p>
+      <p style="font-size: 14px; margin-top: 20px; color: #6b7280;">
+        If you have any questions about this invoice, please don't hesitate to contact us.
+      </p>
+    `;
+    
+    await sendEmail({
+      to: data.recipientEmail,
+      subject: `Invoice ${data.invoiceNumber} from Dev2QA`,
+      html: wrapEmailContent(content, 'Invoice')
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.warn(`Invoice email failed to send to ${data.recipientEmail}.`, error);
+    return { success: false, error: 'Failed to send invoice email.' };
   }
 }
 

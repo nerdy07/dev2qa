@@ -19,55 +19,66 @@ export default function DashboardLayout({
   const { user, logout } = useAuth();
 
   return (
-    <div className="flex h-screen w-full bg-background" suppressHydrationWarning>
-      <Sidebar />
-      <div className="flex flex-1 flex-col" suppressHydrationWarning>
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <MobileSidebar />
-            <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary md:hidden">
-              <Image src="/logo.jpg" alt="Dev2QA Logo" width={24} height={24} />
-              <span>Dev2QA</span>
-            </Link>
-          </div>
+    <div className="min-h-screen w-full bg-background" suppressHydrationWarning>
+      <div className="flex w-full flex-col md:flex-row" suppressHydrationWarning>
+        <Sidebar />
+        <div className="flex min-h-screen flex-1 flex-col md:ml-64" suppressHydrationWarning>
+          <header
+            className="sticky top-0 z-30 flex min-h-[3.5rem] items-center justify-between border-b bg-surface px-sm sm:px-md"
+            suppressHydrationWarning
+          >
+            <div className="flex items-center gap-sm" suppressHydrationWarning>
+              <MobileSidebar />
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-xs font-semibold text-primary md:hidden"
+                suppressHydrationWarning
+              >
+                <Image src="/logo.jpg" alt="Dev2QA Logo" width={24} height={24} />
+                <span>Dev2QA</span>
+              </Link>
+            </div>
 
-          <div className="flex items-center gap-2">
-            <NotificationBell />
-            <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-auto p-1">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.photoURL} alt={user?.name} />
-                  <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
+            <div className="flex items-center gap-sm" suppressHydrationWarning>
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-auto p-1.5" aria-label="Open account menu">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user?.photoURL} alt={user?.name} />
+                      <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
-                        <p className="text-sm font-medium leading-none">{user?.name}</p>
-                        <p className="text-xs leading-none text-muted-foreground">
+                      <p className="text-sm font-medium leading-none">{user?.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
                         {user?.email}
-                        </p>
+                      </p>
                     </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout}>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Log out</span>
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          {children}
-        </main>
-        
-        <footer className="border-t bg-card py-4 px-6 text-center text-sm text-muted-foreground">
-          <p>© 2025 Dev2QA. All rights reserved. Powered by echobitstech.</p>
-        </footer>
+          <main className="flex-1 pb-lg pt-sm sm:pb-xl sm:pt-md" suppressHydrationWarning>
+            <div className="mx-auto w-full max-w-7xl px-sm sm:px-md lg:px-lg">
+              {children}
+            </div>
+          </main>
+
+          <footer className="mt-auto border-t bg-surface-muted py-sm text-center text-sm text-muted-foreground sm:py-md" suppressHydrationWarning>
+            <p>© 2025 Dev2QA. All rights reserved. Powered by echobitstech.</p>
+          </footer>
+        </div>
       </div>
     </div>
   );

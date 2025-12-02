@@ -20,6 +20,7 @@ import { db } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 type QALeaderboardEntry = {
     userId: string;
@@ -160,6 +161,19 @@ export default function LeaderboardsPage() {
     
     // State for selected month
     const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date());
+    const [rowsPerPage, setRowsPerPage] = React.useState(10);
+    const [qaPage, setQaPage] = React.useState(1);
+    const [requesterPage, setRequesterPage] = React.useState(1);
+
+    React.useEffect(() => {
+        setQaPage(1);
+        setRequesterPage(1);
+    }, [selectedMonth, rowsPerPage]);
+
+    const paginate = React.useCallback(<T,>(items: T[], page: number, perPage: number) => {
+        const start = (page - 1) * perPage;
+        return items.slice(start, start + perPage);
+    }, []);
 
     const qaLeaderboard = React.useMemo<QALeaderboardEntry[]>(() => {
         if (!users || !requests) return [];
@@ -691,6 +705,19 @@ export default function LeaderboardsPage() {
         return <span className="text-sm font-medium">{rank}</span>;
     }
 
+    const paginatedQa = React.useMemo(
+        () => paginate(qaLeaderboard, qaPage, rowsPerPage),
+        [qaLeaderboard, qaPage, rowsPerPage, paginate]
+    );
+
+    const paginatedRequester = React.useMemo(
+        () => paginate(requesterLeaderboard, requesterPage, rowsPerPage),
+        [requesterLeaderboard, requesterPage, rowsPerPage, paginate]
+    );
+
+    const qaRowOffset = (qaPage - 1) * rowsPerPage;
+    const requesterRowOffset = (requesterPage - 1) * rowsPerPage;
+
     return (
         <>
             <PageHeader 
@@ -859,45 +886,67 @@ export default function LeaderboardsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {qaLeaderboard.length === 0 && <TableRow><TableCell colSpan={4} className="text-center h-24">No data available.</TableCell></TableRow>}
-                                {qaLeaderboard.slice(0, 10).map((tester, index) => (
-                                    <TableRow 
-                                        key={tester.userId}
-                                        className={cn(index === 0 && "bg-yellow-50 dark:bg-yellow-950/10")}
-                                    >
-                                        <TableCell className="font-bold text-lg">{getRankIcon(index + 1)}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Avatar>
-                                                    <AvatarImage src={tester.photoURL} alt={tester.name} />
-                                                    <AvatarFallback>{tester.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <span className="font-medium">{tester.name}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right font-semibold text-lg">{tester.approvedCount}</TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleLike(tester, 'qa')}
-                                                disabled={likingUserId === `qa_${tester.userId}` || loadingLikes}
-                                                className={cn(tester.userLiked && "text-red-500")}
-                                            >
-                                                {likingUserId === `qa_${tester.userId}` ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <Heart className={cn("h-4 w-4", tester.userLiked && "fill-current")} />
-                                                        <span className="ml-1">{tester.likes || 0}</span>
-                                                    </>
-                                                )}
-                                            </Button>
+                                {qaLeaderboard.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                            No data available.
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : (
+                                    paginatedQa.map((tester, index) => {
+                                        const globalRank = qaRowOffset + index + 1;
+                                        const isTop = globalRank === 1;
+                                        return (
+                                            <TableRow
+                                                key={tester.userId}
+                                                className={cn(isTop && "bg-yellow-50 dark:bg-yellow-950/10")}
+                                            >
+                                                <TableCell className="font-bold text-lg">{getRankIcon(globalRank)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar>
+                                                            <AvatarImage src={tester.photoURL} alt={tester.name} />
+                                                            <AvatarFallback>{tester.name.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <span className="font-medium">{tester.name}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-semibold text-lg">{tester.approvedCount}</TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleLike(tester, 'qa')}
+                                                        disabled={likingUserId === `qa_${tester.userId}` || loadingLikes}
+                                                        className={cn(tester.userLiked && "text-red-500")}
+                                                        aria-label={`Applaud ${tester.name}`}
+                                                    >
+                                                        {likingUserId === `qa_${tester.userId}` ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Heart className={cn("h-4 w-4", tester.userLiked && "fill-current")} />
+                                                                <span className="ml-1">{tester.likes || 0}</span>
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
                             </TableBody>
                         </Table>
+                        {qaLeaderboard.length > rowsPerPage && (
+                            <PaginationWrapper
+                                currentPage={qaPage}
+                                totalItems={qaLeaderboard.length}
+                                itemsPerPage={rowsPerPage}
+                                onPageChange={setQaPage}
+                                onItemsPerPageChange={setRowsPerPage}
+                                itemsPerPageOptions={[5, 10, 15, 20]}
+                            />
+                        )}
                     </CardContent>
                 </Card>
 
@@ -918,46 +967,68 @@ export default function LeaderboardsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {requesterLeaderboard.length === 0 && <TableRow><TableCell colSpan={5} className="text-center h-24">No data available.</TableCell></TableRow>}
-                                {requesterLeaderboard.slice(0, 10).map((requester, index) => (
-                                    <TableRow 
-                                        key={requester.userId}
-                                        className={cn(index === 0 && "bg-yellow-50 dark:bg-yellow-950/10")}
-                                    >
-                                        <TableCell className="font-bold text-lg">{getRankIcon(index + 1)}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Avatar>
-                                                    <AvatarImage src={requester.photoURL} alt={requester.name} />
-                                                    <AvatarFallback>{requester.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <span className="font-medium">{requester.name}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="font-semibold text-primary">{requester.approvalRate}%</TableCell>
-                                        <TableCell className="text-right font-semibold text-lg">{requester.approvedCount}</TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => handleLike(requester, 'requester')}
-                                                disabled={likingUserId === `requester_${requester.userId}` || loadingLikes}
-                                                className={cn(requester.userLiked && "text-red-500")}
-                                            >
-                                                {likingUserId === `requester_${requester.userId}` ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <Heart className={cn("h-4 w-4", requester.userLiked && "fill-current")} />
-                                                        <span className="ml-1">{requester.likes || 0}</span>
-                                                    </>
-                                                )}
-                                            </Button>
+                                {requesterLeaderboard.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                            No data available.
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : (
+                                    paginatedRequester.map((requester, index) => {
+                                        const globalRank = requesterRowOffset + index + 1;
+                                        const isTop = globalRank === 1;
+                                        return (
+                                            <TableRow
+                                                key={requester.userId}
+                                                className={cn(isTop && "bg-yellow-50 dark:bg-yellow-950/10")}
+                                            >
+                                                <TableCell className="font-bold text-lg">{getRankIcon(globalRank)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar>
+                                                            <AvatarImage src={requester.photoURL} alt={requester.name} />
+                                                            <AvatarFallback>{requester.name.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <span className="font-medium">{requester.name}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="font-semibold text-primary">{requester.approvalRate}%</TableCell>
+                                                <TableCell className="text-right font-semibold text-lg">{requester.approvedCount}</TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleLike(requester, 'requester')}
+                                                        disabled={likingUserId === `requester_${requester.userId}` || loadingLikes}
+                                                        className={cn(requester.userLiked && "text-red-500")}
+                                                        aria-label={`Applaud ${requester.name}`}
+                                                    >
+                                                        {likingUserId === `requester_${requester.userId}` ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Heart className={cn("h-4 w-4", requester.userLiked && "fill-current")} />
+                                                                <span className="ml-1">{requester.likes || 0}</span>
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
                             </TableBody>
                         </Table>
+                        {requesterLeaderboard.length > rowsPerPage && (
+                            <PaginationWrapper
+                                currentPage={requesterPage}
+                                totalItems={requesterLeaderboard.length}
+                                itemsPerPage={rowsPerPage}
+                                onPageChange={setRequesterPage}
+                                onItemsPerPageChange={setRowsPerPage}
+                                itemsPerPageOptions={[5, 10, 15, 20]}
+                            />
+                        )}
                     </CardContent>
                 </Card>
             </div>

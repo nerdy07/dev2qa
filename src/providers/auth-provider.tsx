@@ -15,6 +15,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { PERMISSIONS_BY_ROLE, ROLES } from '@/lib/roles';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { saveSession, clearSession } from '@/lib/session';
 
 interface AuthContextType {
   user: User | null;
@@ -526,14 +527,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                             isProjectManager: userData.isProjectManager,
                         };
                         setUser(userWithToken);
+                        // Save session to localStorage (only on client side)
+                        if (typeof window !== 'undefined') {
+                          try {
+                            saveSession(userWithToken.id, userWithToken.email, userWithToken.name);
+                          } catch (error) {
+                            console.warn('Failed to save session:', error);
+                          }
+                        }
                     }
                 } else {
                     console.warn(`User ${authUser.uid} is authenticated but has no Firestore document. Logging out.`);
                     await signOut(auth);
                     setUser(null);
+                    if (typeof window !== 'undefined') {
+                      try {
+                        clearSession();
+                      } catch (error) {
+                        console.warn('Failed to clear session:', error);
+                      }
+                    }
                 }
             } else {
                 setUser(null);
+                if (typeof window !== 'undefined') {
+                  try {
+                    clearSession();
+                  } catch (error) {
+                    console.warn('Failed to clear session:', error);
+                  }
+                }
             }
         } catch (error) {
             console.error("Error during authentication state change:", error);
@@ -549,11 +572,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && firebaseInitialized) {
       const isAuthPage = pathname === '/';
-      const isSignupPage = pathname === '/signup'; 
-      const isPublicPage = isAuthPage || isSignupPage;
+      const isSignupPage = pathname === '/signup';
+      const isInvoicePage = pathname?.startsWith('/invoices/'); // Public invoice viewing
+      const isPublicPage = isAuthPage || isSignupPage || isInvoicePage;
 
-      if (user && isPublicPage) {
-        // User is authenticated but on a public page - redirect to dashboard
+      if (user && isPublicPage && !isInvoicePage) {
+        // User is authenticated but on a public page (except invoice pages) - redirect to dashboard
         router.push('/dashboard');
         router.refresh();
       } else if (!user && !isPublicPage && pathname !== '/dashboard') {
@@ -586,6 +610,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       setUser(null);
+      // Clear session from localStorage (only on client side)
+      if (typeof window !== 'undefined') {
+        try {
+          clearSession();
+        } catch (error) {
+          console.warn('Failed to clear session:', error);
+        }
+      }
       // Redirect to landing page (login page) after logout
       router.push('/');
       router.refresh();
@@ -619,8 +651,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return <MissingFirebaseConfig />;
   }
 
-  // Only show skeleton on dashboard routes, not on login/signup pages
-  const isPublicPage = pathname === '/' || pathname === '/signup';
+  // Only show skeleton on dashboard routes, not on login/signup/invoice pages
+  const isPublicPage = pathname === '/' || pathname === '/signup' || pathname?.startsWith('/invoices/');
   
   // Wait for both auth loading AND roles loading to complete before showing dashboard
   // This ensures permissions are fully loaded before user sees the dashboard

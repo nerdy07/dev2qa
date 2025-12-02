@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useAuth } from '@/providers/auth-provider';
 import { ALL_PERMISSIONS } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2, RefreshCw } from 'lucide-react';
+import { CheckCircle, ExternalLink, ThumbsDown, TriangleAlert, XCircle, Send, Star, User as UserIcon, Calendar, Hash, FolderKanban, Link2, RefreshCw, Info } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
 import {
@@ -83,12 +83,13 @@ export default function RequestDetailsPage() {
     if (!request || !user || !db) return;
 
     try {
-        // Generate friendly ID for certificate before transaction
+        const requestRequiresCertificate = request.certificateRequired !== false;
         const { generateShortId } = await import('@/lib/id-generator');
-        const certShortId = generateShortId('certificate');
+        const certShortId = requestRequiresCertificate ? generateShortId('certificate') : null;
         
-        // Use transaction to prevent race conditions
-        let certificateId: string;
+        let certificateId: string | null = null;
+        let issuedCertificate = false;
+
         await runTransaction(db, async (transaction) => {
             const requestRef = doc(db, 'requests', request.id);
             const requestSnap = await transaction.get(requestRef);
@@ -99,69 +100,93 @@ export default function RequestDetailsPage() {
             
             const requestData = requestSnap.data();
             
-            // Check if request is still pending (prevent race condition)
             if (requestData.status !== 'pending') {
                 throw new Error(`Request has already been ${requestData.status}`);
             }
-            
-            // Create certificate document
-            const certCollection = collection(db, 'certificates');
-            const certDocRef = doc(certCollection);
-            certificateId = certDocRef.id;
-            
-            transaction.set(certDocRef, {
-                requestId: request.id,
-                requestShortId: requestData.shortId || formatFriendlyId(request.id, 'request'),
-                taskTitle: requestData.taskTitle,
-                associatedTeam: requestData.associatedTeam,
-                associatedProject: requestData.associatedProject,
-                requesterName: requestData.requesterName,
-                qaTesterName: user.name,
-                shortId: certShortId,
-                approvalDate: serverTimestamp(),
-                status: 'valid',
-            });
-            
-            // Update request status atomically
-            transaction.update(requestRef, {
-                status: 'approved',
-                qaTesterId: user.id,
-                qaTesterName: user.name,
-                updatedAt: serverTimestamp(),
-                certificateId: certificateId,
-                certificateStatus: 'valid',
-            });
+
+            const shouldIssueCertificate = requestData.certificateRequired !== false;
+
+            if (shouldIssueCertificate) {
+                const certCollection = collection(db, 'certificates');
+                const certDocRef = doc(certCollection);
+                certificateId = certDocRef.id;
+                issuedCertificate = true;
+
+                transaction.set(certDocRef, {
+                    requestId: request.id,
+                    requestShortId: requestData.shortId || formatFriendlyId(request.id, 'request'),
+                    taskTitle: requestData.taskTitle,
+                    associatedTeam: requestData.associatedTeam,
+                    associatedProject: requestData.associatedProject,
+                    requesterName: requestData.requesterName,
+                    qaTesterName: user.name,
+                    shortId: certShortId,
+                    approvalDate: serverTimestamp(),
+                    status: 'valid',
+                });
+
+                transaction.update(requestRef, {
+                    status: 'approved',
+                    qaTesterId: user.id,
+                    qaTesterName: user.name,
+                    updatedAt: serverTimestamp(),
+                    certificateId: certificateId,
+                    certificateStatus: 'valid',
+                });
+            } else {
+                transaction.update(requestRef, {
+                    status: 'approved',
+                    qaTesterId: user.id,
+                    qaTesterName: user.name,
+                    updatedAt: serverTimestamp(),
+                    certificateStatus: 'not_required',
+                });
+            }
         });
 
-        // Create in-app notification for requester
-        await createInAppNotification({
-            userId: request.requesterId,
-            type: 'general',
-            title: 'Request Approved',
-            message: `Your certificate request for "${request.taskTitle}" has been approved. Certificate ${certShortId} has been generated.`,
-            read: false,
-            data: {
-                requestId: request.id,
-                certificateId: certificateId!,
-            },
-        });
+        if (issuedCertificate && certificateId && certShortId) {
+            await createInAppNotification({
+                userId: request.requesterId,
+                type: 'general',
+                title: 'Certificate Issued',
+                message: `Your certificate request for "${request.taskTitle}" has been approved. Certificate ${certShortId} has been generated.`,
+                read: false,
+                data: {
+                    requestId: request.id,
+                    certificateId,
+                },
+            });
+        } else {
+            await createInAppNotification({
+                userId: request.requesterId,
+                type: 'general',
+                title: 'QA Review Approved',
+                message: `QA has approved your request for "${request.taskTitle}". No completion certificate was required.`,
+                read: false,
+                data: {
+                    requestId: request.id,
+                },
+            });
+        }
 
-        // Send email notification after successful transaction
         const emailResult = await sendRequestApprovedEmail({
             recipientEmail: request.requesterEmail,
             requesterName: request.requesterName,
             taskTitle: request.taskTitle,
             requestId: request.id,
             requestShortId: request.shortId,
-            certificateId: certificateId!,
-            certificateShortId: certShortId,
+            certificateId: issuedCertificate ? certificateId ?? undefined : undefined,
+            certificateShortId: issuedCertificate && certShortId ? certShortId : undefined,
+            certificateRequired: issuedCertificate,
         });
 
-        const displayCertId = certShortId;
         toast({
             title: 'Request Approved',
-            description: `Certificate ${displayCertId} for "${request.taskTitle}" has been generated.`,
+            description: issuedCertificate && certShortId
+                ? `Certificate ${certShortId} for "${request.taskTitle}" has been generated.`
+                : `"${request.taskTitle}" has been approved without issuing a completion certificate.`,
         });
+
         if (!emailResult.success) {
             toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
         }
@@ -491,6 +516,7 @@ export default function RequestDetailsPage() {
             requesterName: request.requesterName,
             associatedProject: request.associatedProject,
             associatedTeam: request.associatedTeam,
+            certificateRequired: request.certificateRequired !== false,
         });
 
         // Update local state
@@ -538,7 +564,7 @@ export default function RequestDetailsPage() {
     return (
         <>
             <PageHeader title=""><Skeleton className="h-9 w-64" /></PageHeader>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" suppressHydrationWarning>
               <div className="lg:col-span-2 space-y-6">
                 <Card>
                     <CardHeader>
@@ -586,6 +612,9 @@ export default function RequestDetailsPage() {
 
   const isActionable = hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE) && request.status === 'pending';
   const createdAtDate = (request.createdAt as any)?.toDate() || new Date();
+  const isCertificateRequired = request.certificateRequired !== false;
+  const hasCertificate = request.certificateStatus === 'valid' && !!request.certificateId;
+  const certificateNotRequired = request.certificateStatus === 'not_required' || !isCertificateRequired;
 
   const StarRating = ({ rating, setRating, disabled = false }: { rating: number, setRating?: (r: number) => void, disabled?: boolean }) => {
     return (
@@ -653,15 +682,21 @@ export default function RequestDetailsPage() {
             <CheckCircle className="h-4 w-4 text-primary" />
             <AlertTitle>Request Approved!</AlertTitle>
             <AlertDescription className="flex items-center justify-between">
-                <span>This request was approved by {request.qaTesterName}.</span>
-                <Button variant="link" asChild className="p-0 h-auto text-primary">
-                    <Link href={`/dashboard/certificates/${request.certificateId}`}>View Certificate</Link>
-                </Button>
+                <span>
+                    {certificateNotRequired
+                        ? `This request was approved by ${request.qaTesterName} without issuing a completion certificate.`
+                        : `This request was approved by ${request.qaTesterName}.`}
+                </span>
+                {hasCertificate && (
+                    <Button variant="link" asChild className="p-0 h-auto text-primary">
+                        <Link href={`/dashboard/certificates/${request.certificateId}`}>View Certificate</Link>
+                    </Button>
+                )}
             </AlertDescription>
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" suppressHydrationWarning>
         <div className="lg:col-span-2 space-y-6">
             <Card>
                 <CardHeader>
@@ -674,6 +709,11 @@ export default function RequestDetailsPage() {
                         </DetailItem>
                         <DetailItem icon={Hash} label="Status">
                             <Badge variant={statusVariant(request.status)} className="capitalize w-fit">{request.status}</Badge>
+                        </DetailItem>
+                        <DetailItem icon={Info} label="Review Type">
+                            <Badge variant={isCertificateRequired ? 'outline' : 'secondary'} className="w-fit text-xs font-medium">
+                                {isCertificateRequired ? 'Certificate Required' : 'QA Sign-off'}
+                            </Badge>
                         </DetailItem>
                         <DetailItem icon={UserIcon} label="Requester">
                             {request.requesterName}

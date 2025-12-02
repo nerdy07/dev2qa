@@ -4,10 +4,11 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart,
   BookUser,
+  Building2,
   CalendarCheck,
   DollarSign,
-  FilePlus2,
   FileText,
+  FilePlus2,
   FolderKanban,
   LayoutDashboard,
   Paintbrush,
@@ -81,6 +82,8 @@ const navConfig: NavItemOrSeparator[] = [
             { href: '/dashboard/admin/users', icon: Users, label: 'Users', permission: ALL_PERMISSIONS.USERS.READ },
             { href: '/dashboard/teams', icon: Shield, label: 'Teams', permission: ALL_PERMISSIONS.TEAMS.READ },
             { href: '/dashboard/admin/projects', icon: FolderKanban, label: 'Projects', permission: ALL_PERMISSIONS.PROJECTS.READ },
+            { href: '/dashboard/admin/invoices', icon: Receipt, label: 'Invoices', permission: ALL_PERMISSIONS.INVOICES.MANAGE },
+            { href: '/dashboard/admin/clients', icon: Building2, label: 'Clients', permission: ALL_PERMISSIONS.CLIENTS.READ },
             { href: '/dashboard/analytics', icon: BarChart, label: 'Analytics', permission: ALL_PERMISSIONS.PROJECT_INSIGHTS.READ },
             { href: '/dashboard/files', icon: FileText, label: 'Company Files', permission: ALL_PERMISSIONS.FILES.READ_STAFF },
         ]
@@ -97,6 +100,7 @@ const navConfig: NavItemOrSeparator[] = [
             { href: '/dashboard/admin/infraction-types', icon: ShieldX, label: 'Infraction Types', permission: ALL_PERMISSIONS.INFRACTIONS.MANAGE, parent: '/dashboard/admin/infractions' },
             { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses', permission: ALL_PERMISSIONS.BONUSES.MANAGE, isParent: true },
             { href: '/dashboard/admin/bonus-types', icon: Sparkles, label: 'Bonus Types', permission: ALL_PERMISSIONS.BONUSES.MANAGE, parent: '/dashboard/admin/bonuses' },
+            { href: '/dashboard/admin/settings', icon: Building2, label: 'Company Settings', permission: ALL_PERMISSIONS.INVOICES.MANAGE },
         ]
     },
     { type: 'separator' },
@@ -165,6 +169,11 @@ const NavLinks = () => {
     }, [hasPermission, rolesLoading, user]);
 
     const renderNavItem = useCallback((item: NavItem, itemLabel: string) => {
+        if (!item.icon) {
+            console.error('Missing icon for nav item:', item.href, item.label);
+            return null;
+        }
+        
         const isActive = pathname.startsWith(item.href) && item.href !== '/dashboard' || pathname === item.href;
         
         if (item.isParent) {
@@ -183,7 +192,7 @@ const NavLinks = () => {
                             isActive && 'bg-secondary text-primary'
                         )}
                     >
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
                         <span className="truncate">{itemLabel}</span>
                     </Link>
                 );
@@ -206,7 +215,7 @@ const NavLinks = () => {
                                 isActive && 'bg-secondary text-primary'
                             )}
                         >
-                            <item.icon className="h-4 w-4 shrink-0" />
+                            {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
                             <span className="truncate">{itemLabel}</span>
                         </Link>
                         <CollapsibleTrigger asChild>
@@ -225,7 +234,12 @@ const NavLinks = () => {
                     </div>
                     <CollapsibleContent className="pl-4 space-y-1">
                         {childItems.map(child => {
+                            if (!child.icon) {
+                                console.error('Missing icon for child nav item:', child.href, child.label);
+                                return null;
+                            }
                             const childIsActive = pathname === child.href || pathname.startsWith(child.href + '/');
+                            const ChildIconComponent = child.icon;
                             return (
                                 <Link
                                     key={child.href}
@@ -235,7 +249,7 @@ const NavLinks = () => {
                                         childIsActive && 'bg-secondary text-primary'
                                     )}
                                 >
-                                    <child.icon className="h-3 w-3 shrink-0" />
+                                    <ChildIconComponent className="h-3 w-3 shrink-0" />
                                     <span className="truncate">{child.label}</span>
                                 </Link>
                             );
@@ -254,7 +268,7 @@ const NavLinks = () => {
                     isActive && 'bg-secondary text-primary'
                 )}
             >
-                <item.icon className="h-4 w-4 shrink-0" />
+                {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
                 <span className="truncate">{itemLabel}</span>
             </Link>
         );
@@ -328,7 +342,7 @@ const NavLinks = () => {
                                                    isActive && 'bg-secondary text-primary'
                                                )}
                                            >
-                                               <item.icon className="h-4 w-4 shrink-0" />
+                                               {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
                                                <span className="truncate">{itemLabel}</span>
                                            </Link>
                                            <CollapsibleTrigger asChild>
@@ -347,7 +361,12 @@ const NavLinks = () => {
                                        </div>
                                        <CollapsibleContent className="pl-4 space-y-1">
                                            {childItems.map(child => {
+                                               if (!child.icon) {
+                                                   console.error('Missing icon for child nav item:', child.href, child.label);
+                                                   return null;
+                                               }
                                                const childIsActive = pathname === child.href || pathname.startsWith(child.href + '/');
+                                               const IconComponent = child.icon;
                                                return (
                                                    <Link
                                                        key={child.href}
@@ -357,7 +376,7 @@ const NavLinks = () => {
                                                            childIsActive && 'bg-secondary text-primary'
                                                        )}
                                                    >
-                                                       <child.icon className="h-3 w-3 shrink-0" />
+                                                       <IconComponent className="h-3 w-3 shrink-0" />
                                                        <span className="truncate">{child.label}</span>
                                                    </Link>
                                                );
@@ -380,7 +399,7 @@ const NavLinks = () => {
 
 export function Sidebar() {
   return (
-    <aside className="hidden h-full w-64 flex-col border-r bg-card shadow-sm md:flex" suppressHydrationWarning>
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r bg-card shadow-sm md:flex" suppressHydrationWarning>
       <div className="flex h-16 shrink-0 items-center border-b px-6" suppressHydrationWarning>
         <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary">
           <Image src="/logo.jpg" alt="Dev2QA Logo" width={24} height={24} />

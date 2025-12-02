@@ -261,5 +261,72 @@ service cloud.firestore {
       // Delete rules: Admins or original uploaders can delete files
       allow delete: if request.auth != null && request.auth.uid != null && (isAdminSafe() || resource.data.uploadedBy == request.auth.uid);
     }
+    
+    // Clients collection - client/customer management
+    match /clients/{clientId} {
+      // Read: authenticated users (permission checked in app)
+      allow read: if request.auth != null;
+      
+      // Create, update, delete: users with invoice:manage or client permissions (checked in app)
+      // We validate that required fields are present
+      allow create: if request.auth != null && 
+                     request.auth.uid != null &&
+                     request.resource.data.name != null &&
+                     request.resource.data.email != null &&
+                     request.resource.data.defaultCurrency != null &&
+                     request.resource.data.status != null;
+      
+      allow update: if request.auth != null && request.auth.uid != null;
+      allow delete: if request.auth != null && request.auth.uid != null;
+    }
+    
+    // Invoices collection - invoice management
+    match /invoices/{invoiceId} {
+      // Read: allow public read access (invoices are meant to be shared with clients)
+      // Authenticated users with invoices:manage permission or invoice creator can also read
+      allow get: if true; // Public read access for client viewing
+      
+      // List: authenticated users (filtered by permission in app)
+      allow list: if request.auth != null && request.auth.uid != null;
+      
+      // Create: authenticated users with invoices:manage permission (checked in app)
+      // Validate required fields
+      allow create: if request.auth != null && 
+                     request.auth.uid != null &&
+                     request.resource.data.invoiceNumber != null &&
+                     request.resource.data.clientId != null &&
+                     request.resource.data.clientName != null &&
+                     request.resource.data.status != null &&
+                     request.resource.data.createdById == request.auth.uid &&
+                     request.resource.data.createdByName != null;
+      
+      // Update: users with invoices:manage permission or invoice creator
+      // Allow update if user is admin, or if user is creator (permission checked in app)
+      // Note: App-level permission checks ensure only users with invoices:manage can update
+      allow update: if request.auth != null && request.auth.uid != null && (
+        isAdminSafe() ||
+        resource.data.createdById == request.auth.uid
+      );
+      
+      // Delete: users with invoices:manage permission (only if draft or cancelled)
+      allow delete: if request.auth != null && request.auth.uid != null && 
+                     isAdminSafe() &&
+                     (resource.data.status == 'draft' || resource.data.status == 'cancelled');
+    }
+    
+    // Invoice counters collection - for generating unique invoice numbers
+    match /invoiceCounters/{year} {
+      // Only allow reads and writes by authenticated users (permission checked in app)
+      allow read, write: if request.auth != null && request.auth.uid != null;
+    }
+    
+    // Company settings collection - singleton document
+    match /companySettings/{settingsId} {
+      // Read: authenticated users (permission checked in app)
+      allow read: if request.auth != null;
+      
+      // Write: authenticated users (permission checked in app - users with invoices:manage can write)
+      allow write: if request.auth != null && request.auth.uid != null;
+    }
   }
 }

@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/common/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,17 +13,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { TriangleAlert, MoreHorizontal } from 'lucide-react';
 import { format } from 'date-fns';
-import { useRouter } from 'next/navigation';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 
 export default function DesignApprovalsPage() {
   const { data: designRequests, loading, error } = useCollection<DesignRequest>('designRequests');
-  const router = useRouter();
-
-  const handleRowClick = (id: string) => {
-    router.push(`/dashboard/designs/${id}`);
-  };
 
   const statusVariant = (status: DesignRequest['status']) => {
     switch (status) {
@@ -72,34 +67,56 @@ export default function DesignApprovalsPage() {
 
     return (
       <TableBody>
-        {designRequests?.map((request) => (
-          <TableRow key={request.id} onClick={() => handleRowClick(request.id)} className="cursor-pointer">
-            <TableCell className="font-medium">{request.designTitle}</TableCell>
-            <TableCell>{request.designerName}</TableCell>
-            <TableCell>
-              <Badge variant={statusVariant(request.status)} className="capitalize">{request.status}</Badge>
-            </TableCell>
-            <TableCell>{request.createdAt ? format(request.createdAt.toDate(), 'PPP') : 'N/A'}</TableCell>
-            <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
-                    <span className="sr-only">Open menu</span>
-                    <MoreHorizontal className="h-4 w-4" />
+        {designRequests?.map((request) => {
+          const href = `/dashboard/designs/${request.id}`;
+
+          return (
+            <TableRow key={request.id}>
+              <TableCell className="font-medium">
+                <Link
+                  href={href}
+                  className="block rounded-md px-2 py-1.5 text-sm font-semibold text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Open design request ${request.designTitle}`}
+                >
+                  {request.designTitle}
+                </Link>
+              </TableCell>
+              <TableCell>{request.designerName}</TableCell>
+              <TableCell>
+                <Badge variant={statusVariant(request.status)} className="capitalize">
+                  {request.status}
+                </Badge>
+              </TableCell>
+              <TableCell>{request.createdAt ? format(request.createdAt.toDate(), 'PPP') : 'N/A'}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href={href} aria-label={`View details for ${request.designTitle}`}>
+                      Open
+                    </Link>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => handleRowClick(request.id)}>
-                    View Details
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
-          </TableRow>
-        ))}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0" aria-label={`More actions for ${request.designTitle}`}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem asChild>
+                        <Link href={href}>View Details</Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
         {designRequests?.length === 0 && (
           <TableRow>
-            <TableCell colSpan={5} className="h-24 text-center">No design requests found.</TableCell>
+            <TableCell colSpan={5} className="h-24 text-center">
+              No design requests found.
+            </TableCell>
           </TableRow>
         )}
       </TableBody>

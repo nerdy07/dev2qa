@@ -57,6 +57,7 @@ export type Task = {
   testLinks?: string[]; // Links added when marking task as Done
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
+  certificateRequired?: boolean;
 };
 
 export type Milestone = {
@@ -105,10 +106,13 @@ export type CertificateRequest = {
   qaTesterName?: string;
   rejectionReason?: string;
   certificateId?: string;
-  certificateStatus?: 'valid' | 'revoked';
+  certificateStatus?: 'valid' | 'revoked' | 'not_required';
+  certificateRequired?: boolean;
   submissionRating?: number; // From QA to Requester
   qaProcessRating?: number; // From Requester to QA
   qaProcessFeedback?: string; // From Requester to QA
+  firstReminderSentAt?: any; // Firestore Timestamp
+  reminderCount?: number;
 };
 
 export type DesignRequest = {
@@ -321,4 +325,138 @@ export type CompanyFile = {
   tags?: string[]; // Optional tags for search/filtering
   downloadCount?: number; // Track downloads (for uploads)
   resourceId?: string; // Optional link back to project resource entry
+};
+
+export type Client = {
+  id: string;
+  name: string;
+  email: string;
+  companyName?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
+  };
+  phone?: string;
+  taxId?: string; // Tax ID or VAT number
+  defaultCurrency: string; // ISO currency code (e.g., 'USD', 'NGN', 'EUR')
+  contactPerson?: string;
+  notes?: string;
+  status: 'active' | 'archived';
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+};
+
+export type InvoiceLineItem = {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number; // Percentage (e.g., 10 for 10%)
+  discount?: number; // Amount or percentage
+  total: number; // Calculated: (quantity * unitPrice) - discount + tax
+};
+
+export type InvoicePayment = {
+  id: string;
+  paymentDate: any; // Firestore Timestamp
+  amount: number;
+  referenceNumber?: string;
+  notes?: string;
+};
+
+export type BankAccount = {
+  id: string;
+  accountName: string;
+  accountNumber: string;
+  bankName: string;
+  routingNumber?: string;
+  swiftCode?: string;
+  iban?: string;
+  currency: string;
+  isDefault?: boolean;
+  notes?: string;
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+};
+
+export type CompanySettings = {
+  id: string; // Always 'company' (singleton)
+  companyName: string;
+  email: string;
+  phone?: string;
+  website?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
+  };
+  taxId?: string; // Tax ID or VAT number
+  logoUrl?: string;
+  defaultCurrency: string;
+  paymentTerms?: string; // Default payment terms
+  invoiceNotes?: string; // Default notes for invoices
+  bankAccounts?: BankAccount[];
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+};
+
+export type Invoice = {
+  id: string;
+  invoiceNumber: string; // Auto-generated: INV-YYYY-###
+  status: 'draft' | 'sent' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
+  
+  // Client information
+  clientId: string;
+  clientName: string; // Denormalized for easier display
+  
+  // Project information (optional)
+  projectId?: string;
+  projectName?: string; // Denormalized for easier display
+  
+  // Payment account
+  bankAccountId?: string;
+  bankAccountName?: string; // Denormalized
+  bankAccountNumber?: string; // Denormalized
+  bankName?: string; // Denormalized
+  
+  // Financial information
+  lineItems: InvoiceLineItem[];
+  subtotal: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  currency: string; // ISO currency code
+  exchangeRate?: number; // If different from base currency
+  
+  // Dates
+  issueDate: any; // Firestore Timestamp
+  dueDate: any; // Firestore Timestamp
+  sentAt?: any; // Firestore Timestamp
+  paidAt?: any; // Firestore Timestamp
+  
+  // Recurring invoice information
+  isRecurring?: boolean;
+  recurringFrequency?: 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'semi-annually' | 'annually' | 'custom';
+  recurringInterval?: number; // For custom frequency
+  nextInvoiceDate?: any; // Firestore Timestamp
+  parentInvoiceId?: string; // For recurring series - links to parent invoice
+  
+  // Payment tracking
+  payments?: InvoicePayment[];
+  paidAmount: number;
+  outstandingAmount: number;
+  
+  // Metadata
+  createdById: string;
+  createdByName: string;
+  notes?: string;
+  terms?: string; // Payment terms
+  pdfUrl?: string; // URL to generated PDF
+  lastReminderSentAt?: any; // Firestore Timestamp
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
 };

@@ -18,9 +18,11 @@ import { db } from '@/lib/firebase';
 import { formatDistanceToNow } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 export function NotificationBell() {
   const { user } = useAuth();
+  const router = useRouter();
   
   const notificationsQuery = React.useMemo(() => {
     if (!user?.id || !db) return null;
@@ -112,33 +114,44 @@ export function NotificationBell() {
           ) : (
             <div className="divide-y">
               {notifications.map((notification) => (
-                <div
+                <button
                   key={notification.id}
+                  type="button"
                   className={cn(
-                    "p-4 hover:bg-muted/50 cursor-pointer transition-colors",
+                    "flex w-full items-start gap-3 p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                     !notification.read && "bg-blue-50/50 dark:bg-blue-950/10"
                   )}
-                  onClick={() => !notification.read && markAsRead(notification.id)}
+                  onClick={() => {
+                    if (!notification.read) {
+                      markAsRead(notification.id);
+                    }
+                    // Navigate to leave request if data contains leaveRequestId
+                    if (notification.data?.leaveRequestId) {
+                      router.push(`/dashboard/admin/leave/${notification.data.leaveRequestId}`);
+                    }
+                  }}
+                  aria-pressed={!notification.read}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1">
-                      <p className={cn("font-medium text-sm", !notification.read && "font-semibold")}>
-                        {notification.title}
+                  <div className="flex-1">
+                    <p className={cn("font-medium text-sm", !notification.read && "font-semibold")}>
+                      {notification.title}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {notification.message}
+                    </p>
+                    {notification.createdAt && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}
                       </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {notification.message}
-                      </p>
-                      {notification.createdAt && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}
-                        </p>
-                      )}
-                    </div>
-                    {!notification.read && (
-                      <div className="h-2 w-2 rounded-full bg-blue-500 mt-2" />
                     )}
                   </div>
-                </div>
+                  {!notification.read && (
+                    <span
+                      className="mt-2 h-2 w-2 rounded-full bg-info"
+                      aria-hidden="true"
+                    />
+                  )}
+                </button>
               ))}
             </div>
           )}

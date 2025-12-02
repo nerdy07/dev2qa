@@ -35,6 +35,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { ALL_PERMISSIONS } from '@/lib/roles';
+import { cn } from '@/lib/utils';
 
 const DetailItem = ({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
@@ -72,6 +73,27 @@ const taskStatusIcon = (status: Task['status']) => {
         default: return <CircleDot className="h-4 w-4 text-muted-foreground" />;
     }
 }
+
+const taskStatusTone = (status: Task['status']) => {
+    switch (status) {
+        case 'Done': return 'bg-emerald-500/90';
+        case 'In Progress': return 'bg-sky-500/90';
+        default: return 'bg-muted-foreground/60';
+    }
+};
+
+const getMilestoneProgress = (milestone: Milestone) => {
+    const totalTasks = milestone.tasks?.length ?? 0;
+    if (totalTasks === 0) {
+        return { completed: 0, total: 0, percent: 0 };
+    }
+    const completed = milestone.tasks?.filter(task => task.status === 'Done').length ?? 0;
+    return {
+        completed,
+        total: totalTasks,
+        percent: Math.round((completed / totalTasks) * 100),
+    };
+};
 
 export default function ProjectDetailsPage() {
     const { id } = useParams();
@@ -273,65 +295,141 @@ export default function ProjectDetailsPage() {
                         <CardContent>
                             {project.milestones && project.milestones.length > 0 ? (
                                 <Accordion type="single" collapsible className="w-full" defaultValue={project.milestones[0].id}>
-                                    {project.milestones.map((milestone) => (
-                                        <AccordionItem value={milestone.id} key={milestone.id}>
-                                            <AccordionTrigger>
-                                                <div className='flex items-center gap-3'>
-                                                    {milestone.status === 'Completed' ? <CheckCircle className='h-5 w-5 text-green-500'/> : <Target className='h-5 w-5'/>}
-                                                    <span className='font-semibold'>{milestone.name}</span>
-                                                    <Badge variant="outline">{milestone.status}</Badge>
-                                                </div>
-                                            </AccordionTrigger>
-                                            <AccordionContent className="space-y-4 pl-4 border-l-2 ml-2">
-                                                <p className='text-muted-foreground'>{milestone.description || 'No description for this milestone.'}</p>
-                                                
-                                                <div className='space-y-3 pt-2'>
-                                                    <h4 className='font-semibold'>Tasks</h4>
-                                                    {milestone.tasks && milestone.tasks.length > 0 ? (
-                                                        <div className='space-y-2'>
-                                                            {milestone.tasks.map(task => {
-                                                                const assignee = users?.find(u => u.id === task.assigneeId);
-                                                                return (
-                                                                <div key={task.id} className="flex items-center justify-between gap-2 text-sm p-2 bg-muted/50 rounded-md">
-                                                                    <div className="flex items-center gap-2">
-                                                                        {taskStatusIcon(task.status)}
-                                                                        <span>{task.name}</span>
-                                                                    </div>
-                                                                    <div className='flex items-center gap-3 text-muted-foreground'>
-                                                                        {task.startDate && task.endDate && (
-                                                                            <div className='flex items-center gap-1.5 text-xs'>
-                                                                                <CalendarClock className="h-3 w-3" />
-                                                                                <span>{format(task.startDate.toDate(), 'MMM d')} - {format(task.endDate.toDate(), 'MMM d')}</span>
-                                                                            </div>
-                                                                        )}
-                                                                        <Badge variant={taskStatusVariant(task.status)}>{task.status}</Badge>
-                                                                        {assignee ? (
-                                                                            <div className='flex items-center gap-1.5'>
-                                                                                <Avatar className="h-5 w-5">
-                                                                                    <AvatarImage src={assignee.photoURL} alt={assignee.name} />
-                                                                                    <AvatarFallback className="text-xs">{assignee.name?.[0]}</AvatarFallback>
-                                                                                </Avatar>
-                                                                                <span className='text-xs'>{assignee.name}</span>
-                                                                            </div>
-                                                                        ) : (
-                                                                            <span className='italic text-xs'>Unassigned</span>
-                                                                        )}
-                                                                        {canEdit && (
-                                                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task, milestone.id, milestone.name)}>
-                                                                                <Pencil className="h-3 w-3" />
-                                                                            </Button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            )})}
+                                    {project.milestones.map((milestone) => {
+                                        const milestoneProgress = getMilestoneProgress(milestone);
+                                        const hasSchedule = milestone.startDate && milestone.endDate;
+                                        return (
+                                            <AccordionItem value={milestone.id} key={milestone.id} className="rounded-xl border bg-muted/30">
+                                                <AccordionTrigger className="px-4 py-3 text-left hover:no-underline">
+                                                    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="flex flex-1 items-start gap-3">
+                                                            <div className={cn("mt-1.5 h-2.5 w-2.5 rounded-full", milestone.status === 'Completed' ? 'bg-emerald-500' : milestone.status === 'In Progress' ? 'bg-sky-500' : 'bg-muted-foreground/60')} />
+                                                            <div>
+                                                                <p className="font-semibold text-base leading-tight">{milestone.name}</p>
+                                                                {milestone.description && (
+                                                                    <p className="text-xs text-muted-foreground line-clamp-1 sm:line-clamp-none">{milestone.description}</p>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    ) : (
-                                                        <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                                            {hasSchedule && (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-background/80 px-2 py-1">
+                                                                    <Calendar className="h-3 w-3" />
+                                                                    {format(milestone.startDate!.toDate(), 'MMM d')} - {format(milestone.endDate!.toDate(), 'MMM d')}
+                                                                </span>
+                                                            )}
+                                                            <Badge variant="outline" className="text-xs">{milestone.status}</Badge>
+                                                            {milestoneProgress.total > 0 && (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-background/80 px-2 py-1">
+                                                                    <CheckCircle className="h-3 w-3" />
+                                                                    {milestoneProgress.completed}/{milestoneProgress.total} ({milestoneProgress.percent}%)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="space-y-4 border-t bg-background/60 px-4 py-4 sm:px-6">
+                                                    {!milestone.description && (
+                                                        <p className="text-sm text-muted-foreground">No description for this milestone.</p>
                                                     )}
-                                                </div>
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    ))}
+                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                        <Target className="h-4 w-4" />
+                                                        <span>{milestone.status === 'Completed' ? 'Milestone completed' : 'Milestone in progress'}</span>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tasks</h4>
+                                                            {milestone.tasks && milestone.tasks.length > 0 && (
+                                                                <span className="text-xs text-muted-foreground">{milestone.tasks.length} item{milestone.tasks.length > 1 ? 's' : ''}</span>
+                                                            )}
+                                                        </div>
+                                                        {milestone.tasks && milestone.tasks.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                {milestone.tasks.map(task => {
+                                                                    const assignee = users?.find(u => u.id === task.assigneeId);
+                                                                    const statusTone = taskStatusTone(task.status);
+                                                                    return (
+                                                                        <div
+                                                                            key={task.id}
+                                                                            className="rounded-xl border bg-card/80 p-4 shadow-sm transition hover:shadow-md"
+                                                                        >
+                                                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                                                <div className="flex flex-1 items-start gap-3">
+                                                                                    <span className={cn("mt-1.5 block h-2.5 w-2.5 rounded-full", statusTone)} />
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                                            <span className="font-medium text-sm leading-tight">{task.name}</span>
+                                                                                            <Badge variant={taskStatusVariant(task.status)}>{task.status}</Badge>
+                                                                                            <Badge variant={task.certificateRequired === false ? 'secondary' : 'default'} className="text-xs font-medium">
+                                                                                                {task.certificateRequired === false ? 'QA Sign-off' : 'Certificate'}
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                        {task.description && (
+                                                                                            <p className="text-xs text-muted-foreground leading-relaxed">
+                                                                                                {task.description}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 self-end sm:self-start">
+                                                                                    {canEdit && (
+                                                                                        <Button
+                                                                                            variant="ghost"
+                                                                                            size="icon"
+                                                                                            className="h-8 w-8"
+                                                                                            onClick={() => handleEditTask(task, milestone.id, milestone.name)}
+                                                                                            title="Edit task"
+                                                                                        >
+                                                                                            <Pencil className="h-4 w-4" />
+                                                                                        </Button>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                                                                                {task.startDate && task.endDate && (
+                                                                                    <div className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+                                                                                        <CalendarClock className="h-3 w-3" />
+                                                                                        {format(task.startDate.toDate(), 'MMM d')} – {format(task.endDate.toDate(), 'MMM d')}
+                                                                                    </div>
+                                                                                )}
+                                                                                {assignee ? (
+                                                                                    <div className="inline-flex items-center gap-2 rounded-full bg-muted px-2 py-1">
+                                                                                        <Avatar className="h-5 w-5">
+                                                                                            <AvatarImage src={assignee.photoURL} alt={assignee.name} />
+                                                                                            <AvatarFallback className="text-[10px]">{assignee.name?.[0]}</AvatarFallback>
+                                                                                        </Avatar>
+                                                                                        <span className="font-medium">{assignee.name}</span>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+                                                                                        <Info className="h-3 w-3" />
+                                                                                        Unassigned
+                                                                                    </span>
+                                                                                )}
+                                                                                {task.docUrl && (
+                                                                                    <a
+                                                                                        href={task.docUrl}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-primary hover:underline"
+                                                                                    >
+                                                                                        <Link2 className="h-3 w-3" />
+                                                                                        Task Document
+                                                                                    </a>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : (
+                                                            <p className='text-sm text-muted-foreground'>No tasks defined for this milestone yet.</p>
+                                                        )}
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                        );
+                                    })}
                                 </Accordion>
                             ) : (
                                 <div className="text-center py-8 text-muted-foreground">

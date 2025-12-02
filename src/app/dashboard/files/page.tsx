@@ -31,6 +31,16 @@ import { PermissionGuard } from '@/components/common/permission-guard';
 import type { Project } from '@/lib/types';
 import { Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function FilesPage() {
   const { user } = useAuth();
@@ -53,6 +63,9 @@ export default function FilesPage() {
   const [linkDialogOpen, setLinkDialogOpen] = React.useState(false);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [fileToEdit, setFileToEdit] = React.useState<CompanyFile | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [filePendingDelete, setFilePendingDelete] = React.useState<CompanyFile | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   
   // Query files based on permissions
   // Note: We fetch all files that the user has permission to list, then filter client-side
@@ -312,29 +325,52 @@ export default function FilesPage() {
     return Array.from(cats).sort();
   }, [files]);
   
-  const handleDelete = async (file: CompanyFile) => {
+  const requestDelete = (file: CompanyFile) => {
     if (!canDelete || !user) {
       toast({
-        title: 'Permission Denied',
+        title: 'Permission denied',
         description: 'You do not have permission to delete files.',
         variant: 'destructive',
       });
       return;
     }
-    
-    if (!confirm(`Are you sure you want to delete "${file.name}"? This action cannot be undone.`)) {
+
+    setFilePendingDelete(file);
+    setDeleteDialogOpen(true);
+  };
+
+  const resetDeleteState = () => {
+    setDeleteDialogOpen(false);
+    setFilePendingDelete(null);
+    setIsDeleting(false);
+  };
+
+  const handleDelete = async () => {
+    if (!filePendingDelete) {
+      resetDeleteState();
       return;
     }
-    
+
+    if (!canDelete || !user) {
+      toast({
+        title: 'Permission denied',
+        description: 'You do not have permission to delete files.',
+        variant: 'destructive',
+      });
+      resetDeleteState();
+      return;
+    }
+
+    setIsDeleting(true);
     try {
       // Delete from Firestore
-      await deleteDoc(doc(db, 'files', file.id));
+      await deleteDoc(doc(db, 'files', filePendingDelete.id));
       
       // If it's an uploaded file, delete from Storage
-      if (file.type === 'upload' && file.fileUrl) {
+      if (filePendingDelete.type === 'upload' && filePendingDelete.fileUrl) {
         try {
           // Extract path from URL
-          const url = new URL(file.fileUrl);
+          const url = new URL(filePendingDelete.fileUrl);
           const path = decodeURIComponent(url.pathname.split('/o/')[1]?.split('?')[0] || '');
           if (path) {
             const storageRef = ref(storage, path);
@@ -347,16 +383,18 @@ export default function FilesPage() {
       }
       
       toast({
-        title: 'File Deleted',
-        description: `"${file.name}" has been deleted successfully.`,
+        title: 'File deleted',
+        description: `"${filePendingDelete.name}" has been deleted successfully.`,
       });
+      resetDeleteState();
     } catch (error: any) {
       console.error('Error deleting file:', error);
       toast({
-        title: 'Delete Failed',
+        title: 'Delete failed',
         description: error.message || 'Failed to delete file.',
         variant: 'destructive',
       });
+      setIsDeleting(false);
     }
   };
   
@@ -708,28 +746,30 @@ export default function FilesPage() {
                   setExpandedFolders(newExpanded);
                 }}>
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          {isExpanded ? (
-                            <FolderOpen className="h-5 w-5 text-muted-foreground" />
-                          ) : (
-                            <Folder className="h-5 w-5 text-muted-foreground" />
-                          )}
-                          <CardTitle className="text-lg">
-                            {isProject ? '📁 ' : '📂 '}{folderLabel}
-                          </CardTitle>
-                          <Badge variant="outline" className="ml-2">
-                            {folderFiles.length} {folderFiles.length === 1 ? 'file' : 'files'}
-                          </Badge>
-                        </div>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-t-lg border-b border-border/60 bg-surface px-sm py-sm text-left transition hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <div className="flex items-center gap-sm">
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        )}
+                        {isExpanded ? (
+                          <FolderOpen className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <Folder className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                        )}
+                        <span className="text-base font-semibold">
+                          {isProject ? '📁 ' : '📂 '}
+                          {folderLabel}
+                        </span>
+                        <Badge variant="outline" className="ml-sm">
+                          {folderFiles.length} {folderFiles.length === 1 ? 'file' : 'files'}
+                        </Badge>
                       </div>
-                    </CardHeader>
+                    </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <CardContent>
@@ -829,7 +869,7 @@ export default function FilesPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(file)}
+                          onClick={() => requestDelete(file)}
                           className="text-destructive hover:text-destructive"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -872,6 +912,62 @@ export default function FilesPage() {
           }} />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (isDeleting) return;
+            setDeleteDialogOpen(false);
+            setFilePendingDelete(null);
+          } else {
+            setDeleteDialogOpen(true);
+          }
+        }}
+      >
+        <AlertDialogContent
+          className="sm:fixed sm:left-auto sm:right-6 sm:top-6 sm:translate-x-0 sm:translate-y-0 sm:max-w-md rounded-2xl border border-destructive/20 bg-surface shadow-2xl data-[state=open]:animate-in data-[state=open]:slide-in-from-top-4 data-[state=closed]:animate-out data-[state=closed]:fade-out flex flex-col gap-4 p-6"
+        >
+          <AlertDialogHeader className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" aria-hidden="true" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg font-semibold text-destructive">
+                  Delete this file?
+                </AlertDialogTitle>
+                <p className="text-xs uppercase tracking-wide text-destructive/70">
+                  Irreversible action
+                </p>
+              </div>
+            </div>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              {filePendingDelete
+                ? `"${filePendingDelete.name}" will be permanently removed from company files and cloud storage.`
+                : 'This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-xl border border-muted bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+            Tip: If this file was added by mistake, consider updating its visibility instead of deleting it.
+          </div>
+          <AlertDialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="sm:flex-1 rounded-full border border-border bg-transparent text-sm font-semibold hover:bg-surface-muted"
+            >
+              Keep file
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="sm:flex-1 rounded-full bg-destructive text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive"
+            >
+              {isDeleting ? 'Deleting…' : 'Yes, delete it'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
