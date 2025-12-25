@@ -1,11 +1,11 @@
-
 'use client';
 
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { DateRange } from 'react-day-picker';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInCalendarDays, getYear, format } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -15,10 +15,13 @@ import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
 import { LEAVE_TYPES } from '@/lib/constants';
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, serverTimestamp, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { notifyAdminsOnLeaveRequest } from '@/app/requests/actions';
-import { User } from '@/lib/types';
+import { User, LeaveRequest } from '@/lib/types';
+import { useCollection } from '@/hooks/use-collection';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { createInAppNotificationsForUsers } from '@/lib/notifications';
 
 const formSchema = z.object({
   leaveType: z.string({ required_error: 'Please select a leave type.' }),
@@ -39,6 +42,18 @@ interface LeaveRequestFormProps {
 export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  
+  // Get user's leave requests to calculate remaining entitlement
+  const leaveRequestsQuery = React.useMemo(() => {
+    if (!currentUser?.id) return null;
+    return query(
+      collection(db!, 'leaveRequests'),
+      where('userId', '==', currentUser.id),
+      orderBy('requestedAt', 'desc')
+    );
+  }, [currentUser?.id]);
+  
+  const { data: userLeaveRequests } = useCollection<LeaveRequest>('leaveRequests', leaveRequestsQuery);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -63,6 +78,31 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         return;
     }
 
+    // Check leave entitlement
+    const totalEntitlement = currentUser.annualLeaveEntitlement || 0;
+    const currentYear = getYear(new Date());
+    
+    // Calculate leave taken this year (approved requests, excluding unpaid leave)
+    const leaveTaken = userLeaveRequests
+      ?.filter(req => {
+        const requestYear = req.startDate?.toDate?.()?.getFullYear();
+        return req.status === 'approved' && 
+               requestYear === currentYear && 
+               req.leaveType !== 'Unpaid Leave';
+      })
+      .reduce((acc, req) => acc + (req.daysCount || 0), 0) || 0;
+    
+    const leaveRemaining = totalEntitlement - leaveTaken;
+    
+    if (daysCount > leaveRemaining && values.leaveType !== 'Unpaid Leave') {
+      toast({
+        title: 'Insufficient Leave Balance',
+        description: `You have ${leaveRemaining} days remaining out of ${totalEntitlement} days. You cannot request ${daysCount} days.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const leaveData = {
         userId: currentUser.id,
@@ -76,15 +116,54 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         requestedAt: serverTimestamp(),
       };
       
-      await addDoc(collection(db, 'leaveRequests'), leaveData);
+      const leaveRequestRef = await addDoc(collection(db, 'leaveRequests'), leaveData);
 
-      // Notify Admins
+      // Find users with leave:manage permission
+      const leaveManagersQuery = query(
+        collection(db, 'users'),
+        where('permissions', 'array-contains', ALL_PERMISSIONS.LEAVE_MANAGEMENT.MANAGE)
+      );
+      const leaveManagersSnapshot = await getDocs(leaveManagersQuery);
+      const leaveManagerUsers = leaveManagersSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as User))
+        .filter(user => !user.disabled); // Exclude disabled users
+      
+      const leaveManagerIds = leaveManagerUsers.map(user => user.id);
+      const leaveManagerEmails = leaveManagerUsers.map(user => user.email);
+
+      // Create in-app notifications for users with leave:manage permission
+      if (leaveManagerIds.length > 0) {
+        const notificationResult = await createInAppNotificationsForUsers(
+          leaveManagerIds,
+          {
+            type: 'general',
+            title: 'New Leave Request',
+            message: `${currentUser.name} has submitted a ${values.leaveType} leave request for ${daysCount} day(s) (${format(values.dates.from, 'MMM d')} - ${format(values.dates.to, 'MMM d')}).`,
+            read: false,
+            data: {
+              leaveRequestId: leaveRequestRef.id,
+            },
+          }
+        );
+
+        if (!notificationResult.success) {
+          console.warn('Failed to create some in-app notifications:', notificationResult.error);
+        }
+      }
+
+      // Send email notifications (backward compatibility - includes admins and leave managers)
+      // Also query for admins by role for backward compatibility
       const adminQuery = query(collection(db, 'users'), where('role', '==', 'admin'));
       const adminSnapshot = await getDocs(adminQuery);
-      const adminEmails = adminSnapshot.docs.map(doc => (doc.data() as User).email);
+      const adminEmails = adminSnapshot.docs
+        .map(doc => (doc.data() as User).email)
+        .filter(email => email); // Filter out undefined emails
+      
+      // Combine admin emails with leave manager emails, removing duplicates
+      const allRecipientEmails = Array.from(new Set([...adminEmails, ...leaveManagerEmails]));
       
       const emailResult = await notifyAdminsOnLeaveRequest({ 
-        adminEmails,
+        adminEmails: allRecipientEmails,
         userName: currentUser.name,
         leaveType: values.leaveType,
         startDate: values.dates.from.toISOString(),
@@ -98,7 +177,7 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         description: `Your request for ${daysCount} day(s) off has been sent for approval.`,
       });
       if (!emailResult.success) {
-        toast({ title: 'Admin Notification Failed', description: emailResult.error, variant: 'destructive' });
+        toast({ title: 'Email Notification Failed', description: emailResult.error, variant: 'destructive' });
       }
 
       onSuccess();
@@ -138,16 +217,48 @@ export function LeaveRequestForm({ onSuccess }: LeaveRequestFormProps) {
         <FormField
           control={form.control}
           name="dates"
-          render={({ field }) => (
-            <FormItem className="flex flex-col">
-              <FormLabel>Start & End Date</FormLabel>
-              <DateRangePicker
-                date={field.value}
-                setDate={field.onChange}
-              />
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const daysCount = field.value?.from && field.value?.to 
+              ? differenceInCalendarDays(field.value.to, field.value.from) + 1 
+              : 0;
+            
+            // Calculate remaining leave
+            const totalEntitlement = currentUser?.annualLeaveEntitlement || 0;
+            const currentYear = getYear(new Date());
+            const leaveTaken = userLeaveRequests
+              ?.filter(req => {
+                const requestYear = req.startDate?.toDate?.()?.getFullYear();
+                return req.status === 'approved' && 
+                       requestYear === currentYear && 
+                       req.leaveType !== 'Unpaid Leave';
+              })
+              .reduce((acc, req) => acc + (req.daysCount || 0), 0) || 0;
+            const leaveRemaining = totalEntitlement - leaveTaken;
+            
+            return (
+              <FormItem className="flex flex-col">
+                <FormLabel>Start & End Date</FormLabel>
+                <DateRangePicker
+                  date={field.value}
+                  setDate={field.onChange}
+                />
+                {field.value?.from && field.value?.to && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {daysCount} day{daysCount !== 1 ? 's' : ''}
+                    </p>
+                    {totalEntitlement > 0 && (
+                      <p className={`text-xs ${leaveRemaining < daysCount ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                        Remaining: {leaveRemaining} / {totalEntitlement} days
+                        {leaveRemaining < daysCount && ' (Insufficient balance - unpaid leave may be available)'}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField

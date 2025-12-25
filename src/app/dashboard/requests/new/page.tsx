@@ -1,13 +1,14 @@
 
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 
 import { PageHeader } from '@/components/common/page-header';
+import { BackButton } from '@/components/common/back-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -29,126 +30,196 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { getQATesterSuggestion } from '@/app/actions';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Lightbulb, Loader2 } from 'lucide-react';
 import { useCollection } from '@/hooks/use-collection';
-import { Team, Project, User } from '@/lib/types';
-import { query, where, collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { Team, Project, User, Role } from '@/lib/types';
+import { query, collection, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/providers/auth-provider';
 import { notifyOnNewRequest } from '@/app/requests/actions';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { ALL_PERMISSIONS, PERMISSIONS_BY_ROLE, ROLES } from '@/lib/roles';
 
 const formSchema = z.object({
-  taskTitle: z.string().min(5, 'Title must be at least 5 characters.'),
+  taskTitle: z.string().min(5, 'Title must be at least 5 characters.').max(200, 'Title must be less than 200 characters.'),
   associatedTeam: z.string({ required_error: 'Please select a team.' }),
   associatedProject: z.string({ required_error: 'Please select a project.' }),
-  description: z.string().min(10, 'Description must be at least 10 characters.'),
-  taskLink: z.string().url('Please enter a valid URL.').optional().or(z.literal('')),
+  description: z.string().min(10, 'Description must be at least 10 characters.').max(5000, 'Description must be less than 5000 characters.'),
+  taskLink: z.string().url('Please enter a valid URL.').max(2000, 'URL must be less than 2000 characters.').optional().or(z.literal('')),
 });
-
-type Suggestion = { suggestedQATester: string; reason: string };
 
 export default function NewRequestPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
 
-  const { data: teams } = useCollection<Team>('teams');
-  const { data: projects } = useCollection<Project>('projects');
-  const { data: qaUsers } = useCollection<User>('users', query(collection(db!, 'users'), where('role', '==', 'qa_tester')));
+  // Make queries stable to prevent unnecessary re-subscriptions
+  const teamsQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'teams'));
+  }, []);
+
+  const projectsQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'projects'));
+  }, []);
+
+  // Fetch all users and roles to filter by permissions
+  const allUsersQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'users'));
+  }, []);
+
+  const rolesQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'roles'));
+  }, []);
+
+  const { data: teams } = useCollection<Team>('teams', teamsQuery);
+  const { data: projects } = useCollection<Project>('projects', projectsQuery);
+  const { data: allUsers } = useCollection<User>('users', allUsersQuery);
+  const { data: allRoles } = useCollection<Role>('roles', rolesQuery);
+
+  // Filter users who have requests:approve permission
+  const qaUsers = React.useMemo(() => {
+    if (!allUsers || !allRoles) return [];
+    
+    // Build roles map for quick lookup
+    const rolesMap = new Map<string, Role>();
+    allRoles.forEach(role => {
+      rolesMap.set(role.name.toLowerCase(), role);
+      rolesMap.set(role.name.toLowerCase().replace(/_/g, ''), role);
+      rolesMap.set(role.name.toLowerCase().replace(/\s+/g, '_'), role);
+    });
+    
+    return allUsers.filter(user => {
+      const userRoles = user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []);
+      
+      for (const roleName of userRoles) {
+        if (!roleName) continue;
+        const normalizedRole = roleName.toLowerCase();
+        
+        // Check custom roles first
+        const customRole = rolesMap.get(normalizedRole) || rolesMap.get(normalizedRole.replace(/_/g, ''));
+        if (customRole?.permissions?.includes(ALL_PERMISSIONS.REQUESTS.APPROVE)) {
+          return true;
+        }
+        
+        // Check hardcoded roles as fallback
+        const roleKey = Object.keys(ROLES).find(key => 
+          ROLES[key as keyof typeof ROLES].toLowerCase() === normalizedRole
+        ) as keyof typeof ROLES | undefined;
+        
+        if (roleKey) {
+          const roleValue = ROLES[roleKey];
+          const hardcodedPermissions = PERMISSIONS_BY_ROLE[roleValue as keyof typeof PERMISSIONS_BY_ROLE];
+          if (hardcodedPermissions?.includes(ALL_PERMISSIONS.REQUESTS.APPROVE)) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
+  }, [allUsers, allRoles]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       taskTitle: '',
+      associatedTeam: '',
+      associatedProject: '',
       description: '',
       taskLink: '',
     },
   });
 
-  const handleSuggestQATester = async () => {
-    const { taskTitle, description, associatedTeam, associatedProject } = form.getValues();
-    if (!taskTitle || !description || !associatedTeam || !associatedProject) {
-        toast({
-            title: 'Missing Information',
-            description: 'Please fill out Title, Team, Project, and Description before getting a suggestion.',
-            variant: 'destructive',
-        });
-        return;
-    }
-
-    if (!qaUsers || qaUsers.length === 0) {
-        toast({
-            title: 'No QA Testers',
-            description: 'There are no QA testers available to assign.',
-            variant: 'destructive',
-        });
-        return;
-    }
-
-    setIsSuggesting(true);
-    setSuggestion(null);
-
-    const qaTesterList = qaUsers.map(u => ({ name: u.name, expertise: u.expertise }));
-
-    const result = await getQATesterSuggestion({
-      taskTitle,
-      taskDescription: description,
-      associatedTeam,
-      associatedProject,
-      qaTesterList,
-    });
-
-    if (result.success) {
-      setSuggestion(result.data);
-    } else {
-      toast({
-        title: 'Suggestion Failed',
-        description: result.error,
-        variant: 'destructive',
-      });
-    }
-
-    setIsSuggesting(false);
-  };
-  
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user || !db) {
         toast({ title: "Not Authenticated or DB not available", description: "You must be logged in to create a request.", variant: "destructive"});
         return;
     }
 
-    try {
-        const requestData = {
-            ...values,
-            requesterId: user.id,
-            requesterName: user.name,
-            requesterEmail: user.email,
-            status: 'pending' as const,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-        };
-        const docRef = await addDoc(collection(db, 'requests'), requestData);
-        
-        // Notify QA Testers
-        const qaQuery = query(collection(db, 'users'), where('role', '==', 'qa_tester'));
-        const qaSnapshot = await getDocs(qaQuery);
-        const qaEmails = qaSnapshot.docs.map(doc => (doc.data() as User).email);
+    // Validate team and project selection
+    const selectedTeam = teams?.find(t => t.id === values.associatedTeam);
+    const selectedProject = projects?.find(p => p.id === values.associatedProject);
+    
+    if (!selectedTeam) {
+      toast({ 
+        title: "Invalid Team", 
+        description: "The selected team does not exist. Please select a valid team.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (!selectedProject) {
+      toast({ 
+        title: "Invalid Project", 
+        description: "The selected project does not exist. Please select a valid project.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    const teamName = selectedTeam.name;
+    const projectName = selectedProject.name;
 
-        const emailResult = await notifyOnNewRequest({ 
+    const requestsCollectionRef = collection(db, 'requests');
+    const docRef = doc(requestsCollectionRef);
+    const requestId = docRef.id;
+    
+    // Generate friendly ID before creating document
+    const { generateShortId } = await import('@/lib/id-generator');
+    const shortId = generateShortId('request');
+    
+    const requestData = {
+        ...values,
+        requesterId: user.id,
+        requesterName: user.name,
+        requesterEmail: user.email,
+        associatedTeam: teamName, // Save the name, not the ID
+        associatedProject: projectName, // Save the name, not the ID
+        status: 'pending' as const,
+        shortId: shortId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        certificateRequired: true,
+    };
+
+    try {
+        await setDoc(docRef, requestData);
+
+        toast({
+            title: 'Request Submitted!',
+            description: 'Your certificate request has been sent for QA review.',
+        });
+
+        // Notify users with requests:approve permission
+        const qaEmails = qaUsers.map(u => u.email);
+        const qaUserIds = qaUsers.map(u => u.id);
+
+        // Create in-app notifications for QA testers
+        if (qaUserIds.length > 0) {
+            const { createInAppNotificationsForUsers } = await import('@/lib/notifications');
+            await createInAppNotificationsForUsers(qaUserIds, {
+                type: 'general',
+                title: 'New Certificate Request',
+                message: `${user.name} submitted a new certificate request: "${values.taskTitle}"`,
+                read: false,
+                data: {
+                    requestId: requestId,
+                },
+            });
+        }
+
+        const emailResult = await notifyOnNewRequest({
             qaEmails: qaEmails,
             taskTitle: values.taskTitle,
             requesterName: user.name,
-            associatedProject: values.associatedProject,
-            associatedTeam: values.associatedTeam
-        });
-
-        toast({
-          title: 'Request Submitted!',
-          description: 'Your certificate request has been sent for QA review.',
+            associatedProject: projectName,
+            associatedTeam: teamName,
+            certificateRequired: true,
         });
 
         if (!emailResult.success) {
@@ -156,10 +227,22 @@ export default function NewRequestPage() {
         }
 
         router.push('/dashboard');
-    } catch (err) {
-        const error = err as Error;
-        console.error("Error creating request: ", error);
-        toast({ title: "Submission Failed", description: error.message, variant: "destructive"});
+    } catch (serverError: any) {
+        if (serverError.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+                path: requestsCollectionRef.path,
+                operation: 'create',
+                requestResourceData: requestData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        } else {
+            console.error('Error submitting request:', serverError);
+            toast({
+                title: 'Submission Failed',
+                description: serverError.message || 'An unexpected error occurred.',
+                variant: 'destructive',
+            });
+        }
     }
   }
 
@@ -168,7 +251,9 @@ export default function NewRequestPage() {
       <PageHeader
         title="New Certificate Request"
         description="Fill out the form below to request a certificate for a completed task."
-      />
+      >
+        <BackButton />
+      </PageHeader>
       <Card>
         <CardContent className="p-6">
           <Form {...form}>
@@ -213,7 +298,11 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {teams?.map(team => <SelectItem key={team.id} value={team.name}>{team.name}</SelectItem>)}
+                          {teams && teams.length > 0 ? (
+                            teams.map(team => <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>)
+                          ) : (
+                            <SelectItem value="loading" disabled>Loading teams...</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -233,7 +322,11 @@ export default function NewRequestPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {projects?.map(project => <SelectItem key={project.id} value={project.name}>{project.name}</SelectItem>)}
+                          {projects && projects.length > 0 ? (
+                            projects.map(project => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)
+                          ) : (
+                            <SelectItem value="loading" disabled>Loading projects...</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -259,37 +352,6 @@ export default function NewRequestPage() {
                   </FormItem>
                 )}
               />
-              
-              <div className="space-y-4 rounded-lg border bg-secondary/50 p-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div>
-                        <h3 className="font-semibold">Smart QA Assignment</h3>
-                        <p className="text-sm text-muted-foreground">Let AI suggest the best QA Tester for this request.</p>
-                      </div>
-                      <Button type="button" variant="outline" onClick={handleSuggestQATester} disabled={isSuggesting}>
-                          {isSuggesting ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <Lightbulb className="mr-2 h-4 w-4" />
-                          )}
-                          Suggest QA Tester
-                      </Button>
-                  </div>
-                  {isSuggesting &&
-                    <div className="flex items-center justify-center rounded-md border border-dashed p-4">
-                        <p className="text-sm text-muted-foreground">Analyzing request details...</p>
-                    </div>
-                  }
-                  {suggestion &&
-                     <Alert>
-                        <Lightbulb className="h-4 w-4" />
-                        <AlertTitle>Suggestion: {suggestion.suggestedQATester}</AlertTitle>
-                        <AlertDescription>
-                          <strong>Reason:</strong> {suggestion.reason}
-                        </AlertDescription>
-                    </Alert>
-                  }
-              </div>
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => router.back()}>
@@ -306,5 +368,3 @@ export default function NewRequestPage() {
     </>
   );
 }
-
-    

@@ -3,7 +3,7 @@ import admin from 'firebase-admin';
 // This file provides a centralized way to initialize the Firebase Admin SDK.
 // It ensures that the SDK is initialized only once, which is crucial for serverless environments.
 
-// IMPORTANT: For this to work, you must set the FIREBASE_SERVICE_ACCOUNT_KEY
+// IMPORTANT: For this to work, you must set the SERVICE_ACCOUNT_KEY
 // environment variable. This variable should contain the entire JSON content
 // of your Firebase service account key file.
 
@@ -12,7 +12,7 @@ import admin from 'firebase-admin';
 // 2. Navigate to the "Service accounts" tab.
 // 3. Click "Generate new private key".
 // 4. A JSON file will be downloaded. Copy the contents of this file.
-// 5. Set the contents as the value for the FIREBASE_SERVICE_ACCOUNT_KEY environment variable.
+// 5. Set the contents as the value for the SERVICE_ACCOUNT_KEY environment variable.
 
 let app: admin.app.App | null = null;
 
@@ -28,10 +28,10 @@ export async function initializeAdminApp() {
     return app;
   }
   
-  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const serviceAccountKey = process.env.SERVICE_ACCOUNT_KEY;
 
   if (!serviceAccountKey) {
-    throw new Error('Firebase service account key is not set in environment variables. Please set FIREBASE_SERVICE_ACCOUNT_KEY.');
+    throw new Error('Firebase service account key is not set in environment variables. Please set SERVICE_ACCOUNT_KEY.');
   }
 
   try {

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/providers/auth-provider';
-import { TriangleAlert } from 'lucide-react';
+import { TriangleAlert, Eye, EyeOff } from 'lucide-react';
 import Image from 'next/image';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -44,14 +44,30 @@ const formSchema = z.object({
   password: z.string().min(1, { message: 'Password is required.' }),
 });
 
+const productHighlights = [
+  {
+    title: 'End-to-end delivery tracking',
+    description: 'Follow every task from request through QA sign-off and completion certificate issuance.',
+  },
+  {
+    title: 'Permission-aware workflows',
+    description: 'Surface the right actions per role so project managers, QA, and execs stay aligned.',
+  },
+  {
+    title: 'Automated notifications',
+    description: 'Keep stakeholders informed with reminders, approvals, and follow-up nudges—automatically.',
+  },
+];
+
 export default function LoginPage() {
-  const router = useRouter();
-  const { login, sendPasswordReset } = useAuth();
+  const { login, sendPasswordReset, user, loading } = useAuth();
   const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
-
+  const [isResetting, setIsResetting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -59,50 +75,187 @@ export default function LoginPage() {
       password: '',
     },
   });
+  
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      // Use window.location for a hard redirect to ensure it works even if router.push fails
+      if (window.location.pathname !== '/dashboard') {
+        window.location.href = '/dashboard';
+      }
+    }
+  }, [user, loading]);
+  
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Don't render login form if user is already authenticated (will redirect)
+  if (user) {
+    return null;
+  }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setError(null);
     try {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Attempting login with email:', values.email);
+      }
       await login(values.email, values.password);
-      router.push('/dashboard');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Login successful, redirecting to dashboard...');
+      }
+      
+      // Redirect immediately after successful login
+      // Use window.location for a hard redirect to ensure it works in production
+      window.location.href = '/dashboard';
     } catch (err: any) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Login error:', err);
+        }
         if (err.code === 'auth/user-disabled') {
             setError('This account has been deactivated. Please contact an administrator.');
+        } else if (err.code === 'auth/user-not-found') {
+            setError('No account found with this email address.');
+        } else if (err.code === 'auth/wrong-password') {
+            setError('Incorrect password. Please try again.');
+        } else if (err.code === 'auth/invalid-email') {
+            setError('Invalid email address. Please check and try again.');
+        } else if (err.code === 'auth/invalid-credential') {
+            setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (err.code === 'auth/network-request-failed') {
+            setError('Network error. Please check your internet connection and try again.');
+        } else if (err.message?.includes('Firebase not initialized')) {
+            setError('Application configuration error. Please contact support.');
         } else {
-            setError(err.message || 'An unexpected error occurred.');
+            setError(err.message || err.code || 'An unexpected error occurred. Please try again.');
         }
-        console.error(err);
     }
   }
 
   const handlePasswordReset = async () => {
-    if (!resetEmail) {
+    const emailToReset = resetEmail || form.getValues('email');
+    
+    if (!emailToReset) {
         toast({ title: "Email required", description: "Please enter your email address.", variant: "destructive" });
         return;
     }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailToReset)) {
+        toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
+        return;
+    }
+    
+    setIsResetting(true);
     try {
-        await sendPasswordReset(resetEmail);
-        toast({ title: "Password Reset Email Sent", description: `If an account exists for ${resetEmail}, a password reset link has been sent.` });
+        await sendPasswordReset(emailToReset);
+        toast({ 
+            title: "Password Reset Email Sent", 
+            description: `If an account exists for ${emailToReset}, a password reset link has been sent. Please check your inbox.` 
+        });
         setIsResetDialogOpen(false);
         setResetEmail('');
     } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+        toast({ title: "Error", description: error.message || "Failed to send password reset email. Please try again.", variant: "destructive" });
+    } finally {
+        setIsResetting(false);
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 dark:bg-background">
-      <div className="mb-8 flex items-center gap-2 font-semibold text-primary">
-        <Image src="/logo.jpg" alt="Dev2QA Logo" width={28} height={28} />
-        <h1 className="text-2xl">Dev2QA</h1>
-      </div>
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Welcome Back!</CardTitle>
-          <CardDescription>
-            Sign in to your account to continue.
-          </CardDescription>
-        </CardHeader>
+    <main className="min-h-screen bg-gradient-to-br from-background via-background to-muted/40 dark:from-background dark:via-background dark:to-muted/30">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12 sm:px-8">
+        <div className="flex items-center gap-2 font-semibold text-primary">
+          <Image src="/logo.jpg" alt="Dev2QA Logo" width={28} height={28} priority />
+          <span className="text-2xl">Dev2QA</span>
+        </div>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
+          <section
+            aria-labelledby="onboarding-heading"
+            className="flex flex-col gap-6 rounded-xl border border-border/70 bg-card/60 p-6 shadow-sm backdrop-blur"
+          >
+            <div className="space-y-3">
+              <p className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                Built for Product & QA Delivery Teams
+              </p>
+              <h1 id="onboarding-heading" className="text-3xl font-bold tracking-tight md:text-4xl">
+                Ship with certainty. Celebrate with certificates.
+              </h1>
+              <p className="text-base text-muted-foreground md:text-lg">
+                Dev2QA unifies project oversight, QA sign-off, and certificate governance so your team can move fast
+                without breaking compliance.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {productHighlights.map((highlight) => (
+                <div
+                  key={highlight.title}
+                  className="rounded-lg border border-border/50 bg-background/60 p-4 shadow-sm transition hover:border-primary/50"
+                >
+                  <h2 className="text-sm font-semibold tracking-wide text-primary uppercase">{highlight.title}</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">{highlight.description}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-4 rounded-lg border border-border/60 bg-muted/40 p-4 text-sm text-muted-foreground md:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Getting started</h3>
+                <ul className="mt-2 space-y-2">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    Use your company email to sign in. New joiners can request access below.
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                    QA testers approve tasks directly from reminders—no spreadsheet chasing.
+                  </li>
+                </ul>
+              </div>
+              <div className="rounded-lg bg-background/70 p-4 shadow-inner">
+                <h3 className="text-sm font-semibold text-foreground">Need help?</h3>
+                <p className="mt-2">
+                  Reach our support desk at{' '}
+                  <a href="mailto:support@echobitstech.com" className="font-medium text-primary underline-offset-4 hover:underline">
+                    support@echobitstech.com
+                  </a>{' '}
+                  or message #dev2qa-support on Slack.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-lg bg-primary/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-primary">Request access</h3>
+                <p className="text-sm text-primary/90">
+                  Not onboarded yet? Submit a request and we’ll set up your permissions within one business day.
+                </p>
+              </div>
+              <Button type="button" variant="default" className="w-full sm:w-auto" asChild>
+                <Link href="/request-access">Request access</Link>
+              </Button>
+            </div>
+          </section>
+
+          <Card className="w-full shadow-lg" asChild>
+            <div>
+              <CardHeader>
+                <CardTitle className="text-2xl">Sign in to Dev2QA</CardTitle>
+                <CardDescription>
+                  Access your projects, QA queues, and company dashboards.
+                </CardDescription>
+              </CardHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-4">
@@ -129,44 +282,115 @@ export default function LoginPage() {
               <FormField
                 control={form.control}
                 name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex items-center justify-between">
-                        <FormLabel>Password</FormLabel>
-                        <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button variant="link" type="button" className="p-0 h-auto text-sm font-medium">Forgot Password?</Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                                <DialogHeader>
-                                    <DialogTitle>Reset Password</DialogTitle>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <p className="text-sm text-muted-foreground">Enter your email address below and we'll send you a link to reset your password.</p>
-                                    <Label htmlFor="reset-email" className="sr-only">Email</Label>
-                                    <Input 
-                                        id="reset-email"
-                                        type="email"
-                                        placeholder="name@example.com"
-                                        value={resetEmail}
-                                        onChange={(e) => setResetEmail(e.target.value)}
-                                    />
-                                </div>
-                                <DialogFooter>
-                                    <DialogClose asChild>
-                                        <Button type="button" variant="outline">Cancel</Button>
-                                    </DialogClose>
-                                    <Button type="button" onClick={handlePasswordReset}>Send Reset Link</Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-                    </div>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} autoComplete="current-password" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const { type: _, ...fieldProps } = field;
+                  return (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                          <FormLabel>Password</FormLabel>
+                          <Dialog open={isResetDialogOpen} onOpenChange={(open) => {
+                              setIsResetDialogOpen(open);
+                              if (open) {
+                                  // Auto-fill with email from form if available
+                                  const formEmail = form.getValues('email');
+                                  if (formEmail) {
+                                      setResetEmail(formEmail);
+                                  }
+                              } else {
+                                  setResetEmail('');
+                              }
+                          }}>
+                              <DialogTrigger asChild>
+                                  <Button variant="link" type="button" className="p-0 h-auto text-sm font-medium text-primary hover:underline">
+                                      Forgot Password?
+                                  </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-md">
+                                  <DialogHeader>
+                                      <DialogTitle>Reset Password</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="grid gap-4 py-4">
+                                      <p className="text-sm text-muted-foreground">
+                                          Enter your email address below and we'll send you a link to reset your password. 
+                                          The link will expire in 1 hour.
+                                      </p>
+                                      <div className="space-y-2">
+                                          <Label htmlFor="reset-email">Email Address</Label>
+                                          <Input 
+                                              id="reset-email"
+                                              type="email"
+                                              placeholder="name@example.com"
+                                              value={resetEmail}
+                                              onChange={(e) => setResetEmail(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') {
+                                                      e.preventDefault();
+                                                      handlePasswordReset();
+                                                  }
+                                              }}
+                                              disabled={isResetting}
+                                              autoFocus
+                                          />
+                                      </div>
+                                  </div>
+                                  <DialogFooter>
+                                      <DialogClose asChild>
+                                          <Button type="button" variant="outline" disabled={isResetting}>
+                                              Cancel
+                                          </Button>
+                                      </DialogClose>
+                                      <Button 
+                                          type="button" 
+                                          onClick={handlePasswordReset}
+                                          disabled={isResetting || !resetEmail}
+                                      >
+                                          {isResetting ? 'Sending...' : 'Send Reset Link'}
+                                      </Button>
+                                  </DialogFooter>
+                              </DialogContent>
+                          </Dialog>
+                      </div>
+                      <FormControl>
+                        <div className="relative">
+                          <Input 
+                            {...fieldProps}
+                            type={showPassword ? "text" : "password"} 
+                            placeholder="••••••••" 
+                            autoComplete="current-password"
+                            className="pr-10"
+                            value={field.value}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowPassword((prev) => !prev);
+                            }}
+                            onMouseDown={(e) => {
+                              // Prevent form submission when clicking the button
+                              e.preventDefault();
+                            }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none z-10 cursor-pointer"
+                            tabIndex={-1}
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </CardContent>
             <CardFooter className="flex-col items-center gap-4">
@@ -180,7 +404,10 @@ export default function LoginPage() {
             </CardFooter>
           </form>
         </Form>
-      </Card>
-    </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </main>
   );
 }

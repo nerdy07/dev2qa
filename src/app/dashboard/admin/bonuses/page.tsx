@@ -1,9 +1,10 @@
+
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, TriangleAlert } from 'lucide-react';
+import { PlusCircle, TriangleAlert, Calendar } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -19,17 +20,79 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Bonus } from '@/lib/types';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { BonusForm } from '@/components/admin/bonus-form';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
 
 export default function BonusesPage() {
   const { data: bonuses, loading, error } = useCollection<Bonus>('bonuses');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [selectedDate, setSelectedDate] = React.useState(new Date());
+  const [filterType, setFilterType] = React.useState<'month' | 'all'>('month');
+
+  // Filter bonuses by selected month or all time
+  const filteredBonuses = useMemo(() => {
+    if (!bonuses) return [];
+    
+    if (filterType === 'all') {
+      return bonuses;
+    }
+    
+    const monthStart = startOfMonth(selectedDate);
+    const monthEnd = endOfMonth(selectedDate);
+    
+    return bonuses.filter(bonus => {
+      if (!bonus.dateIssued) return false;
+      const date = bonus.dateIssued.toDate();
+      return date >= monthStart && date <= monthEnd;
+    });
+  }, [bonuses, selectedDate, filterType]);
+
+  // Calculate totals (monthly or all time)
+  const totals = useMemo(() => {
+    const result = {
+      ngn: 0,
+      percentage: 0,
+      count: filteredBonuses.length,
+    };
+    
+    filteredBonuses.forEach(bonus => {
+      if (bonus.currency === 'NGN') {
+        result.ngn += bonus.amount;
+      } else {
+        result.percentage += bonus.amount;
+      }
+    });
+    
+    return result;
+  }, [filteredBonuses]);
+
+  // Pagination
+  const {
+    currentPage,
+    totalPages,
+    currentData: paginatedBonuses,
+    itemsPerPage,
+    setCurrentPage,
+    setItemsPerPage,
+  } = usePagination({
+    data: filteredBonuses,
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
 
   const formatAmount = (amount: number, currency: 'NGN' | 'PERCENTAGE') => {
     if (currency === 'NGN') {
@@ -37,6 +100,26 @@ export default function BonusesPage() {
     }
     return `${amount}%`;
   };
+
+  const handleMonthChange = (month: string) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(parseInt(month));
+    setSelectedDate(newDate);
+  };
+
+  const handleYearChange = (year: string) => {
+    const newDate = new Date(selectedDate);
+    newDate.setFullYear(parseInt(year));
+    setSelectedDate(newDate);
+  };
+
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i.toString(),
+    label: format(new Date(2024, i, 1), 'MMMM'),
+  }));
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => (currentYear - 2 + i).toString());
 
   const renderContent = () => {
     if (loading) {
@@ -71,9 +154,23 @@ export default function BonusesPage() {
       );
     }
 
+    if (filteredBonuses.length === 0) {
+      return (
+        <TableBody>
+          <TableRow>
+            <TableCell colSpan={5} className="h-24 text-center">
+              {filterType === 'all' 
+                ? 'No bonuses found.' 
+                : `No bonuses found for ${format(selectedDate, 'MMMM yyyy')}.`}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      );
+    }
+
     return (
       <TableBody>
-        {bonuses?.map((bonus) => (
+        {paginatedBonuses.map((bonus) => (
           <TableRow key={bonus.id}>
             <TableCell className="font-medium">{bonus.userName}</TableCell>
             <TableCell>{bonus.bonusType}</TableCell>
@@ -90,7 +187,7 @@ export default function BonusesPage() {
     <>
       <PageHeader
         title="Bonus Management"
-        description="Issue and track employee bonuses and rewards."
+        description="Issue and track employee bonuses and rewards by month."
       >
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogTrigger asChild>
@@ -107,19 +204,113 @@ export default function BonusesPage() {
           </DialogContent>
         </Dialog>
       </PageHeader>
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Bonus Type</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Date Issued</TableHead>
-              <TableHead>Issued By</TableHead>
-            </TableRow>
-          </TableHeader>
-          {renderContent()}
-        </Table>
+      
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Filter</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Select value={filterType} onValueChange={(value) => setFilterType(value as 'month' | 'all')}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">By Month</SelectItem>
+                  <SelectItem value="all">All Time</SelectItem>
+                </SelectContent>
+              </Select>
+              {filterType === 'month' && (
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                  <Select value={selectedDate.getMonth().toString()} onValueChange={handleMonthChange}>
+                    <SelectTrigger className="w-full sm:w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map(month => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedDate.getFullYear().toString()} onValueChange={handleYearChange}>
+                    <SelectTrigger className="w-full sm:w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map(year => (
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Count</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totals.count}</div>
+            <p className="text-xs text-muted-foreground">{filterType === 'all' ? 'total bonuses' : 'bonuses this month'}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total NGN</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(totals.ngn)}
+            </div>
+            <p className="text-xs text-muted-foreground">cash bonuses</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Percentage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totals.percentage.toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">percentage bonuses</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[120px]">User</TableHead>
+                <TableHead className="min-w-[120px]">Bonus Type</TableHead>
+                <TableHead className="min-w-[100px]">Amount</TableHead>
+                <TableHead className="min-w-[120px]">Date Issued</TableHead>
+                <TableHead className="min-w-[120px]">Issued By</TableHead>
+              </TableRow>
+            </TableHeader>
+            {renderContent()}
+          </Table>
+        </div>
+        {filteredBonuses.length > 0 && (
+          <div className="p-4 border-t">
+            <PaginationWrapper
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredBonuses.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </div>
+        )}
       </Card>
     </>
   );

@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/providers/auth-provider';
 import { useCollection } from '@/hooks/use-collection';
-import { INFRACTION_TYPES } from '@/lib/constants';
+import type { InfractionType } from '@/lib/types';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { sendInfractionNotification } from '@/app/requests/actions';
@@ -45,6 +45,7 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const { data: users, loading: usersLoading } = useCollection<User>('users');
+  const { data: infractionTypes, loading: typesLoading } = useCollection<InfractionType>('infractionTypes');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,7 +66,7 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
         return;
     }
     
-    const selectedInfraction = INFRACTION_TYPES.find(i => i.name === values.infractionType);
+    const selectedInfraction = infractionTypes?.find(i => i.name === values.infractionType);
     if (!selectedInfraction) {
         toast({ title: 'Invalid Infraction Type', variant: 'destructive' });
         return;
@@ -84,6 +85,16 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
       };
 
       await addDoc(collection(db, 'infractions'), infractionData);
+      
+      // Create in-app notification
+      const { createInAppNotification } = await import('@/lib/notifications');
+      await createInAppNotification({
+        userId: selectedUser.id,
+        type: 'general',
+        title: 'Infraction Issued',
+        message: `An infraction has been issued: ${values.infractionType}${values.description ? ` - ${values.description}` : ''}`,
+        read: false,
+      });
       
       const emailResult = await sendInfractionNotification({
           recipientEmail: selectedUser.email,
@@ -146,11 +157,17 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {INFRACTION_TYPES.map(infraction => (
-                    <SelectItem key={infraction.name} value={infraction.name}>
-                      {infraction.name} ({infraction.deduction > 0 ? `${infraction.deduction}%` : 'Note'})
-                    </SelectItem>
-                  ))}
+                  {typesLoading ? (
+                    <SelectItem value="loading" disabled>Loading types...</SelectItem>
+                  ) : infractionTypes && infractionTypes.length > 0 ? (
+                    infractionTypes.map(infraction => (
+                      <SelectItem key={infraction.id} value={infraction.name}>
+                        {infraction.name} ({infraction.deduction > 0 ? `${infraction.deduction}%` : 'Note'})
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No infraction types available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -174,11 +191,11 @@ export function InfractionForm({ onSuccess }: InfractionFormProps) {
             </FormItem>
           )}
         />
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onSuccess}>
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onSuccess} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full sm:w-auto">
             {form.formState.isSubmitting ? 'Issuing...' : 'Issue Infraction'}
           </Button>
         </div>

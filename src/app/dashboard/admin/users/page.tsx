@@ -1,9 +1,10 @@
+
 'use client';
 
 import React from 'react';
 import { PageHeader } from '@/components/common/page-header';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, MoreHorizontal, TriangleAlert, UserCheck, UserX } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, TriangleAlert, UserCheck, UserX, FileText } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -38,26 +39,59 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { User } from '@/lib/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { User, Role } from '@/lib/types';
 import { UserForm } from '@/components/admin/user-form';
+import { RoleForm } from '@/components/admin/role-form';
+import { UserDocumentsDialog } from '@/components/admin/user-documents-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/providers/auth-provider';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/use-permissions';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { createUser } from '@/app/actions/user-actions';
+import { ProtectedRoute } from '@/components/common/protected-route';
+import { usePagination } from '@/hooks/use-pagination';
+import { PaginationWrapper } from '@/components/common/pagination-wrapper';
+
 
 type ActionType = 'delete' | 'deactivate' | 'activate';
 
-export default function UsersPage() {
+function UsersTable() {
   const { data: users, loading, error, setData } = useCollection<User>('users');
   const { user: currentUser, sendPasswordReset } = useAuth();
+  const { hasPermission } = usePermissions();
   const [isFormOpen, setIsFormOpen] = React.useState(false);
+  const [isDocumentsDialogOpen, setIsDocumentsDialogOpen] = React.useState(false);
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
   const { toast } = useToast();
+
+  const canCreate = hasPermission(ALL_PERMISSIONS.USERS.CREATE);
+  const canUpdate = hasPermission(ALL_PERMISSIONS.USERS.UPDATE);
+  const canDelete = hasPermission(ALL_PERMISSIONS.USERS.DELETE);
+
+  // Pagination
+  const {
+    currentPage,
+    totalPages,
+    currentData: paginatedUsers,
+    itemsPerPage,
+    setCurrentPage,
+    setItemsPerPage,
+  } = usePagination({
+    data: users || [],
+    itemsPerPage: 20,
+    initialPage: 1,
+  });
+
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
@@ -108,22 +142,41 @@ export default function UsersPage() {
             successMessage = `User ${selectedUser.name} has been ${newStatus ? 'deactivated' : 'activated'}.`;
         }
         
-        const result = await response.json();
-
+        // Check if response is ok before trying to parse JSON
         if (!response.ok) {
-            throw new Error(result.message || 'An unknown error occurred.');
+            // Try to get error message from response
+            let errorMessage = 'An unknown error occurred.';
+            try {
+                const errorResult = await response.json();
+                errorMessage = errorResult.message || errorMessage;
+            } catch (jsonError) {
+                // If JSON parsing fails, use status text
+                errorMessage = response.statusText || `HTTP ${response.status} error`;
+            }
+            throw new Error(errorMessage);
         }
+
+        // Parse JSON only if response is ok
+        const result = await response.json();
 
         toast({ title: 'Success', description: successMessage });
         
-        // Optimistically update the local state to reflect the change immediately
+        // Firestore's real-time listener will automatically update the UI
+        // But we can do an optimistic update for immediate feedback
         if (users && setData) {
             if (actionToConfirm === 'delete') {
+                // Optimistically remove the user from the list
                 setData(users.filter(u => u.id !== selectedUser.id));
             } else {
+                // Optimistically update the user status
                 setData(users.map(u => u.id === selectedUser.id ? { ...u, disabled: actionToConfirm === 'deactivate' } : u));
             }
         }
+        
+        // Close dialog immediately
+        setIsAlertOpen(false);
+        setSelectedUser(undefined);
+        setActionToConfirm(null);
         
     } catch (err) {
         const error = err as Error;
@@ -133,10 +186,14 @@ export default function UsersPage() {
             description: error.message,
             variant: 'destructive',
         });
+        // Keep dialog open on error so user can retry
     } finally {
-        setIsAlertOpen(false);
-        setSelectedUser(undefined);
-        setActionToConfirm(null);
+        // Only close if not already closed (on success)
+        if (actionToConfirm) {
+            setIsAlertOpen(false);
+            setSelectedUser(undefined);
+            setActionToConfirm(null);
+        }
     }
   }
 
@@ -212,7 +269,7 @@ export default function UsersPage() {
 
     return (
       <TableBody>
-        {users?.map((user) => (
+        {paginatedUsers?.map((user) => (
           <TableRow key={user.id} className={cn(user.disabled && 'text-muted-foreground opacity-60')}>
             <TableCell className="font-medium">{user.name}</TableCell>
             <TableCell>{user.email}</TableCell>
@@ -227,17 +284,24 @@ export default function UsersPage() {
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id}>
+                  <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id || !canUpdate}>
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {user.disabled ? (
+                  {canUpdate && <DropdownMenuItem onClick={() => handleEdit(user)}>Edit User</DropdownMenuItem>}
+                  {canUpdate && <DropdownMenuItem onClick={() => {
+                    setSelectedUser(user);
+                    setIsDocumentsDialogOpen(true);
+                  }}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Manage Documents
+                  </DropdownMenuItem>}
+                  {canUpdate && <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>}
+                  {(canUpdate || canDelete) && <DropdownMenuSeparator />}
+                  {canUpdate && (user.disabled ? (
                     <DropdownMenuItem onClick={() => handleActionTrigger(user, 'activate')}>
                       <UserCheck className="mr-2 h-4 w-4" />
                       Activate User
@@ -247,9 +311,9 @@ export default function UsersPage() {
                       <UserX className="mr-2 h-4 w-4" />
                       Deactivate User
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleActionTrigger(user, 'delete')}>Delete User</DropdownMenuItem>
+                  ))}
+                  {canDelete && <DropdownMenuSeparator />}
+                  {canDelete && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleActionTrigger(user, 'delete')}>Delete User</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>
@@ -258,32 +322,31 @@ export default function UsersPage() {
       </TableBody>
     );
   };
-
+  
   return (
     <>
-      <PageHeader
-        title="User Management"
-        description="Create, view, and manage user accounts."
-      >
-        <Dialog open={isFormOpen} onOpenChange={(open) => {
-            if (!open) setSelectedUser(undefined);
-            setIsFormOpen(open);
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
-            </DialogHeader>
-            <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
-          </DialogContent>
-        </Dialog>
-      </PageHeader>
-      <Card>
+      <div className="flex items-center justify-end">
+        {canCreate && (
+            <Dialog open={isFormOpen} onOpenChange={(open) => {
+                if (!open) setSelectedUser(undefined);
+                setIsFormOpen(open);
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add User
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
+                </DialogHeader>
+                <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
+              </DialogContent>
+            </Dialog>
+          )}
+      </div>
+      <Card className="mt-4">
         <Table>
           <TableHeader>
             <TableRow>
@@ -296,7 +359,30 @@ export default function UsersPage() {
           </TableHeader>
           {renderContent()}
         </Table>
+        {users && users.length > 0 && (
+          <div className="p-4">
+            <PaginationWrapper
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={users.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+            />
+          </div>
+        )}
       </Card>
+
+      {selectedUser && (
+        <UserDocumentsDialog
+          user={selectedUser}
+          open={isDocumentsDialogOpen}
+          onOpenChange={(open) => {
+            setIsDocumentsDialogOpen(open);
+            if (!open) setSelectedUser(undefined);
+          }}
+        />
+      )}
 
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
           <AlertDialogContent>
@@ -318,5 +404,214 @@ export default function UsersPage() {
           </AlertDialogContent>
       </AlertDialog>
     </>
-  );
+  )
+}
+
+function RolesTable() {
+    const { data: roles, loading, error } = useCollection<Role>('roles');
+    const [isFormOpen, setIsFormOpen] = React.useState(false);
+    const [isAlertOpen, setIsAlertOpen] = React.useState(false);
+    const [selectedRole, setSelectedRole] = React.useState<Role | undefined>(undefined);
+    const { toast } = useToast();
+    const { hasPermission } = usePermissions();
+
+    const canManageRoles = hasPermission(ALL_PERMISSIONS.ROLES.MANAGE);
+  
+    const handleEdit = (role: Role) => {
+      setSelectedRole(role);
+      setIsFormOpen(true);
+    };
+    
+    const handleDelete = (role: Role) => {
+      setSelectedRole(role);
+      setIsAlertOpen(true);
+    }
+    
+    const confirmDelete = async () => {
+      if (selectedRole && db) {
+        try {
+          await deleteDoc(doc(db, 'roles', selectedRole.id));
+          toast({ title: `Role "${selectedRole.name}" Deleted`, description: 'The role has been successfully removed.' });
+        } catch (e) {
+          const error = e as Error;
+          console.error("Error deleting role: ", error);
+          toast({ title: 'Error Deleting Role', description: error.message, variant: 'destructive' });
+        }
+      }
+      setIsAlertOpen(false);
+      setSelectedRole(undefined);
+    }
+  
+    const handleSave = async (values: Omit<Role, 'id'>) => {
+      if (!db) {
+          toast({ title: 'Database not available', variant: 'destructive' });
+          return false;
+      }
+      const isEditing = !!selectedRole;
+      try {
+          if (isEditing) {
+              const roleRef = doc(db, 'roles', selectedRole.id);
+              await updateDoc(roleRef, values);
+              toast({ title: `Role Updated`, description: `Role "${values.name}" was saved.` });
+          } else {
+              await addDoc(collection(db, 'roles'), values);
+              toast({ title: `Role Created`, description: `Role "${values.name}" was created.` });
+          }
+          handleFormSuccess();
+          return true;
+      } catch(e) {
+          const error = e as Error;
+          console.error("Error saving role: ", error);
+          toast({ title: 'Error Saving Role', description: error.message, variant: 'destructive' });
+          return false;
+      }
+    }
+  
+    const handleFormSuccess = () => {
+      setIsFormOpen(false);
+      setSelectedRole(undefined);
+    };
+  
+    const renderContent = () => {
+      if (loading) {
+        return (
+          <TableBody>
+            {[...Array(3)].map((_, i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        );
+      }
+  
+      if (error) {
+        return (
+          <TableBody>
+            <TableRow>
+              <TableCell colSpan={3}>
+                <Alert variant="destructive">
+                  <TriangleAlert className="h-4 w-4" />
+                  <AlertTitle>Error Loading Roles</AlertTitle>
+                  <AlertDescription>{error.message}</AlertDescription>
+                </Alert>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        );
+      }
+  
+      return (
+        <TableBody>
+          {roles?.map((role) => (
+            <TableRow key={role.id}>
+              <TableCell className="font-medium">{role.name}</TableCell>
+              <TableCell>{role.permissions.length}</TableCell>
+              <TableCell className="text-right">
+                {canManageRoles && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0" disabled={role.name === 'admin'}>
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleEdit(role)} disabled={role.name === 'admin'}>Edit Role</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDelete(role)} disabled={role.name === 'admin'}>Delete Role</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      );
+    };
+
+    return (
+        <>
+        <div className="flex items-center justify-end">
+            {canManageRoles && (
+                <Dialog open={isFormOpen} onOpenChange={(open) => {
+                    if (!open) setSelectedRole(undefined);
+                    setIsFormOpen(open);
+                }}>
+                <DialogTrigger asChild>
+                    <Button>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Role
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                    <DialogTitle>{selectedRole ? `Edit Role: ${selectedRole.name}` : 'Create New Role'}</DialogTitle>
+                    </DialogHeader>
+                    <RoleForm
+                    role={selectedRole}
+                    onSave={handleSave}
+                    onCancel={handleFormSuccess}
+                    />
+                </DialogContent>
+                </Dialog>
+            )}
+        </div>
+        <Card className="mt-4">
+            <Table>
+            <TableHeader>
+                <TableRow>
+                <TableHead>Role Name</TableHead>
+                <TableHead>Permissions Count</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+            </TableHeader>
+            {renderContent()}
+            </Table>
+      </Card>
+
+      <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the role: <span className="font-semibold">{selectedRole?.name}</span>. This could affect users currently assigned to this role.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setSelectedRole(undefined)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      </>
+    )
+}
+
+export default function UsersPage() {
+    return (
+        <ProtectedRoute 
+            permission={ALL_PERMISSIONS.USERS.READ}
+        >
+            <PageHeader
+                title="User Management"
+                description="Manage user accounts, roles, and permissions."
+            />
+            <Tabs defaultValue="users" className="w-full">
+                <TabsList>
+                    <TabsTrigger value="users">Users</TabsTrigger>
+                    <TabsTrigger value="roles">Roles & Permissions</TabsTrigger>
+                </TabsList>
+                <TabsContent value="users" className="mt-6">
+                    <UsersTable />
+                </TabsContent>
+                <TabsContent value="roles" className="mt-6">
+                    <RolesTable />
+                </TabsContent>
+            </Tabs>
+        </ProtectedRoute>
+    )
 }

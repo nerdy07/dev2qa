@@ -1,355 +1,716 @@
 
 'use client';
+
 import React from 'react';
-import { useAuth } from '@/providers/auth-provider';
-import { PageHeader } from '@/components/common/page-header';
-import { StatCard } from '@/components/dashboard/stat-card';
-import { Users, Shield, FolderKanban, FileText, FilePlus2, TriangleAlert, CheckCircle, Clock, XCircle, Percent } from 'lucide-react';
-import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
-import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { useCollection } from '@/hooks/use-collection';
-import { Team, Project, CertificateRequest, User } from '@/lib/types';
-import { query, where, limit, collection, orderBy, getCountFromServer } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import DashboardLoading from './loading';
-import { useToast } from '@/hooks/use-toast';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatDistanceToNow } from 'date-fns';
+import { PageHeader } from '@/components/common/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
-import type { DateRange } from 'react-day-picker';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/providers/auth-provider';
+import { usePermissions } from '@/hooks/use-permissions';
+import { useCollection } from '@/hooks/use-collection';
+import type { CertificateRequest, Project, Team, User, Invoice } from '@/lib/types';
+import { ALL_PERMISSIONS } from '@/lib/roles';
+import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase';
+import { collection, limit, orderBy, query } from 'firebase/firestore';
+import {
+  ArrowRight,
+  ClipboardList,
+  CheckCircle2,
+  Users,
+  FolderKanban,
+  Clock,
+  TriangleAlert,
+  Activity,
+  FilePlus2,
+  Receipt,
+} from 'lucide-react';
+
+type HeroSummary = {
+  title: string;
+  value: string;
+  description: string;
+  cta?: {
+    label: string;
+    href: string;
+    ariaLabel?: string;
+  };
+  badge?: string;
+};
+
+type ActionItem = {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  meta?: string;
+};
+
+const formatCount = (value: number) => value.toLocaleString();
+
+const getCreatedAt = (request: CertificateRequest): Date => {
+  const created = (request.createdAt as any)?.toDate?.();
+  return created instanceof Date ? created : new Date();
+};
+
+const statusVariant = (status: CertificateRequest['status']) => {
+  switch (status) {
+    case 'approved':
+      return 'default';
+    case 'pending':
+      return 'secondary';
+    case 'rejected':
+      return 'destructive';
+    default:
+      return 'outline';
+  }
+};
+
+function HeroCard({ summary }: { summary: HeroSummary }) {
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardHeader className="space-y-2">
+        {summary.badge ? (
+          <Badge variant="outline" className="w-fit border-primary text-primary">
+            {summary.badge}
+          </Badge>
+        ) : null}
+        <CardTitle className="text-3xl font-bold tracking-tight md:text-4xl">
+          {summary.value}
+        </CardTitle>
+        <CardDescription className="text-base text-muted-foreground">
+          {summary.description}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="text-xl font-semibold">{summary.title}</h2>
+          <p className="text-sm text-muted-foreground">
+            Stay focused on the work that drives delivery forward.
+          </p>
+        </div>
+        {summary.cta ? (
+          <Button asChild className="w-full sm:w-auto" aria-label={summary.cta.ariaLabel ?? summary.cta.label}>
+            <Link href={summary.cta.href}>
+              {summary.cta.label}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function NextActionsList({ actions }: { actions: ActionItem[] }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle className="text-lg font-semibold">Next actions</CardTitle>
+          <CardDescription>Prioritized items that keep your queue moving.</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {actions.length > 0 ? (
+          <ul className="space-y-3">
+            {actions.map((action) => (
+              <li key={action.id}>
+                <Link
+                  href={action.href}
+                  className="group flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Open ${action.title}`}
+                >
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold leading-tight text-foreground group-hover:text-primary">
+                      {action.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
+                  </div>
+                  <div className="ml-4 flex items-center gap-3">
+                    {action.meta ? (
+                      <Badge variant="outline" className="text-xs font-medium">
+                        {action.meta}
+                      </Badge>
+                    ) : null}
+                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+            Nothing urgent right now. You’ll see upcoming work here as soon as it needs attention.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricsGrid({
+  metrics,
+}: {
+  metrics: { title: string; value: string; description: string }[];
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {metrics.map((metric) => (
+        <Card key={metric.title} className="border-border/60 bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold">{metric.title}</CardTitle>
+            <CardDescription>{metric.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <span className="text-2xl font-bold">{metric.value}</span>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function RecentActivityList({ items }: { items: CertificateRequest[] }) {
+  if (items.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+        Activity will appear here as soon as work starts flowing through the system.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {items.map((request) => (
+        <Link
+          key={request.id}
+          href={`/dashboard/requests/${request.id}`}
+          className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card px-4 py-3 shadow-sm transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          aria-label={`Open request ${request.taskTitle}`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold leading-tight text-foreground">{request.taskTitle}</p>
+            <Badge variant={statusVariant(request.status)} className="capitalize">
+              {request.status}
+            </Badge>
+          </div>
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <FolderKanban className="h-3 w-3" />
+              {request.associatedProject || 'No project'}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {formatDistanceToNow(getCreatedAt(request), { addSuffix: true })}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {request.requesterName}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
 
-  const AdminDashboard = () => {
-    const { data: users, loading: usersLoading } = useCollection<User>('users');
-    const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
-    const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
-    
-    // For Recent Requests Table - this is already optimized with limit(5)
-    const { data: recentRequests, loading: recentRequestsLoading, error: recentRequestsError } = useCollection<CertificateRequest>(
-        'requests',
-        query(collection(db!, 'requests'), orderBy('createdAt', 'desc'), limit(5))
-    );
+  const requestsQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, 'requests'), orderBy('createdAt', 'desc'), limit(25));
+  }, []);
 
-    // State for our new stats, fetched efficiently
-    const [stats, setStats] = React.useState({ total: 0, approved: 0, pending: 0, rejected: 0 });
-    const [statsLoading, setStatsLoading] = React.useState(true);
-    const [statsError, setStatsError] = React.useState<string | null>(null);
+  const {
+    data: requests,
+    loading: requestsLoading,
+    error: requestsError,
+  } = useCollection<CertificateRequest>('requests', requestsQuery);
+  const { data: projects, loading: projectsLoading } = useCollection<Project>('projects');
+  const { data: teams, loading: teamsLoading } = useCollection<Team>('teams');
+  const { data: users, loading: usersLoading } = useCollection<User>('users');
+  const { data: invoices, loading: invoicesLoading } = useCollection<Invoice>('invoices');
 
-    // Fetch counts efficiently on component mount
-    React.useEffect(() => {
-        const fetchCounts = async () => {
-            if (!db) return;
-            try {
-                const requestsCollection = collection(db, 'requests');
-                
-                const approvedQuery = query(requestsCollection, where('status', '==', 'approved'));
-                const pendingQuery = query(requestsCollection, where('status', '==', 'pending'));
-                const rejectedQuery = query(requestsCollection, where('status', '==', 'rejected'));
+  const loading = requestsLoading || projectsLoading || teamsLoading || usersLoading || invoicesLoading;
 
-                // Get counts from server
-                const [totalSnapshot, approvedSnapshot, pendingSnapshot, rejectedSnapshot] = await Promise.all([
-                    getCountFromServer(requestsCollection),
-                    getCountFromServer(approvedQuery),
-                    getCountFromServer(pendingQuery),
-                    getCountFromServer(rejectedQuery),
-                ]);
+  // All hooks must be called before any conditional returns
+  const pendingRequests = React.useMemo(
+    () => (requests ?? []).filter((request) => request.status === 'pending'),
+    [requests]
+  );
 
-                setStats({
-                    total: totalSnapshot.data().count,
-                    approved: approvedSnapshot.data().count,
-                    pending: pendingSnapshot.data().count,
-                    rejected: rejectedSnapshot.data().count,
-                });
+  const overdueRequests = React.useMemo(
+    () =>
+      pendingRequests.filter((request) => {
+        const created = getCreatedAt(request);
+        const diff = Date.now() - created.getTime();
+        return diff > 3 * 24 * 60 * 60 * 1000;
+      }),
+    [pendingRequests]
+  );
 
-            } catch (err) {
-                const error = err as Error;
-                console.error("Failed to fetch dashboard stats:", error);
-                setStatsError(error.message);
-            } finally {
-                setStatsLoading(false);
-            }
+  const myRequests = React.useMemo(
+    () => (requests ?? []).filter((request) => request.requesterId === user?.id),
+    [requests, user?.id]
+  );
+
+  const managedProjects = React.useMemo(
+    () => (projects ?? []).filter((project) => project.leadId === user?.id),
+    [projects, user?.id]
+  );
+
+  const managedProjectNames = React.useMemo(
+    () => new Set(managedProjects.map((project) => project.name)),
+    [managedProjects]
+  );
+
+  const managedPending = React.useMemo(
+    () => pendingRequests.filter((request) => managedProjectNames.has(request.associatedProject || '')),
+    [pendingRequests, managedProjectNames]
+  );
+
+  const myPending = React.useMemo(
+    () => myRequests.filter((request) => request.status === 'pending'),
+    [myRequests]
+  );
+
+  const isQA = hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE);
+  const isProjectManager = hasPermission(ALL_PERMISSIONS.PROJECTS.UPDATE) || Boolean(user?.isProjectManager);
+  const isAdmin = Boolean(user?.isAdmin);
+  const canManageInvoices = hasPermission(ALL_PERMISSIONS.INVOICES.MANAGE);
+
+  // Invoice metrics - must be defined before useMemo hooks that use it
+  const invoiceMetrics = React.useMemo(() => {
+    if (!invoices || !canManageInvoices) return null;
+
+    const pendingInvoices = invoices.filter(inv => inv.status === 'sent' || inv.status === 'draft');
+    const overdueInvoices = invoices.filter(inv => {
+      if (inv.status !== 'sent' && inv.status !== 'partially_paid') return false;
+      const dueDate = inv.dueDate?.toDate?.();
+      return dueDate && dueDate < new Date() && inv.outstandingAmount > 0;
+    });
+    const totalOutstanding = invoices.reduce((sum, inv) => sum + inv.outstandingAmount, 0);
+    const recentInvoices = invoices
+      .sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(0);
+        const dateB = b.createdAt?.toDate?.() || new Date(0);
+        return dateB.getTime() - dateA.getTime();
+      })
+      .slice(0, 5);
+
+    return {
+      pending: pendingInvoices.length,
+      overdue: overdueInvoices.length,
+      totalOutstanding,
+      recent: recentInvoices,
+    };
+  }, [invoices, canManageInvoices]);
+
+  const heroSummary: HeroSummary = React.useMemo(() => {
+    if (isQA) {
+      return {
+        title: 'Pending approvals',
+        value: formatCount(pendingRequests.length),
+        description:
+          pendingRequests.length > 0
+            ? 'Requests waiting on QA sign-off. Start with the most overdue items to keep delivery on track.'
+            : 'All requests are up to date—nice work staying ahead of the queue.',
+        cta: {
+          label: 'Open approval queue',
+          href: '/dashboard/requests?status=pending',
+          ariaLabel: 'Open the list of pending requests awaiting QA approval',
+        },
+        badge: overdueRequests.length ? `${formatCount(overdueRequests.length)} overdue` : undefined,
+      };
+    }
+
+    if (isProjectManager) {
+      return {
+        title: 'Requests from your projects',
+        value: formatCount(managedPending.length),
+        description:
+          managedPending.length > 0
+            ? 'Coordinate with QA to keep these project deliverables moving.'
+            : 'No pending approvals tied to the projects you lead.',
+        cta: {
+          label: 'Review project work',
+          href: '/dashboard/my-work',
+        },
+        badge: managedProjects.length ? `${formatCount(managedProjects.length)} active projects` : undefined,
+      };
+    }
+
+    if (isAdmin) {
+      // Show invoice metrics if user can manage invoices
+      if (canManageInvoices && invoiceMetrics && invoiceMetrics.overdue > 0) {
+        return {
+          title: 'Overdue invoices',
+          value: formatCount(invoiceMetrics.overdue),
+          description:
+            invoiceMetrics.overdue > 0
+              ? 'These invoices are past their due date and require immediate attention.'
+              : 'No invoices are currently overdue.',
+          cta: {
+            label: 'View invoices',
+            href: '/dashboard/admin/invoices?status=overdue',
+          },
         };
-
-        fetchCounts();
-    }, []);
-
-    const loading = usersLoading || teamsLoading || projectsLoading || recentRequestsLoading || statsLoading;
-    const error = statsError || recentRequestsError;
-
-    if (loading) return <DashboardLoading />;
-
-    if (error) {
-        return (
-            <Alert variant="destructive">
-                <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>Error Loading Dashboard</AlertTitle>
-                <AlertDescription>{typeof error === 'string' ? error : (error as Error)?.message}</AlertDescription>
-            </Alert>
-        )
+      }
+      
+      return {
+        title: 'Overdue approvals',
+        value: formatCount(overdueRequests.length),
+        description:
+          overdueRequests.length > 0
+            ? 'These requests have been waiting more than three days. Consider nudging approvers.'
+            : 'No approvals are currently overdue.',
+        cta: {
+          label: 'Open requests dashboard',
+          href: '/dashboard/requests',
+        },
+      };
     }
 
-    return (
-      <>
-        <PageHeader
-          title={`Welcome, ${user?.name}!`}
-          description="Here's a quick overview of your system."
-        />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Total Users" value={users?.length.toString() || '0'} icon={Users} />
-          <StatCard title="Total Teams" value={teams?.length.toString() || '0'} icon={Shield} />
-          <StatCard title="Total Projects" value={projects?.length.toString() || '0'} icon={FolderKanban} />
-          <StatCard title="Total Requests" value={stats.total.toString()} icon={FileText} />
-        </div>
-        <div className="grid gap-4 md:grid-cols-3 mt-4">
-            <StatCard title="Approved Certificates" value={stats.approved.toString()} icon={CheckCircle} />
-            <StatCard title="Pending Requests" value={stats.pending.toString()} icon={Clock} />
-            <StatCard title="Rejected Requests" value={stats.rejected.toString()} icon={XCircle} />
-        </div>
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold tracking-tight mb-4">Recent Requests</h2>
-          <CertificateRequestsTable requests={recentRequests || []} isLoading={loading} />
-        </div>
-      </>
-    );
-  };
+    return {
+      title: 'My pending requests',
+      value: formatCount(myPending.length),
+      description:
+        myPending.length > 0
+          ? 'Track the work awaiting QA review and add more context if needed.'
+          : 'You have no work in review. Submit a new request when you are ready.',
+      cta: {
+        label: 'Submit new request',
+        href: '/dashboard/requests/new',
+      },
+    };
+  }, [
+    isQA,
+    isProjectManager,
+    isAdmin,
+    canManageInvoices,
+    invoiceMetrics,
+    pendingRequests.length,
+    overdueRequests.length,
+    managedPending.length,
+    managedProjects.length,
+    myPending.length,
+  ]);
 
-  const RequesterDashboard = () => {
-    const myRequestsQuery = React.useMemo(() => {
-        if (!user?.id) return null;
-        return query(collection(db!, 'requests'), where('requesterId', '==', user.id));
-    }, [user?.id]);
-    
-    const { data: myRequests, loading, error } = useCollection<CertificateRequest>(
-        'requests',
-        myRequestsQuery
-    );
-    const { toast } = useToast();
-    const prevRequestsRef = React.useRef<CertificateRequest[] | null>(null);
+  const nextActions = React.useMemo<ActionItem[]>(() => {
+    const buildDescription = (request: CertificateRequest) =>
+      `${request.requesterName} • ${formatDistanceToNow(getCreatedAt(request), { addSuffix: true })}`;
 
-    const stats = React.useMemo(() => {
-        if (!myRequests || myRequests.length === 0) {
-            return { total: 0, approved: 0, pending: 0, rejected: 0, approvalRate: 0 };
-        }
-        const approved = myRequests.filter(r => r.status === 'approved').length;
-        const pending = myRequests.filter(r => r.status === 'pending').length;
-        const rejected = myRequests.filter(r => r.status === 'rejected').length;
-        const totalConsidered = approved + rejected;
-        const approvalRate = totalConsidered > 0 ? Math.round((approved / totalConsidered) * 100) : 0;
-        return { total: myRequests.length, approved, pending, rejected, approvalRate };
-    }, [myRequests]);
+    const actions: ActionItem[] = [];
 
-    React.useEffect(() => {
-        if (loading || !myRequests) {
-          return;
-        }
-    
-        if (prevRequestsRef.current === null) {
-          prevRequestsRef.current = myRequests;
-          return;
-        }
-    
-        myRequests.forEach(newRequest => {
-          const oldRequest = prevRequestsRef.current?.find(r => r.id === newRequest.id);
-          if (oldRequest) {
-            // Status change from pending
-            if (oldRequest.status === 'pending' && newRequest.status !== 'pending') {
-              if (newRequest.status === 'approved') {
-                toast({
-                  title: "Request Approved!",
-                  description: `Your request "${newRequest.taskTitle}" has been approved.`,
-                });
-              } else if (newRequest.status === 'rejected') {
-                toast({
-                  title: "Request Rejected",
-                  description: `Your request "${newRequest.taskTitle}" has been rejected.`,
-                  variant: "destructive"
-                });
-              }
-            }
-            // Certificate revoked
-            if (oldRequest.certificateStatus !== 'revoked' && newRequest.certificateStatus === 'revoked') {
-                toast({
-                  title: "Certificate Revoked",
-                  description: `The certificate for "${newRequest.taskTitle}" has been revoked.`,
-                  variant: "destructive",
-                });
-            }
-          }
+    // Add invoice actions if user can manage invoices
+    if (canManageInvoices && invoiceMetrics) {
+      if (invoiceMetrics.overdue > 0) {
+        actions.push({
+          id: 'overdue-invoices',
+          title: `${invoiceMetrics.overdue} Overdue Invoice${invoiceMetrics.overdue > 1 ? 's' : ''}`,
+          description: 'Invoices past their due date requiring attention',
+          meta: 'Urgent',
+          href: '/dashboard/admin/invoices?status=overdue',
         });
-    
-        prevRequestsRef.current = myRequests;
-    
-    }, [myRequests, loading, toast]);
-
-    if (loading) return <DashboardLoading />;
-
-    if (error) {
-        return (
-            <Alert variant="destructive">
-                <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>Failed to load your requests. Please try again later.</AlertDescription>
-            </Alert>
-        )
+      }
+      if (invoiceMetrics.recent.length > 0) {
+        const recentInvoice = invoiceMetrics.recent[0];
+        const createdDate = recentInvoice.createdAt?.toDate?.() || new Date();
+        actions.push({
+          id: recentInvoice.id,
+          title: `Invoice ${recentInvoice.invoiceNumber}`,
+          description: `${recentInvoice.clientName} • ${formatDistanceToNow(createdDate, { addSuffix: true })}`,
+          meta: recentInvoice.status,
+          href: `/dashboard/admin/invoices/${recentInvoice.id}`,
+        });
+      }
     }
 
+    // Add request actions based on role
+    if (isQA) {
+      actions.push(...pendingRequests.slice(0, 4 - actions.length).map((request) => ({
+        id: request.id,
+        title: request.taskTitle,
+        description: buildDescription(request),
+        meta: request.certificateRequired !== false ? 'Certificate' : 'QA sign-off',
+        href: `/dashboard/requests/${request.id}`,
+      })));
+    } else if (isProjectManager) {
+      actions.push(...managedPending.slice(0, 4 - actions.length).map((request) => ({
+        id: request.id,
+        title: request.taskTitle,
+        description: `${request.associatedTeam || 'No team'} • ${formatDistanceToNow(getCreatedAt(request), {
+          addSuffix: true,
+        })}`,
+        meta: request.certificateRequired !== false ? 'Certificate' : 'QA sign-off',
+        href: `/dashboard/requests/${request.id}`,
+      })));
+    } else if (isAdmin) {
+      actions.push(...overdueRequests.slice(0, 4 - actions.length).map((request) => ({
+        id: request.id,
+        title: request.taskTitle,
+        description: `${request.associatedProject || 'No project'} • ${formatDistanceToNow(
+          getCreatedAt(request),
+          { addSuffix: true }
+        )}`,
+        meta: request.requesterName,
+        href: `/dashboard/requests/${request.id}`,
+      })));
+    } else {
+      actions.push(...myPending.slice(0, 4 - actions.length).map((request) => ({
+        id: request.id,
+        title: request.taskTitle,
+        description: `${request.associatedProject || 'No project'} • ${formatDistanceToNow(
+          getCreatedAt(request),
+          { addSuffix: true }
+        )}`,
+        meta: request.certificateRequired !== false ? 'Certificate' : 'QA sign-off',
+        href: `/dashboard/requests/${request.id}`,
+      })));
+    }
+
+    return actions.slice(0, 4);
+  }, [isQA, isProjectManager, isAdmin, canManageInvoices, invoiceMetrics, pendingRequests, managedPending, overdueRequests, myPending]);
+
+  const secondaryMetrics = React.useMemo(
+    () => {
+      const metrics: { title: string; value: string; description: string }[] = [
+        {
+          title: 'Total requests',
+          value: formatCount((requests ?? []).length),
+          description: 'All certificate and QA sign-off submissions',
+        },
+        {
+          title: 'Pending approvals',
+          value: formatCount(pendingRequests.length),
+          description: 'Awaiting a QA or manager decision',
+        },
+      ];
+
+      metrics.push({
+        title: 'Overdue (>3 days)',
+        value: formatCount(overdueRequests.length),
+        description: 'Requests that should be prioritised next',
+      });
+
+      metrics.push({
+        title: 'In-flight projects',
+        value: formatCount((projects ?? []).filter((project) => project.status !== 'Completed').length),
+        description: 'Projects currently moving through delivery',
+      });
+
+      if (isProjectManager) {
+        metrics.push({
+          title: 'Projects you lead',
+          value: formatCount(managedProjects.length),
+          description: 'Active engagements where you are responsible',
+        });
+      }
+
+      if (isAdmin) {
+        metrics.push({
+          title: 'Active users',
+          value: formatCount((users ?? []).filter((account) => !account.disabled).length),
+          description: 'Enabled accounts across the organisation',
+        });
+      }
+
+      if (canManageInvoices && invoiceMetrics) {
+        metrics.push({
+          title: 'Pending invoices',
+          value: formatCount(invoiceMetrics.pending),
+          description: 'Invoices awaiting payment or action',
+        });
+        metrics.push({
+          title: 'Overdue invoices',
+          value: formatCount(invoiceMetrics.overdue),
+          description: 'Invoices past due date',
+        });
+        metrics.push({
+          title: 'Total outstanding',
+          value: new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(invoiceMetrics.totalOutstanding),
+          description: 'Total amount outstanding across all invoices',
+        });
+      }
+
+      metrics.push({
+        title: 'Teams',
+        value: formatCount((teams ?? []).length),
+        description: 'Teams collaborating in Dev2QA',
+      });
+
+      return metrics;
+    },
+    [
+      (requests ?? []).length,
+      pendingRequests.length,
+      overdueRequests.length,
+      projects,
+      isProjectManager,
+      managedProjects.length,
+      isAdmin,
+      users,
+      teams,
+      canManageInvoices,
+      invoiceMetrics,
+    ]
+  );
+
+  const recentActivity = React.useMemo(
+    () => (requests ?? []).slice(0, 6),
+    [requests]
+  );
+
+  const [metricsOpen, setMetricsOpen] = React.useState(false);
+  const [activityOpen, setActivityOpen] = React.useState(false);
+  const [tableOpen, setTableOpen] = React.useState(false);
+
+  // Now we can do conditional returns after all hooks are called
+  if (!user) {
     return (
-        <>
-        <PageHeader title="My Certificate Requests" description="Track the status of your submitted requests.">
-            <Button asChild>
-                <Link href="/dashboard/requests/new">
-                    <FilePlus2 className="mr-2 h-4 w-4" />
-                    New Request
-                </Link>
+      <div className="space-y-6">
+        <PageHeader title="Loading dashboard" description="Fetching your personalized insights." />
+        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
+
+  if (requestsError) {
+    return (
+      <Alert variant="destructive">
+        <TriangleAlert className="h-4 w-4" />
+        <AlertTitle>Dashboard unavailable</AlertTitle>
+        <AlertDescription>
+          We couldn't load your dashboard data. Please refresh or contact support if the problem persists.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (loading || !requests) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title={`Welcome${user.name ? `, ${user.name}` : ''}!`} description="Preparing your workspace..." />
+        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <PageHeader
+        title={`Welcome${user.name ? `, ${user.name}` : ''}!`}
+        description="Stay focused on the metrics and actions that matter to your role."
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/requests">
+              <ClipboardList className="mr-2 h-4 w-4" />
+              View requests
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/dashboard/requests/new">
+              <FilePlus2 className="mr-2 h-4 w-4" />
+              New request
+            </Link>
+          </Button>
+        </div>
+      </PageHeader>
+
+      <HeroCard summary={heroSummary} />
+
+      <NextActionsList actions={nextActions} />
+
+      <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            aria-expanded={metricsOpen}
+          >
+            <Activity className="h-4 w-4" />
+            Secondary metrics
+            <ArrowRight className={cn('h-4 w-4 transition-transform', metricsOpen ? 'rotate-90' : 'rotate-0')} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-4">
+          <MetricsGrid metrics={secondaryMetrics} />
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Collapsible open={activityOpen} onOpenChange={setActivityOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            aria-expanded={activityOpen}
+          >
+            <Clock className="h-4 w-4" />
+            Recent activity
+            <ArrowRight className={cn('h-4 w-4 transition-transform', activityOpen ? 'rotate-90' : 'rotate-0')} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-4">
+          <RecentActivityList items={recentActivity} />
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Collapsible open={tableOpen} onOpenChange={setTableOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            aria-expanded={tableOpen}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Pending approval table
+            <ArrowRight className={cn('h-4 w-4 transition-transform', tableOpen ? 'rotate-90' : 'rotate-0')} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-4">
+          <CertificateRequestsTable
+            requests={isQA ? pendingRequests : pendingRequests.slice(0, 10)}
+            isLoading={false}
+          />
+        </CollapsibleContent>
+      </Collapsible>
+
+      {canManageInvoices && invoiceMetrics && invoiceMetrics.recent.length > 0 && (
+        <Collapsible open={false} onOpenChange={() => {}}>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+              asChild
+            >
+              <Link href="/dashboard/admin/invoices">
+                <Receipt className="h-4 w-4" />
+                Recent invoices
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </Button>
-        </PageHeader>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Total Requests" value={stats.total.toString()} icon={FileText} />
-            <StatCard title="Approved" value={stats.approved.toString()} icon={CheckCircle} />
-            <StatCard title="Pending" value={stats.pending.toString()} icon={Clock} />
-            <StatCard title="Approval Rate" value={`${stats.approvalRate}%`} icon={Percent} description='Based on completed requests' />
-        </div>
-        <div className="mt-8">
-            <CertificateRequestsTable requests={myRequests || []} isLoading={loading} />
-        </div>
-        </>
-    )
-  };
-
-  const QATesterDashboard = () => {
-    const { user } = useAuth();
-    
-    // Data for Pending Requests tab
-    const { data: pendingRequests, loading: pendingLoading, error: pendingError } = useCollection<CertificateRequest>(
-        'requests',
-        query(collection(db!, 'requests'), where('status', '==', 'pending'))
-    );
-
-    // Data for My Approvals tab
-    const myApprovalsQuery = React.useMemo(() => {
-        if (!user?.id) return null;
-        return query(
-            collection(db!, 'requests'), 
-            where('qaTesterId', '==', user.id), 
-            where('status', '==', 'approved'),
-            orderBy('updatedAt', 'desc'),
-            limit(50)
-        );
-    }, [user?.id]);
-
-    const { data: myApprovedRequests, loading: approvedLoading, error: approvedError } = useCollection<CertificateRequest>(
-        'requests',
-        myApprovalsQuery
-    );
-
-    // State for filters
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
-
-    const loading = pendingLoading || approvedLoading;
-    const error = pendingError || approvedError;
-
-    const filteredApprovedRequests = React.useMemo(() => {
-        if (!myApprovedRequests) return [];
-
-        return myApprovedRequests.filter(req => {
-            const approvalDate = (req.updatedAt as any)?.toDate();
-            
-            const matchesSearch = searchTerm.trim() === '' || 
-                                  req.taskTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                  req.requesterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                  req.associatedProject.toLowerCase().includes(searchTerm.toLowerCase());
-
-            const matchesDate = !dateRange || !dateRange.from || !approvalDate || (
-                approvalDate >= dateRange.from && 
-                (!dateRange.to || approvalDate <= new Date(dateRange.to.setHours(23, 59, 59, 999))) // Include the whole end day
-            );
-            
-            return matchesSearch && matchesDate;
-        });
-    }, [myApprovedRequests, searchTerm, dateRange]);
-
-
-    if (loading) return <DashboardLoading />;
-
-    if (error) {
-        return (
-            <Alert variant="destructive">
-                <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                    Failed to load dashboard data. If this persists, you may need to create a Firestore index. Check the browser console for a link.
-                </AlertDescription>
-            </Alert>
-        )
-    }
-
-     return (
-        <>
-        <PageHeader title="QA Dashboard" description="Review pending requests and manage your approvals." />
-        <Tabs defaultValue="pending" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:w-[400px] md:grid-cols-2">
-                <TabsTrigger value="pending">
-                    <Clock className="mr-2 h-4 w-4" /> Pending Review ({pendingRequests?.length || 0})
-                </TabsTrigger>
-                <TabsTrigger value="approvals">
-                    <CheckCircle className="mr-2 h-4 w-4" /> My Approvals ({myApprovedRequests?.length || 0})
-                </TabsTrigger>
-            </TabsList>
-            <TabsContent value="pending" className="mt-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Pending Requests</CardTitle>
-                        <CardDescription>These requests are awaiting your review and action.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <CertificateRequestsTable requests={pendingRequests || []} isLoading={pendingLoading} />
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            <TabsContent value="approvals" className="mt-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>My Approved Certificates</CardTitle>
-                        <CardDescription>A history of the last 50 certificate requests you have approved. You can filter by title, requester, project, or date.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-                            <Input 
-                                placeholder="Filter by title, requester, project..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full md:max-w-sm"
-                            />
-                            <DateRangePicker date={dateRange} setDate={setDateRange} className="w-full md:w-auto" />
-                        </div>
-                        <CertificateRequestsTable requests={filteredApprovedRequests} isLoading={approvedLoading} />
-                    </CardContent>
-                </Card>
-            </TabsContent>
-        </Tabs>
-        </>
-    )
-  };
-
-  const renderDashboard = () => {
-    switch (user?.role) {
-      case 'admin':
-        return <AdminDashboard />;
-      case 'requester':
-        return <RequesterDashboard />;
-      case 'qa_tester':
-        return <QATesterDashboard />;
-      default:
-        // This handles the case where user is null during the initial load
-        return <DashboardLoading />;
-    }
-  };
-
-  return <div className="flex-1 space-y-4">{renderDashboard()}</div>;
+          </CollapsibleTrigger>
+        </Collapsible>
+      )}
+    </div>
+  );
 }

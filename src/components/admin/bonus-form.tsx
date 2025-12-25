@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/providers/auth-provider';
 import { useCollection } from '@/hooks/use-collection';
-import { BONUS_TYPES } from '@/lib/constants';
+import type { BonusType } from '@/lib/types';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Input } from '../ui/input';
@@ -47,6 +47,7 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const { data: users, loading: usersLoading } = useCollection<User>('users');
+  const { data: bonusTypes, loading: typesLoading } = useCollection<BonusType>('bonusTypes');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -57,7 +58,7 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
   });
 
   const selectedBonusTypeName = form.watch('bonusType');
-  const selectedBonusType = BONUS_TYPES.find(b => b.name === selectedBonusTypeName);
+  const selectedBonusType = bonusTypes?.find(b => b.name === selectedBonusTypeName);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!currentUser || !db) {
@@ -90,6 +91,16 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
       };
 
       await addDoc(collection(db, 'bonuses'), bonusData);
+      
+      // Create in-app notification
+      const { createInAppNotification } = await import('@/lib/notifications');
+      await createInAppNotification({
+        userId: selectedUser.id,
+        type: 'general',
+        title: 'Bonus Issued',
+        message: `You have been issued a bonus: ${values.bonusType}${values.description ? ` - ${values.description}` : ''}`,
+        read: false,
+      });
       
       const emailResult = await sendBonusNotification({
         recipientEmail: selectedUser.email,
@@ -152,11 +163,17 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {BONUS_TYPES.map(bonus => (
-                    <SelectItem key={bonus.name} value={bonus.name}>
+                  {typesLoading ? (
+                    <SelectItem value="loading" disabled>Loading types...</SelectItem>
+                  ) : bonusTypes && bonusTypes.length > 0 ? (
+                    bonusTypes.map(bonus => (
+                      <SelectItem key={bonus.id} value={bonus.name}>
                         {bonus.name}
-                    </SelectItem>
-                  ))}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="none" disabled>No bonus types available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -207,11 +224,11 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
             </FormItem>
           )}
         />
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="outline" onClick={onSuccess}>
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onSuccess} className="w-full sm:w-auto">
             Cancel
           </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={form.formState.isSubmitting} className="w-full sm:w-auto">
             {form.formState.isSubmitting ? 'Issuing...' : 'Issue Bonus'}
           </Button>
         </div>

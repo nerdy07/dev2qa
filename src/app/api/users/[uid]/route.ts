@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { getAuth, getFirestore } from '@/lib/firebase-admin-simple';
 import { requireAdmin } from '@/lib/auth-middleware';
@@ -40,8 +41,8 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
   }
 
   try {
-    const adminAuth = getAuth();
-    const db = getFirestore();
+    const adminAuth = getAuth(app);
+    const db = getFirestore(app);
     
     const { name, role, expertise, baseSalary, annualLeaveEntitlement, disabled } = validationResult.data;
     
@@ -53,8 +54,29 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
       authUpdatePayload.displayName = safeName;
       firestoreUpdatePayload.name = safeName;
     }
-    if (role !== undefined) {
+    
+    // NEW: Update permissions directly (primary method)
+    if (permissions !== undefined && Array.isArray(permissions)) {
+      const validPermissions = permissions.filter(p => p && typeof p === 'string' && p.trim()).map(p => p.trim());
+      firestoreUpdatePayload.permissions = validPermissions;
+      
+      // Recalculate isAdmin and isProjectManager from permissions
+      const { ADMIN_PERMISSION_IDENTIFIERS } = await import('@/lib/roles');
+      const isAdmin = validPermissions.some(perm => ADMIN_PERMISSION_IDENTIFIERS.includes(perm as any));
+      const isProjectManager = validPermissions.some(perm => 
+        perm === 'projects:create' || perm === 'projects:delete' || perm === 'projects:update'
+      );
+      firestoreUpdatePayload.isAdmin = isAdmin;
+      firestoreUpdatePayload.isProjectManager = isProjectManager;
+    }
+    
+    // BACKWARD COMPATIBILITY: Support roles (deprecated)
+    if (roles !== undefined && Array.isArray(roles)) {
+      firestoreUpdatePayload.roles = roles;
+      firestoreUpdatePayload.role = roles[0] || role;
+    } else if (role !== undefined) {
       firestoreUpdatePayload.role = role;
+      firestoreUpdatePayload.roles = [role];
     }
     if (expertise !== undefined) {
         firestoreUpdatePayload.expertise = sanitizeString(expertise);
@@ -71,6 +93,15 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
         authUpdatePayload.disabled = disabled;
         firestoreUpdatePayload.disabled = disabled;
     }
+    if (startDate !== undefined) {
+        // Convert ISO string to Firestore Timestamp
+        const admin = require('firebase-admin');
+        if (startDate) {
+            firestoreUpdatePayload.startDate = admin.firestore.Timestamp.fromDate(new Date(startDate));
+        } else {
+            firestoreUpdatePayload.startDate = admin.firestore.FieldValue.delete();
+        }
+    }
 
     // Update Firebase Auth
     if (Object.keys(authUpdatePayload).length > 0) {
@@ -86,7 +117,9 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
     return NextResponse.json({ message: 'User updated successfully' });
 
   } catch (error: any) {
-    console.error(`Error updating user ${uid}:`, error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`Error updating user ${uid}:`, error);
+    }
     const errorMessage = error.message || `An unexpected error occurred while updating user.`;
     return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
   }
@@ -102,8 +135,10 @@ async function deleteUserHandler(request: any, { params }: { params: { uid: stri
   }
 
   try {
-    const adminAuth = getAuth();
-    const db = getFirestore();
+    // Initialize Firebase Admin with proper error handling
+    const app = await initializeAdminApp();
+    const adminAuth = getAuth(app);
+    const db = getFirestore(app);
 
     // Delete from Firebase Auth
     await adminAuth.deleteUser(uid);
@@ -115,13 +150,21 @@ async function deleteUserHandler(request: any, { params }: { params: { uid: stri
     return NextResponse.json({ message: 'User deleted successfully' });
 
   } catch (error: any) {
-    console.error(`Error deleting user ${uid}:`, error);
+    if (process.env.NODE_ENV === 'development') {
+      console.error(`Error deleting user ${uid}:`, error);
+    }
     let errorMessage = error.message || 'An unexpected error occurred.';
+    let statusCode = 500;
 
-    if (error.code === 'auth/user-not-found') {
+    // Handle specific Firebase Admin initialization errors
+    if (error.message?.includes('SERVICE_ACCOUNT_KEY')) {
+      errorMessage = 'Firebase Admin SDK not configured. Please check your SERVICE_ACCOUNT_KEY environment variable.';
+      statusCode = 503; // Service Unavailable
+    } else if (error.code === 'auth/user-not-found') {
         // If user not in Auth, still try to delete from Firestore for cleanup
         try {
-            const db = getFirestore();
+            const app = await initializeAdminApp();
+            const db = getFirestore(app);
             await db.collection('users').doc(uid).delete();
             return NextResponse.json({ message: 'User deleted from Firestore, as they were not found in Authentication.' });
         } catch (dbError: any) {
@@ -129,7 +172,10 @@ async function deleteUserHandler(request: any, { params }: { params: { uid: stri
         }
     }
     
-    return NextResponse.json({ message: errorMessage, error: error.code || 'UNKNOWN_ERROR' }, { status: 500 });
+    return NextResponse.json({ 
+      message: errorMessage, 
+      error: error.code || 'UNKNOWN_ERROR' 
+    }, { status: statusCode });
   }
 }
 

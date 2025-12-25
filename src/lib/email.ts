@@ -16,7 +16,9 @@ interface MailOptions {
 export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ success: boolean; error?: string }> {
     if (!isBrevoConfigured) {
         const errorMessage = 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.';
-        console.error(errorMessage);
+        if (process.env.NODE_ENV === 'development') {
+          console.error(errorMessage);
+        }
         return { success: false, error: errorMessage };
     }
 
@@ -48,7 +50,9 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
             // Attempt to parse the error response from Brevo
             const errorBody = await response.json();
             const errorMessage = errorBody.message || `Brevo API Error: Status ${response.status}`;
-            console.error('Error sending email via Brevo:', errorBody);
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Error sending email via Brevo:', errorBody);
+            }
             
             // Provide more specific feedback for common configuration errors
             if (response.status === 401) {
@@ -68,7 +72,9 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
         return { success: true };
 
     } catch (error: any) {
-        console.error('Failed to send email:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to send email:', error);
+        }
         return { success: false, error: 'A network or unknown error occurred while trying to send the email.' };
     }
 }
