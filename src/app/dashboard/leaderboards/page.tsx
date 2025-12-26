@@ -95,19 +95,19 @@ export default function LeaderboardsPage() {
 
     const { user: currentUser, customRoles, rolesLoading } = useAuth();
     const { toast } = useToast();
-    
+
     // Helper function to check if a user has a specific permission
     // This replicates the permission checking logic from auth-provider
     const userHasPermission = React.useCallback((user: User, permission: string, customRolesMap: Map<string, Role>): boolean => {
         if (!user) return false;
-        
+
         const roles = user.roles && user.roles.length > 0 ? user.roles : (user.role ? [user.role] : []);
         if (roles.length === 0) return false;
-        
+
         // Check each role for the permission
         for (const roleName of roles) {
             if (!roleName || typeof roleName !== 'string') continue;
-            
+
             const normalizedRole = roleName.toLowerCase();
             const baseVariations = [
                 normalizedRole,
@@ -116,7 +116,7 @@ export default function LeaderboardsPage() {
                 normalizedRole.replace(/\s+/g, ''),
                 normalizedRole.replace(/_/g, ' '),
             ];
-            
+
             const roleVariations: string[] = [];
             baseVariations.forEach(base => {
                 roleVariations.push(base);
@@ -128,7 +128,7 @@ export default function LeaderboardsPage() {
             roleVariations.push(roleName);
             roleVariations.push(roleName.toLowerCase());
             roleVariations.push(roleName.toUpperCase());
-            
+
             // Check custom roles from Firestore ONLY (no hardcoded fallback)
             for (const variation of roleVariations) {
                 const lowerVariation = variation.toLowerCase();
@@ -138,7 +138,7 @@ export default function LeaderboardsPage() {
                         return true;
                     }
                 }
-                
+
                 // Also try without underscores
                 const noUnderscore = lowerVariation.replace(/_/g, '');
                 const customRoleNoUnderscore = customRolesMap.get(noUnderscore);
@@ -149,16 +149,16 @@ export default function LeaderboardsPage() {
                 }
             }
         }
-        
+
         return false;
     }, []);
-    
+
     // State to store likes data
     const [qaLikesData, setQaLikesData] = React.useState<Record<string, { likes: number; userLiked: boolean }>>({});
     const [requesterLikesData, setRequesterLikesData] = React.useState<Record<string, { likes: number; userLiked: boolean }>>({});
     const [likingUserId, setLikingUserId] = React.useState<string | null>(null);
     const [loadingLikes, setLoadingLikes] = React.useState(true);
-    
+
     // State for selected month
     const [selectedMonth, setSelectedMonth] = React.useState<Date>(new Date());
     const [rowsPerPage, setRowsPerPage] = React.useState(10);
@@ -177,12 +177,12 @@ export default function LeaderboardsPage() {
 
     const qaLeaderboard = React.useMemo<QALeaderboardEntry[]>(() => {
         if (!users || !requests) return [];
-        
+
         // If roles are still loading, show users who have approved requests (fallback)
         // Once roles load, we'll filter by permissions
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
-        
+
         const approvedRequests = requests.filter(r => {
             if (r.status !== 'approved' || !r.qaTesterId) return false;
             const approvalDate = r.updatedAt?.toDate?.() || r.createdAt?.toDate?.();
@@ -196,7 +196,7 @@ export default function LeaderboardsPage() {
         }, {} as Record<string, number>);
 
         const qaTesterIds = new Set(Object.keys(scores));
-        
+
         // If roles are still loading or customRoles is not available, just show users who approved
         if (rolesLoading || !customRoles || customRoles.size === 0) {
             const qaTesters = users.filter(u => qaTesterIds.has(u.id));
@@ -218,10 +218,10 @@ export default function LeaderboardsPage() {
         const qaTesters = users.filter(u => {
             // Include if they have approved at least one request (they definitely have the permission)
             if (qaTesterIds.has(u.id)) return true;
-            
+
             // Check if user has permission to approve requests based on their roles
             return userHasPermission(u, ALL_PERMISSIONS.REQUESTS.APPROVE, customRoles) ||
-                   userHasPermission(u, ALL_PERMISSIONS.REQUESTS.READ_ALL, customRoles);
+                userHasPermission(u, ALL_PERMISSIONS.REQUESTS.READ_ALL, customRoles);
         });
 
         return qaTesters
@@ -274,13 +274,13 @@ export default function LeaderboardsPage() {
             }
             return;
         }
-        
+
         setLoadingLikes(true);
         const unsubscribes: (() => void)[] = [];
-        
+
         qaLeaderboard.forEach((entry) => {
             const likesDocRef = doc(db, 'leaderboardLikes', `qa_${entry.userId}`);
-            
+
             // Real-time listener for likes count
             const unsubscribe = onSnapshot(likesDocRef, (docSnap) => {
                 const likesData = docSnap.data();
@@ -294,9 +294,9 @@ export default function LeaderboardsPage() {
             }, (error) => {
                 console.error('Error listening to likes:', error);
             });
-            
+
             unsubscribes.push(unsubscribe);
-            
+
             // Check if current user liked (one-time check)
             if (currentUser) {
                 const userLikeRef = doc(db, 'leaderboardLikes', `qa_${entry.userId}`, 'userLikes', currentUser.id);
@@ -312,9 +312,9 @@ export default function LeaderboardsPage() {
                 });
             }
         });
-        
+
         setLoadingLikes(false);
-        
+
         return () => {
             unsubscribes.forEach(unsub => unsub());
         };
@@ -339,11 +339,11 @@ export default function LeaderboardsPage() {
         try {
             const likesDocRef = doc(db, 'leaderboardLikes', `${type}_${entry.userId}`);
             const userLikeRef = doc(db, 'leaderboardLikes', `${type}_${entry.userId}`, 'userLikes', currentUser.id);
-            
+
             // Use a batch write to ensure atomicity
             const { writeBatch } = await import('firebase/firestore');
             const batch = writeBatch(db);
-            
+
             const userLikeDoc = await getDoc(userLikeRef);
             const isLiked = userLikeDoc.exists();
             const likesDoc = await getDoc(likesDocRef);
@@ -382,7 +382,7 @@ export default function LeaderboardsPage() {
                         updatedAt: serverTimestamp(),
                     });
                 }
-                
+
                 batch.set(userLikeRef, {
                     userId: currentUser.id,
                     createdAt: serverTimestamp(),
@@ -395,7 +395,7 @@ export default function LeaderboardsPage() {
             // Update local state immediately for better UX
             const setLikesData = type === 'qa' ? setQaLikesData : setRequesterLikesData;
             const currentLikesData = type === 'qa' ? qaLikesData : requesterLikesData;
-            
+
             setLikesData(prev => ({
                 ...prev,
                 [entry.userId]: {
@@ -422,7 +422,7 @@ export default function LeaderboardsPage() {
 
     const requesterLeaderboard = React.useMemo<RequesterLeaderboardEntry[]>(() => {
         if (!users || !requests) return [];
-        
+
         // Handle optional collections gracefully
         const safeDesignRequests = designRequests || [];
         const safeProjects = projects || [];
@@ -430,19 +430,19 @@ export default function LeaderboardsPage() {
         // Filter requests and designs to selected month
         const monthStart = startOfMonth(selectedMonth);
         const monthEnd = endOfMonth(selectedMonth);
-        
+
         const monthlyRequests = requests.filter(req => {
             const requestDate = req.createdAt?.toDate?.() || req.updatedAt?.toDate?.();
             if (!requestDate) return false;
             return requestDate >= monthStart && requestDate <= monthEnd;
         });
-        
+
         const monthlyDesigns = safeDesignRequests.filter(design => {
             const designDate = design.createdAt?.toDate?.() || design.updatedAt?.toDate?.();
             if (!designDate) return false;
             return designDate >= monthStart && designDate <= monthEnd;
         });
-        
+
         // Get all users who have tasks assigned (from projects)
         const usersWithTasks = new Set<string>();
         safeProjects.forEach(project => {
@@ -452,7 +452,7 @@ export default function LeaderboardsPage() {
                 }
             });
         });
-        
+
         // Calculate stats from requests
         const requestStats = monthlyRequests.reduce((acc, req) => {
             if (!acc[req.requesterId]) {
@@ -469,7 +469,7 @@ export default function LeaderboardsPage() {
             }
             return acc;
         }, {} as Record<string, { approved: number, rejected: number, total: number }>);
-        
+
         // Calculate stats from designs (treat as approved requests for leaderboard)
         const designStats = monthlyDesigns.reduce((acc, design) => {
             if (!acc[design.designerId]) {
@@ -486,7 +486,7 @@ export default function LeaderboardsPage() {
             }
             return acc;
         }, {} as Record<string, { approved: number, rejected: number, total: number }>);
-        
+
         // Merge request and design stats
         const allStats = { ...requestStats };
         Object.keys(designStats).forEach(designerId => {
@@ -507,7 +507,7 @@ export default function LeaderboardsPage() {
             ...Object.keys(designStats),
             ...Array.from(usersWithTasks)
         ]);
-        
+
         // Filter users based on permissions from Firestore roles only (no hardcoded roles)
         // Include:
         // 1. Users who have submitted requests/designs or have tasks assigned
@@ -515,13 +515,13 @@ export default function LeaderboardsPage() {
         const requesters = users.filter(u => {
             // Always include if they have submitted requests/designs or have tasks
             if (requesterIds.has(u.id)) return true;
-            
+
             // If roles are loaded, also check permissions
             if (!rolesLoading && customRoles && customRoles.size > 0) {
                 return userHasPermission(u, ALL_PERMISSIONS.REQUESTS.CREATE, customRoles) ||
-                       userHasPermission(u, ALL_PERMISSIONS.DESIGNS.CREATE, customRoles);
+                    userHasPermission(u, ALL_PERMISSIONS.DESIGNS.CREATE, customRoles);
             }
-            
+
             // While roles are loading, only show users who have submitted
             return false;
         });
@@ -580,13 +580,13 @@ export default function LeaderboardsPage() {
             }
             return;
         }
-        
+
         setLoadingLikes(true);
         const unsubscribes: (() => void)[] = [];
-        
+
         requesterLeaderboard.forEach((entry) => {
             const likesDocRef = doc(db, 'leaderboardLikes', `requester_${entry.userId}`);
-            
+
             // Real-time listener for likes count
             const unsubscribe = onSnapshot(likesDocRef, (docSnap) => {
                 const likesData = docSnap.data();
@@ -600,9 +600,9 @@ export default function LeaderboardsPage() {
             }, (error) => {
                 console.error('Error listening to likes:', error);
             });
-            
+
             unsubscribes.push(unsubscribe);
-            
+
             // Check if current user liked (one-time check)
             if (currentUser) {
                 const userLikeRef = doc(db, 'leaderboardLikes', `requester_${entry.userId}`, 'userLikes', currentUser.id);
@@ -618,92 +618,13 @@ export default function LeaderboardsPage() {
                 });
             }
         });
-        
+
         setLoadingLikes(false);
-        
+
         return () => {
             unsubscribes.forEach(unsub => unsub());
         };
     }, [requesterLeaderboard.map(e => e.userId).join(','), currentUser?.id]);
-
-    if (loading) {
-        return (
-            <>
-                <PageHeader 
-                title="Leaderboards" 
-                description={`See who is leading the way in quality and efficiency.`}
-            >
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Select
-                        value={format(selectedMonth, 'yyyy-MM')}
-                        onValueChange={(value) => {
-                            const [year, month] = value.split('-').map(Number);
-                            setSelectedMonth(new Date(year, month - 1, 1));
-                        }}
-                    >
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue>
-                                {format(selectedMonth, 'MMMM yyyy')}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Array.from({ length: 12 }, (_, i) => {
-                                const monthDate = subMonths(new Date(), i);
-                                return (
-                                    <SelectItem key={format(monthDate, 'yyyy-MM')} value={format(monthDate, 'yyyy-MM')}>
-                                        {format(monthDate, 'MMMM yyyy')}
-                                    </SelectItem>
-                                );
-                            })}
-                        </SelectContent>
-                    </Select>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
-                        disabled={startOfMonth(selectedMonth) >= startOfMonth(new Date())}
-                    >
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    {startOfMonth(selectedMonth).getTime() !== startOfMonth(new Date()).getTime() && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setSelectedMonth(new Date())}
-                        >
-                            Current Month
-                        </Button>
-                    )}
-                </div>
-            </PageHeader>
-                <LeaderboardLoadingSkeleton />
-            </>
-        )
-    }
-
-    if (error) {
-        return (
-          <Alert variant="destructive">
-            <TriangleAlert className="h-4 w-4" />
-            <AlertTitle>Error Loading Leaderboards</AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
-          </Alert>
-        );
-      }
-
-    const getRankIcon = (rank: number) => {
-        if (rank === 1) return <Medal className="h-5 w-5 text-yellow-500" />;
-        if (rank === 2) return <Medal className="h-5 w-5 text-slate-400" />;
-        if (rank === 3) return <Medal className="h-5 w-5 text-yellow-700" />;
-        return <span className="text-sm font-medium">{rank}</span>;
-    }
 
     const paginatedQa = React.useMemo(
         () => paginate(qaLeaderboard, qaPage, rowsPerPage),
@@ -718,10 +639,91 @@ export default function LeaderboardsPage() {
     const qaRowOffset = (qaPage - 1) * rowsPerPage;
     const requesterRowOffset = (requesterPage - 1) * rowsPerPage;
 
+    if (loading) {
+        return (
+            <>
+                <PageHeader
+                    title="Leaderboards"
+                    description={`See who is leading the way in quality and efficiency.`}
+                >
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Select
+                            value={format(selectedMonth, 'yyyy-MM')}
+                            onValueChange={(value) => {
+                                const [year, month] = value.split('-').map(Number);
+                                setSelectedMonth(new Date(year, month - 1, 1));
+                            }}
+                        >
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue>
+                                    {format(selectedMonth, 'MMMM yyyy')}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Array.from({ length: 12 }, (_, i) => {
+                                    const monthDate = subMonths(new Date(), i);
+                                    return (
+                                        <SelectItem key={format(monthDate, 'yyyy-MM')} value={format(monthDate, 'yyyy-MM')}>
+                                            {format(monthDate, 'MMMM yyyy')}
+                                        </SelectItem>
+                                    );
+                                })}
+                            </SelectContent>
+                        </Select>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}
+                            disabled={startOfMonth(selectedMonth) >= startOfMonth(new Date())}
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        {startOfMonth(selectedMonth).getTime() !== startOfMonth(new Date()).getTime() && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedMonth(new Date())}
+                            >
+                                Current Month
+                            </Button>
+                        )}
+                    </div>
+                </PageHeader>
+                <LeaderboardLoadingSkeleton />
+            </>
+        )
+    }
+
+    if (error) {
+        return (
+            <Alert variant="destructive">
+                <TriangleAlert className="h-4 w-4" />
+                <AlertTitle>Error Loading Leaderboards</AlertTitle>
+                <AlertDescription>{error.message}</AlertDescription>
+            </Alert>
+        );
+    }
+
+    const getRankIcon = (rank: number) => {
+        if (rank === 1) return <Medal className="h-5 w-5 text-yellow-500" />;
+        if (rank === 2) return <Medal className="h-5 w-5 text-slate-400" />;
+        if (rank === 3) return <Medal className="h-5 w-5 text-yellow-700" />;
+        return <span className="text-sm font-medium">{rank}</span>;
+    }
+
+
+
     return (
         <>
-            <PageHeader 
-                title="Leaderboards" 
+            <PageHeader
+                title="Leaderboards"
                 description={`See who is leading the way in quality and efficiency.`}
             >
                 <div className="flex items-center gap-2">
@@ -777,102 +779,102 @@ export default function LeaderboardsPage() {
 
             {/* Top Performers Highlight Cards - Only show if there are approvals */}
             {qaLeaderboard.length > 0 && qaLeaderboard[0]?.approvedCount > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {qaLeaderboard[0]?.approvedCount > 0 && (
-                    <Card className="border-2 border-yellow-400 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Crown className="h-6 w-6 text-yellow-500" />
-                                Top QA Tester
-                            </CardTitle>
-                            <CardDescription>Our leading QA tester for {format(selectedMonth, 'MMMM yyyy')}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-4">
-                                <Avatar className="h-20 w-20 border-4 border-yellow-400">
-                                    <AvatarImage src={qaLeaderboard[0]?.photoURL} alt={qaLeaderboard[0]?.name} />
-                                    <AvatarFallback className="text-2xl">{qaLeaderboard[0]?.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1">
-                                    <h3 className="text-2xl font-bold">{qaLeaderboard[0]?.name}</h3>
-                                    <p className="text-muted-foreground">QA Tester</p>
-                                    <p className="text-lg font-semibold text-primary mt-2">
-                                        {qaLeaderboard[0]?.approvedCount} Approved Certificates
-                                    </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    {qaLeaderboard[0]?.approvedCount > 0 && (
+                        <Card className="border-2 border-yellow-400 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Crown className="h-6 w-6 text-yellow-500" />
+                                    Top QA Tester
+                                </CardTitle>
+                                <CardDescription>Our leading QA tester for {format(selectedMonth, 'MMMM yyyy')}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-4">
+                                    <Avatar className="h-20 w-20 border-4 border-yellow-400">
+                                        <AvatarImage src={qaLeaderboard[0]?.photoURL} alt={qaLeaderboard[0]?.name} />
+                                        <AvatarFallback className="text-2xl">{qaLeaderboard[0]?.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1">
+                                        <h3 className="text-2xl font-bold">{qaLeaderboard[0]?.name}</h3>
+                                        <p className="text-muted-foreground">QA Tester</p>
+                                        <p className="text-lg font-semibold text-primary mt-2">
+                                            {qaLeaderboard[0]?.approvedCount} Approved Certificates
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleLike(qaLeaderboard[0], 'qa')}
+                                        disabled={likingUserId === `qa_${qaLeaderboard[0]?.userId}` || loadingLikes}
+                                        className={cn(qaLeaderboard[0]?.userLiked && "text-red-500 border-red-500")}
+                                    >
+                                        {likingUserId === `qa_${qaLeaderboard[0]?.userId}` ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Heart className={cn("h-4 w-4 mr-2", qaLeaderboard[0]?.userLiked && "fill-current")} />
+                                                {qaLeaderboard[0]?.likes || 0}
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleLike(qaLeaderboard[0], 'qa')}
-                                    disabled={likingUserId === `qa_${qaLeaderboard[0]?.userId}` || loadingLikes}
-                                    className={cn(qaLeaderboard[0]?.userLiked && "text-red-500 border-red-500")}
-                                >
-                                    {likingUserId === `qa_${qaLeaderboard[0]?.userId}` ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Heart className={cn("h-4 w-4 mr-2", qaLeaderboard[0]?.userLiked && "fill-current")} />
-                                            {qaLeaderboard[0]?.likes || 0}
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
-                {requesterLeaderboard.length > 0 && requesterLeaderboard[0]?.approvedCount > 0 && (
-                    <Card className="border-2 border-yellow-400 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Crown className="h-6 w-6 text-yellow-500" />
-                                Top Requester
-                            </CardTitle>
-                            <CardDescription>Our leading requester for {format(selectedMonth, 'MMMM yyyy')}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-4">
-                                <Avatar className="h-20 w-20 border-4 border-yellow-400">
-                                    <AvatarImage src={requesterLeaderboard[0]?.photoURL} alt={requesterLeaderboard[0]?.name} />
-                                    <AvatarFallback className="text-2xl">{requesterLeaderboard[0]?.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1">
-                                    <h3 className="text-2xl font-bold">{requesterLeaderboard[0]?.name}</h3>
-                                    <p className="text-muted-foreground">Requester</p>
-                                    <p className="text-lg font-semibold text-primary mt-2">
-                                        {requesterLeaderboard[0]?.approvalRate}% Approval Rate
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {requesterLeaderboard[0]?.approvedCount} Approved
-                                    </p>
+                    {requesterLeaderboard.length > 0 && requesterLeaderboard[0]?.approvedCount > 0 && (
+                        <Card className="border-2 border-yellow-400 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Crown className="h-6 w-6 text-yellow-500" />
+                                    Top Requester
+                                </CardTitle>
+                                <CardDescription>Our leading requester for {format(selectedMonth, 'MMMM yyyy')}</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center gap-4">
+                                    <Avatar className="h-20 w-20 border-4 border-yellow-400">
+                                        <AvatarImage src={requesterLeaderboard[0]?.photoURL} alt={requesterLeaderboard[0]?.name} />
+                                        <AvatarFallback className="text-2xl">{requesterLeaderboard[0]?.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1">
+                                        <h3 className="text-2xl font-bold">{requesterLeaderboard[0]?.name}</h3>
+                                        <p className="text-muted-foreground">Requester</p>
+                                        <p className="text-lg font-semibold text-primary mt-2">
+                                            {requesterLeaderboard[0]?.approvalRate}% Approval Rate
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {requesterLeaderboard[0]?.approvedCount} Approved
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleLike(requesterLeaderboard[0], 'requester')}
+                                        disabled={likingUserId === `requester_${requesterLeaderboard[0]?.userId}` || loadingLikes}
+                                        className={cn(requesterLeaderboard[0]?.userLiked && "text-red-500 border-red-500")}
+                                    >
+                                        {likingUserId === `requester_${requesterLeaderboard[0]?.userId}` ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Heart className={cn("h-4 w-4 mr-2", requesterLeaderboard[0]?.userLiked && "fill-current")} />
+                                                {requesterLeaderboard[0]?.likes || 0}
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleLike(requesterLeaderboard[0], 'requester')}
-                                    disabled={likingUserId === `requester_${requesterLeaderboard[0]?.userId}` || loadingLikes}
-                                    className={cn(requesterLeaderboard[0]?.userLiked && "text-red-500 border-red-500")}
-                                >
-                                    {likingUserId === `requester_${requesterLeaderboard[0]?.userId}` ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Heart className={cn("h-4 w-4 mr-2", requesterLeaderboard[0]?.userLiked && "fill-current")} />
-                                            {requesterLeaderboard[0]?.likes || 0}
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Trophy className="text-primary"/> Top QA Testers</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><Trophy className="text-primary" /> Top QA Testers</CardTitle>
                         <CardDescription>Ranked by the total number of approved certificates for {format(selectedMonth, 'MMMM yyyy')}.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -952,7 +954,7 @@ export default function LeaderboardsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Trophy className="text-primary"/> Top Requesters</CardTitle>
+                        <CardTitle className="flex items-center gap-2"><Trophy className="text-primary" /> Top Requesters</CardTitle>
                         <CardDescription>Ranked by approval rate, then by total approvals for {format(selectedMonth, 'MMMM yyyy')}.</CardDescription>
                     </CardHeader>
                     <CardContent>

@@ -1,12 +1,9 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
   },
   async headers() {
     return [
@@ -19,7 +16,7 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           // Minimal CSP; adjust as needed
-          { key: 'Content-Security-Policy', value: "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; frame-ancestors 'self';" },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; img-src 'self' https: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; connect-src 'self' https:; frame-ancestors 'self';" },
         ],
       },
     ];
@@ -51,22 +48,34 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'date-fns'],
   },
-  // Webpack optimizations - simplified to avoid build issues
+  // Turbopack config (required when webpack config exists in Next.js 16)
+  // Firebase deployment uses default 'next build' which defaults to Turbopack
+  turbopack: {},
+  // Use webpack instead of Turbopack to avoid build crashes
+  // Simplified webpack config to reduce memory usage during build
   webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Only apply minimal optimizations to avoid breaking builds
+    // Removed externals to avoid Windows symlink permission issues during Firebase deploy
+    // All packages will be bundled for Cloud Functions
+    if (isServer) {
+      // No external packages to avoid symlink issues
+    } else {
+      // Only apply client-side optimizations
+      // Use simpler splitChunks config to reduce memory usage
       config.optimization = {
         ...config.optimization,
         splitChunks: {
-          ...config.optimization?.splitChunks,
+          chunks: 'all',
           cacheGroups: {
-            ...config.optimization?.splitChunks?.cacheGroups,
-            // Firebase chunk
-            firebase: {
-              name: 'firebase',
-              test: /[\\/]node_modules[\\/](firebase|@firebase)[\\/]/,
-              chunks: 'all',
-              priority: 30,
+            default: {
+              minChunks: 2,
+              priority: -20,
+              reuseExistingChunk: true,
+            },
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              priority: -10,
+              reuseExistingChunk: true,
             },
           },
         },

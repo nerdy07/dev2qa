@@ -45,8 +45,8 @@ export default function DashboardLayout({
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-auto p-1.5" aria-label="Open account menu">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={user?.photoURL} alt={user?.name} />
-                      <AvatarFallback>{user?.name?.[0].toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={user?.photoURL || ''} alt={user?.name || ''} />
+                      <AvatarFallback>{user?.name?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>

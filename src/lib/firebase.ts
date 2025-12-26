@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { getPublicEnv } from "./env-validation";
 
 // Your web app's Firebase configuration
@@ -25,15 +26,15 @@ let firebaseInitialized = false;
 
 // Initialize Firebase with validated environment
 try {
-    app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    auth = getAuth(app);
-    db = getFirestore(app);
-    firebaseInitialized = true;
-} catch(e) {
-    console.error("Firebase initialization failed:", e);
-    firebaseInitialized = false;
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+  firebaseInitialized = true;
+} catch (e) {
+  console.error("Firebase initialization failed:", e);
+  firebaseInitialized = false;
 }
 
 export { app, auth, db, storage, firebaseInitialized };
 
-    
