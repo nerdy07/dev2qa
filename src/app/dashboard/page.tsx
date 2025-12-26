@@ -581,16 +581,8 @@ export default function DashboardPage() {
   const [tableOpen, setTableOpen] = React.useState(false);
 
   // Now we can do conditional returns after all hooks are called
-  if (!user) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title="Loading dashboard" description="Fetching your personalized insights." />
-        <Skeleton className="h-36 w-full" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    );
-  }
-
+  // Note: AuthProvider handles the case when user is null, so we don't need to check here
+  
   if (requestsError) {
     return (
       <Alert variant="destructive">
@@ -603,113 +595,171 @@ export default function DashboardPage() {
     );
   }
 
-  if (loading || !requests) {
-    return (
-      <div className="space-y-6">
-        <PageHeader title={`Welcome${user.name ? `, ${user.name}` : ''}!`} description="Preparing your workspace..." />
-        <Skeleton className="h-36 w-full" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-48 w-full" />
-      </div>
-    );
-  }
+  // Show loading state with actual layout structure using skeletons
+  const isLoading = loading || !requests || !user;
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={`Welcome${user.name ? `, ${user.name}` : ''}!`}
-        description="Stay focused on the metrics and actions that matter to your role."
-      >
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline">
-            <Link href="/dashboard/requests">
-              <ClipboardList className="mr-2 h-4 w-4" />
-              View requests
-            </Link>
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard/requests/new">
-              <FilePlus2 className="mr-2 h-4 w-4" />
-              New request
-            </Link>
-          </Button>
+      {isLoading ? (
+        <div className="space-y-8 opacity-100 transition-opacity duration-300">
+          <PageHeader
+            title={`Welcome${user?.name ? `, ${user.name}` : ''}!`}
+            description="Stay focused on the metrics and actions that matter to your role."
+          >
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" disabled>
+                <Link href="/dashboard/requests">
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  View requests
+                </Link>
+              </Button>
+              <Button asChild disabled>
+                <Link href="/dashboard/requests/new">
+                  <FilePlus2 className="mr-2 h-4 w-4" />
+                  New request
+                </Link>
+              </Button>
+            </div>
+          </PageHeader>
+
+          {/* Hero Card Skeleton */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="space-y-2">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-5 w-full max-w-md" />
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-7 w-48" />
+                <Skeleton className="h-4 w-64" />
+              </div>
+              <Skeleton className="h-10 w-full sm:w-40" />
+            </CardContent>
+          </Card>
+
+          {/* Next Actions Skeleton */}
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-32 mb-2" />
+              <Skeleton className="h-4 w-64" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-3">
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-5 w-full max-w-md" />
+                      <Skeleton className="h-4 w-full max-w-xs" />
+                    </div>
+                    <div className="ml-4 flex items-center gap-3">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                      <Skeleton className="h-4 w-4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </PageHeader>
-
-      <HeroCard summary={heroSummary} />
-
-      <NextActionsList actions={nextActions} />
-
-      <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            aria-expanded={metricsOpen}
+      ) : (
+        <div className="space-y-8 animate-[fadeIn_0.5s_ease-in-out_forwards]">
+          <PageHeader
+            title={`Welcome${user.name ? `, ${user.name}` : ''}!`}
+            description="Stay focused on the metrics and actions that matter to your role."
           >
-            <Activity className="h-4 w-4" />
-            Secondary metrics
-            <ArrowRight className={cn('h-4 w-4 transition-transform', metricsOpen ? 'rotate-90' : 'rotate-0')} />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-          <MetricsGrid metrics={secondaryMetrics} />
-        </CollapsibleContent>
-      </Collapsible>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline">
+                <Link href="/dashboard/requests">
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  View requests
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href="/dashboard/requests/new">
+                  <FilePlus2 className="mr-2 h-4 w-4" />
+                  New request
+                </Link>
+              </Button>
+            </div>
+          </PageHeader>
 
-      <Collapsible open={activityOpen} onOpenChange={setActivityOpen}>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            aria-expanded={activityOpen}
-          >
-            <Clock className="h-4 w-4" />
-            Recent activity
-            <ArrowRight className={cn('h-4 w-4 transition-transform', activityOpen ? 'rotate-90' : 'rotate-0')} />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-          <RecentActivityList items={recentActivity} />
-        </CollapsibleContent>
-      </Collapsible>
+          <HeroCard summary={heroSummary} />
 
-      <Collapsible open={tableOpen} onOpenChange={setTableOpen}>
-        <CollapsibleTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-            aria-expanded={tableOpen}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            Pending approval table
-            <ArrowRight className={cn('h-4 w-4 transition-transform', tableOpen ? 'rotate-90' : 'rotate-0')} />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-          <CertificateRequestsTable
-            requests={isQA ? pendingRequests : pendingRequests.slice(0, 10)}
-            isLoading={false}
-          />
-        </CollapsibleContent>
-      </Collapsible>
+          <NextActionsList actions={nextActions} />
 
-      {canManageInvoices && invoiceMetrics && invoiceMetrics.recent.length > 0 && (
-        <Collapsible open={false} onOpenChange={() => {}}>
-          <CollapsibleTrigger asChild>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-              asChild
-            >
-              <Link href="/dashboard/admin/invoices">
-                <Receipt className="h-4 w-4" />
-                Recent invoices
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          </CollapsibleTrigger>
-        </Collapsible>
+          <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                aria-expanded={metricsOpen}
+              >
+                <Activity className="h-4 w-4" />
+                Secondary metrics
+                <ArrowRight className={cn('h-4 w-4 transition-transform', metricsOpen ? 'rotate-90' : 'rotate-0')} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <MetricsGrid metrics={secondaryMetrics} />
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Collapsible open={activityOpen} onOpenChange={setActivityOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                aria-expanded={activityOpen}
+              >
+                <Clock className="h-4 w-4" />
+                Recent activity
+                <ArrowRight className={cn('h-4 w-4 transition-transform', activityOpen ? 'rotate-90' : 'rotate-0')} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <RecentActivityList items={recentActivity} />
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Collapsible open={tableOpen} onOpenChange={setTableOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                aria-expanded={tableOpen}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Pending approval table
+                <ArrowRight className={cn('h-4 w-4 transition-transform', tableOpen ? 'rotate-90' : 'rotate-0')} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-4">
+              <CertificateRequestsTable
+                requests={isQA ? pendingRequests : pendingRequests.slice(0, 10)}
+                isLoading={false}
+              />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {canManageInvoices && invoiceMetrics && invoiceMetrics.recent.length > 0 && (
+            <Collapsible open={false} onOpenChange={() => {}}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                  asChild
+                >
+                  <Link href="/dashboard/admin/invoices">
+                    <Receipt className="h-4 w-4" />
+                    Recent invoices
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </CollapsibleTrigger>
+            </Collapsible>
+          )}
+        </div>
       )}
     </div>
   );

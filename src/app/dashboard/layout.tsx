@@ -10,6 +10,12 @@ import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { CommandPalette } from '@/components/common/command-palette';
+import { Breadcrumbs } from '@/components/common/breadcrumbs';
+import { MobileBottomNav } from '@/components/common/mobile-bottom-nav';
+import { KeyboardShortcutsDialog } from '@/components/common/keyboard-shortcuts-dialog';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
@@ -17,6 +23,41 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const { user, logout } = useAuth();
+  const router = useRouter();
+
+  // Global keyboard shortcuts (using Alt to avoid Windows conflicts)
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      altKey: true,
+      action: () => router.push('/dashboard/requests/new'),
+      description: 'Create new request',
+    },
+    {
+      key: 'h',
+      altKey: true,
+      action: () => router.push('/dashboard'),
+      description: 'Go to dashboard (Home)',
+    },
+    {
+      key: 'w',
+      altKey: true,
+      action: () => router.push('/dashboard/my-work'),
+      description: 'Go to my work',
+    },
+    {
+      key: 'm',
+      altKey: true,
+      action: () => router.push('/dashboard/profile'),
+      description: 'Go to my profile',
+    },
+    {
+      key: 'l',
+      altKey: true,
+      action: () => router.push('/dashboard/leaderboards'),
+      description: 'Go to leaderboards',
+    },
+  ]);
 
   return (
     <div className="min-h-screen w-full bg-background" suppressHydrationWarning>
@@ -40,6 +81,8 @@ export default function DashboardLayout({
             </div>
 
             <div className="flex items-center gap-sm" suppressHydrationWarning>
+              <CommandPalette />
+              <KeyboardShortcutsDialog />
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -71,6 +114,7 @@ export default function DashboardLayout({
 
           <main className="flex-1 pb-lg pt-sm sm:pb-xl sm:pt-md" suppressHydrationWarning>
             <div className="mx-auto w-full max-w-7xl px-sm sm:px-md lg:px-lg">
+              <Breadcrumbs />
               {children}
             </div>
           </main>
@@ -79,6 +123,7 @@ export default function DashboardLayout({
             <p>© 2025 Dev2QA. All rights reserved. Powered by echobitstech.</p>
           </footer>
         </div>
+        <MobileBottomNav />
       </div>
     </div>
   );
