@@ -121,6 +121,8 @@ const NavLinks = () => {
         infractions: false,
         bonuses: false,
     });
+    // Track which sections are collapsed (default: all sections expanded)
+    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
     const getFilteredNav = useMemo(() => {
         // If user is not loaded yet, show nothing
@@ -293,10 +295,30 @@ const NavLinks = () => {
                     }
                 });
                 
+                // Check if section should be collapsible (has label and more than 3 items)
+                const isCollapsible = section.label && parentItems.length > 3;
+                const sectionKey = section.label?.toLowerCase().replace(/\s+/g, '-') || `section-${index}`;
+                const isSectionCollapsed = collapsedSections[sectionKey] ?? false;
+                
                 return (
                     <div key={section.label || `section-${index}`} className="space-y-1">
-                        {section.label && <p className="px-3 text-xs font-semibold text-muted-foreground tracking-wider uppercase whitespace-nowrap">{section.label}</p>}
-                        {parentItems.map(item => {
+                        {section.label && (
+                            <div className="flex items-center justify-between px-3">
+                                {isCollapsible ? (
+                                    <Collapsible
+                                        open={!isSectionCollapsed}
+                                        onOpenChange={(open) => setCollapsedSections(prev => ({ ...prev, [sectionKey]: !open }))}
+                                    >
+                                        <CollapsibleTrigger className="flex items-center gap-2 w-full text-xs font-semibold text-muted-foreground tracking-wider uppercase whitespace-nowrap hover:text-foreground transition-colors">
+                                            <span>{section.label}</span>
+                                            {isSectionCollapsed ? (
+                                                <ChevronRight className="h-3 w-3" />
+                                            ) : (
+                                                <ChevronDown className="h-3 w-3" />
+                                            )}
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent className="space-y-1 mt-1">
+                                            {parentItems.map(item => {
                            let itemLabel = item.label;
                            // Customize dashboard label based on role
                            if (item.href === '/dashboard') {
@@ -389,6 +411,110 @@ const NavLinks = () => {
                            // Otherwise render as regular link
                            return renderNavItem(item, itemLabel);
                         })}
+                                        </CollapsibleContent>
+                                    </Collapsible>
+                                ) : (
+                                    <p className="px-3 text-xs font-semibold text-muted-foreground tracking-wider uppercase whitespace-nowrap">{section.label}</p>
+                                )}
+                            </div>
+                        )}
+                        {!isCollapsible && (
+                            <>
+                                {parentItems.map(item => {
+                                    let itemLabel = item.label;
+                                    // Customize dashboard label based on role
+                                    if (item.href === '/dashboard') {
+                                        if (hasPermission(ALL_PERMISSIONS.ADMIN_SECTION.READ)) {
+                                            itemLabel = "Admin Dashboard";
+                                        } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.READ_ALL)) {
+                                            itemLabel = 'QA Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.CREATE)) {
+                                            itemLabel = 'My Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.PROJECTS.READ)) {
+                                            itemLabel = 'Developer Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.TEAMS.READ)) {
+                                            itemLabel = 'Manager Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.USERS.READ)) {
+                                            itemLabel = 'HR Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.PROJECTS.CREATE)) {
+                                            itemLabel = 'Project Manager Dashboard';
+                                        } else if (hasPermission(ALL_PERMISSIONS.REQUESTS.APPROVE)) {
+                                            itemLabel = 'Senior QA Dashboard';
+                                        }
+                                    }
+                                    
+                                    // Get child items for this parent
+                                    const childItems = childItemsMap.get(item.href) || [];
+                                    
+                                    // If this item is a parent with children, render as collapsible
+                                    if (item.isParent && childItems.length > 0) {
+                                        const collapsibleKey = item.href.split('/').pop() || '';
+                                        const isOpen = openCollapsibles[collapsibleKey] || pathname.startsWith(item.href);
+                                        const isActive = pathname.startsWith(item.href) && item.href !== '/dashboard' || pathname === item.href;
+                                        
+                                        return (
+                                            <Collapsible
+                                                key={item.href}
+                                                open={isOpen}
+                                                onOpenChange={(open) => setOpenCollapsibles(prev => ({ ...prev, [collapsibleKey]: open }))}
+                                            >
+                                                <div className="flex items-center gap-1">
+                                                    <Link
+                                                        href={item.href}
+                                                        className={cn(
+                                                            'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary whitespace-nowrap flex-1',
+                                                            isActive && 'bg-secondary text-primary'
+                                                        )}
+                                                    >
+                                                        {item.icon && <item.icon className="h-4 w-4 shrink-0" />}
+                                                        <span className="truncate">{itemLabel}</span>
+                                                    </Link>
+                                                    <CollapsibleTrigger asChild>
+                                                        <button
+                                                            type="button"
+                                                            className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded"
+                                                            aria-label={isOpen ? "Collapse" : "Expand"}
+                                                        >
+                                                            {isOpen ? (
+                                                                <ChevronDown className="h-4 w-4 shrink-0" />
+                                                            ) : (
+                                                                <ChevronRight className="h-4 w-4 shrink-0" />
+                                                            )}
+                                                        </button>
+                                                    </CollapsibleTrigger>
+                                                </div>
+                                                <CollapsibleContent className="pl-4 space-y-1">
+                                                    {childItems.map(child => {
+                                                        if (!child.icon) {
+                                                            console.error('Missing icon for child nav item:', child.href, child.label);
+                                                            return null;
+                                                        }
+                                                        const childIsActive = pathname === child.href || pathname.startsWith(child.href + '/');
+                                                        const IconComponent = child.icon;
+                                                        return (
+                                                            <Link
+                                                                key={child.href}
+                                                                href={child.href}
+                                                                className={cn(
+                                                                    'flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-secondary whitespace-nowrap text-sm',
+                                                                    childIsActive && 'bg-secondary text-primary'
+                                                                )}
+                                                            >
+                                                                <IconComponent className="h-3 w-3 shrink-0" />
+                                                                <span className="truncate">{child.label}</span>
+                                                            </Link>
+                                                        );
+                                                    })}
+                                                </CollapsibleContent>
+                                            </Collapsible>
+                                        );
+                                    }
+                                    
+                                    // Otherwise render as regular link
+                                    return renderNavItem(item, itemLabel);
+                                })}
+                            </>
+                        )}
                     </div>
                 )
             })}
