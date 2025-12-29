@@ -12,15 +12,25 @@ const publicEnvSchema = z.object({
 });
 
 const serverEnvSchema = z.object({
-  FIREBASE_SERVICE_ACCOUNT_KEY: z.string().min(1, 'Firebase service account key is required'),
+  // Support both FIREBASE_SERVICE_ACCOUNT_KEY and SERVICE_ACCOUNT_KEY for backward compatibility
+  FIREBASE_SERVICE_ACCOUNT_KEY: z.string().min(1, 'Firebase service account key is required').optional(),
+  SERVICE_ACCOUNT_KEY: z.string().min(1, 'Service account key is required').optional(),
   BREVO_API_KEY: z.string().min(1, 'Brevo API key is required'),
   BREVO_SENDER_EMAIL: z.string().email('Invalid sender email'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).optional(),
-});
+}).refine(
+  (data) => data.FIREBASE_SERVICE_ACCOUNT_KEY || data.SERVICE_ACCOUNT_KEY,
+  {
+    message: 'Either FIREBASE_SERVICE_ACCOUNT_KEY or SERVICE_ACCOUNT_KEY must be provided',
+    path: ['FIREBASE_SERVICE_ACCOUNT_KEY'],
+  }
+);
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type ServerEnv = Omit<z.infer<typeof serverEnvSchema>, 'SERVICE_ACCOUNT_KEY'> & {
+  FIREBASE_SERVICE_ACCOUNT_KEY: string; // Always required after normalization
+};
 
 let _publicEnv: PublicEnv | null = null;
 let _serverEnv: ServerEnv | null = null;
@@ -66,7 +76,20 @@ export function getPublicEnv(): PublicEnv {
 export function getServerEnv(): ServerEnv {
   if (_serverEnv) return _serverEnv;
   try {
-    _serverEnv = serverEnvSchema.parse(process.env);
+    // Normalize environment variables: use FIREBASE_SERVICE_ACCOUNT_KEY if SERVICE_ACCOUNT_KEY exists
+    const env = { ...process.env };
+    if (env.SERVICE_ACCOUNT_KEY && !env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      env.FIREBASE_SERVICE_ACCOUNT_KEY = env.SERVICE_ACCOUNT_KEY;
+    }
+    
+    const parsed = serverEnvSchema.parse(env);
+    // Ensure FIREBASE_SERVICE_ACCOUNT_KEY is set (use SERVICE_ACCOUNT_KEY if available)
+    const normalized: ServerEnv = {
+      ...parsed,
+      FIREBASE_SERVICE_ACCOUNT_KEY: parsed.FIREBASE_SERVICE_ACCOUNT_KEY || parsed.SERVICE_ACCOUNT_KEY || '',
+    } as ServerEnv;
+    
+    _serverEnv = normalized;
     return _serverEnv;
   } catch (error) {
     if (error instanceof z.ZodError) {

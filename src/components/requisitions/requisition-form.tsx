@@ -756,16 +756,18 @@ export function RequisitionForm({ onSuccess, initialData }: RequisitionFormProps
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full pl-3 text-left font-normal",
+                        "w-full pl-3 pr-3 text-left font-normal justify-between",
                         !field.value && "text-muted-foreground"
                       )}
                     >
-                      {field.value ? (
-                        format(field.value, "PPP")
-                      ) : (
-                        <span>Pick a date (optional)</span>
-                      )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      <span className="flex-1 text-left">
+                        {field.value ? (
+                          format(field.value, "PPP")
+                        ) : (
+                          "Pick a date (optional)"
+                        )}
+                      </span>
+                      <CalendarIcon className="ml-2 h-4 w-4 opacity-50 flex-shrink-0" />
                     </Button>
                   </FormControl>
                 </PopoverTrigger>

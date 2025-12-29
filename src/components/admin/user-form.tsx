@@ -323,20 +323,22 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                       open={isOpen}
                       onOpenChange={() => toggleCategory(category)}
                     >
-                      <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-muted rounded-md">
-                        <div className="flex items-center gap-2">
-                          {isOpen ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          <span className="font-medium">{label}</span>
-                          {selectedCount > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              ({selectedCount}/{permissions.length})
-                            </span>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-2 p-2 hover:bg-muted rounded-md">
+                        <CollapsibleTrigger className="flex items-center justify-between flex-1 gap-2">
+                          <div className="flex items-center gap-2">
+                            {isOpen ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                            <span className="font-medium">{label}</span>
+                            {selectedCount > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                ({selectedCount}/{permissions.length})
+                              </span>
+                            )}
+                          </div>
+                        </CollapsibleTrigger>
                         {allSelected && (
                           <Checkbox
                             checked={true}
@@ -367,7 +369,7 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
                             onClick={(e) => e.stopPropagation()}
                           />
                         )}
-                      </CollapsibleTrigger>
+                      </div>
                       <CollapsibleContent className="pl-6 pt-2 space-y-2">
                         {permissions.map((permission) => {
                           const isSelected = selectedPermissions.includes(permission);

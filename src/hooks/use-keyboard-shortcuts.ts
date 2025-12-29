@@ -17,6 +17,9 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Skip if key is undefined (can happen with some special keys)
+            if (!e.key) return;
+            
             for (const shortcut of shortcuts) {
                 const ctrlMatch = shortcut.ctrlKey === undefined || shortcut.ctrlKey === (e.ctrlKey || e.metaKey);
                 const shiftMatch = shortcut.shiftKey === undefined || shortcut.shiftKey === e.shiftKey;

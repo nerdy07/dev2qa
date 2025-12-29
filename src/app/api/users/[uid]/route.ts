@@ -10,14 +10,23 @@ import { z } from 'zod';
 const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   role: z.enum(['requester', 'qa_tester', 'admin']).optional(),
+  permissions: z.array(z.string()).optional(),
+  roles: z.array(z.string()).optional(),
   expertise: z.string().optional(),
   baseSalary: z.number().min(0).optional(),
   annualLeaveEntitlement: z.number().min(0).optional(),
   disabled: z.boolean().optional(),
+  startDate: z.string().optional(),
 });
 
 // PATCH /api/users/[uid] - Update user details or activation status
-async function updateUserHandler(request: any, { params }: { params: { uid: string } }) {
+async function updateUserHandler(request: AuthenticatedRequest, context: { params?: Promise<{ uid: string }> | { uid: string } } | { params: Promise<{ uid: string }> | { uid: string } }) {
+  if (!context || !context.params) {
+    return NextResponse.json({ message: 'Missing route parameters' }, { status: 400 });
+  }
+  
+  // Handle both async and sync params (Next.js 15+ uses Promise, older versions use direct object)
+  const params = 'then' in context.params ? await context.params : context.params;
   const { uid } = params;
   const body = await request.json();
 
@@ -41,10 +50,10 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
   }
 
   try {
-    const adminAuth = getAuth(app);
-    const db = getFirestore(app);
+    const adminAuth = getAuth();
+    const db = getFirestore();
     
-    const { name, role, expertise, baseSalary, annualLeaveEntitlement, disabled } = validationResult.data;
+    const { name, role, permissions, roles, expertise, baseSalary, annualLeaveEntitlement, disabled, startDate } = validationResult.data;
     
     const authUpdatePayload: any = {};
     const firestoreUpdatePayload: any = {};
@@ -90,7 +99,8 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
         firestoreUpdatePayload.annualLeaveEntitlement = annualLeaveEntitlement;
     }
     if (disabled !== undefined) {
-        authUpdatePayload.disabled = disabled;
+        // Note: Firebase Auth doesn't support a 'disabled' field
+        // We only update it in Firestore, and the app logic handles disabled users
         firestoreUpdatePayload.disabled = disabled;
     }
     if (startDate !== undefined) {
@@ -127,7 +137,13 @@ async function updateUserHandler(request: any, { params }: { params: { uid: stri
 
 
 // DELETE /api/users/[uid] - Delete a user
-async function deleteUserHandler(request: any, { params }: { params: { uid: string } }) {
+async function deleteUserHandler(request: AuthenticatedRequest, context: { params?: Promise<{ uid: string }> | { uid: string } } | { params: Promise<{ uid: string }> | { uid: string } }) {
+  if (!context || !context.params) {
+    return NextResponse.json({ message: 'Missing route parameters' }, { status: 400 });
+  }
+  
+  // Handle both async and sync params (Next.js 15+ uses Promise, older versions use direct object)
+  const params = 'then' in context.params ? await context.params : context.params;
   const { uid } = params;
   
   if (!uid) {
@@ -136,9 +152,8 @@ async function deleteUserHandler(request: any, { params }: { params: { uid: stri
 
   try {
     // Initialize Firebase Admin with proper error handling
-    const app = await initializeAdminApp();
-    const adminAuth = getAuth(app);
-    const db = getFirestore(app);
+    const adminAuth = getAuth();
+    const db = getFirestore();
 
     // Delete from Firebase Auth
     await adminAuth.deleteUser(uid);
@@ -163,8 +178,7 @@ async function deleteUserHandler(request: any, { params }: { params: { uid: stri
     } else if (error.code === 'auth/user-not-found') {
         // If user not in Auth, still try to delete from Firestore for cleanup
         try {
-            const app = await initializeAdminApp();
-            const db = getFirestore(app);
+            const db = getFirestore();
             await db.collection('users').doc(uid).delete();
             return NextResponse.json({ message: 'User deleted from Firestore, as they were not found in Authentication.' });
         } catch (dbError: any) {

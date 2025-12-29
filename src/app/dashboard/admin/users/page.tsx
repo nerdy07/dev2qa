@@ -49,6 +49,7 @@ import { useCollection } from '@/hooks/use-collection';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useAuth } from '@/providers/auth-provider';
+import { auth } from '@/lib/firebase';
 import { cn } from '@/lib/utils';
 import { usePermissions } from '@/hooks/use-permissions';
 import { ALL_PERMISSIONS } from '@/lib/roles';
@@ -72,6 +73,7 @@ function UsersTable() {
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<User | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
+  const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
   const { toast } = useToast();
 
   const canCreate = hasPermission(ALL_PERMISSIONS.USERS.CREATE);
@@ -96,6 +98,7 @@ function UsersTable() {
   const handleEdit = (user: User) => {
     setSelectedUser(user);
     setIsFormOpen(true);
+    setOpenDropdownId(null); // Close the dropdown menu
   };
   
   const handleActionTrigger = (user: User, action: ActionType) => {
@@ -125,21 +128,63 @@ function UsersTable() {
   const confirmAction = async () => {
     if (!selectedUser || !actionToConfirm) return;
 
-    let response;
+    // Get Firebase ID token for authentication (force refresh to ensure valid token)
+    let idToken: string | null = null;
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast({
+          title: 'Authentication Error',
+          description: 'Please log in again to perform this action.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      // Force refresh to get a fresh token
+      idToken = await currentUser.getIdToken(true);
+      
+      if (!idToken || idToken.trim().length === 0) {
+        throw new Error('Token is empty');
+      }
+      
+      console.log('Token retrieved successfully, length:', idToken.length);
+    } catch (tokenError: any) {
+      console.error('Error getting ID token:', tokenError);
+      toast({
+        title: 'Authentication Error',
+        description: tokenError?.message || 'Failed to authenticate. Please log in again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    let response: Response | undefined;
     let successMessage = '';
     
     try {
+        const headers = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        };
+
         if (actionToConfirm === 'delete') {
-            response = await fetch(`/api/users/${selectedUser.id}`, { method: 'DELETE' });
+            response = await fetch(`/api/users/${selectedUser.id}`, { 
+              method: 'DELETE',
+              headers,
+            });
             successMessage = `${selectedUser.name}'s account has been permanently deleted.`;
         } else { // 'activate' or 'deactivate'
             const newStatus = actionToConfirm === 'deactivate';
             response = await fetch(`/api/users/${selectedUser.id}`, { 
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ disabled: newStatus }) 
             });
             successMessage = `User ${selectedUser.name} has been ${newStatus ? 'deactivated' : 'activated'}.`;
+        }
+        
+        if (!response) {
+            throw new Error('No response received from server');
         }
         
         // Check if response is ok before trying to parse JSON
@@ -148,7 +193,7 @@ function UsersTable() {
             let errorMessage = 'An unknown error occurred.';
             try {
                 const errorResult = await response.json();
-                errorMessage = errorResult.message || errorMessage;
+                errorMessage = errorResult.message || errorResult.error || errorMessage;
             } catch (jsonError) {
                 // If JSON parsing fails, use status text
                 errorMessage = response.statusText || `HTTP ${response.status} error`;
@@ -181,19 +226,13 @@ function UsersTable() {
     } catch (err) {
         const error = err as Error;
         console.error(`Error performing action '${actionToConfirm}':`, error);
+        console.error('Full error details:', err);
         toast({
             title: 'Action Failed',
-            description: error.message,
+            description: error.message || 'An unknown error occurred. Please try again.',
             variant: 'destructive',
         });
         // Keep dialog open on error so user can retry
-    } finally {
-        // Only close if not already closed (on success)
-        if (actionToConfirm) {
-            setIsAlertOpen(false);
-            setSelectedUser(undefined);
-            setActionToConfirm(null);
-        }
     }
   }
 
@@ -282,7 +321,10 @@ function UsersTable() {
               </Badge>
             </TableCell>
             <TableCell className="text-right">
-              <DropdownMenu>
+              <DropdownMenu 
+                open={openDropdownId === user.id} 
+                onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}
+              >
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="h-8 w-8 p-0" disabled={user.id === currentUser?.id || !canUpdate}>
                     <span className="sr-only">Open menu</span>
@@ -295,25 +337,38 @@ function UsersTable() {
                   {canUpdate && <DropdownMenuItem onClick={() => {
                     setSelectedUser(user);
                     setIsDocumentsDialogOpen(true);
+                    setOpenDropdownId(null); // Close the dropdown menu
                   }}>
                     <FileText className="mr-2 h-4 w-4" />
                     Manage Documents
                   </DropdownMenuItem>}
-                  {canUpdate && <DropdownMenuItem onClick={() => handleResetPassword(user)}>Send Password Reset</DropdownMenuItem>}
+                  {canUpdate && <DropdownMenuItem onClick={() => {
+                    handleResetPassword(user);
+                    setOpenDropdownId(null); // Close the dropdown menu
+                  }}>Send Password Reset</DropdownMenuItem>}
                   {(canUpdate || canDelete) && <DropdownMenuSeparator />}
                   {canUpdate && (user.disabled ? (
-                    <DropdownMenuItem onClick={() => handleActionTrigger(user, 'activate')}>
+                    <DropdownMenuItem onClick={() => {
+                      handleActionTrigger(user, 'activate');
+                      setOpenDropdownId(null); // Close the dropdown menu
+                    }}>
                       <UserCheck className="mr-2 h-4 w-4" />
                       Activate User
                     </DropdownMenuItem>
                   ) : (
-                    <DropdownMenuItem onClick={() => handleActionTrigger(user, 'deactivate')}>
+                    <DropdownMenuItem onClick={() => {
+                      handleActionTrigger(user, 'deactivate');
+                      setOpenDropdownId(null); // Close the dropdown menu
+                    }}>
                       <UserX className="mr-2 h-4 w-4" />
                       Deactivate User
                     </DropdownMenuItem>
                   ))}
                   {canDelete && <DropdownMenuSeparator />}
-                  {canDelete && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleActionTrigger(user, 'delete')}>Delete User</DropdownMenuItem>}
+                  {canDelete && <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {
+                    handleActionTrigger(user, 'delete');
+                    setOpenDropdownId(null); // Close the dropdown menu
+                  }}>Delete User</DropdownMenuItem>}
                 </DropdownMenuContent>
               </DropdownMenu>
             </TableCell>
@@ -337,11 +392,13 @@ function UsersTable() {
                   Add User
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
                 </DialogHeader>
-                <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
+                <div className="max-h-[calc(90vh-120px)] overflow-y-auto pr-2">
+                  <UserForm user={selectedUser} onSuccess={handleFormSuccess} />
+                </div>
               </DialogContent>
             </Dialog>
           )}

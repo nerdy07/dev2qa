@@ -93,34 +93,27 @@ export const CertificateRequestsTable = React.memo(function CertificateRequestsT
               </Badge>
             </TableCell>
             <TableCell className="text-right">
-              <div className="flex items-center justify-end gap-2">
-                <Button asChild variant="ghost" size="sm">
-                  <Link href={`/dashboard/requests/${request.id}`} aria-label={`View details for ${request.taskTitle}`}>
-                    Open
-                  </Link>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0" aria-label={`More actions for ${request.taskTitle}`}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0" aria-label={`More actions for ${request.taskTitle}`}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href={`/dashboard/requests/${request.id}`}>
+                      View Details
+                    </Link>
+                  </DropdownMenuItem>
+                  {hasRole('requester') && request.status === 'approved' && request.certificateId && (
                     <DropdownMenuItem asChild>
-                      <Link href={`/dashboard/requests/${request.id}`}>
-                        View Details
+                      <Link href={`/dashboard/certificates/${request.certificateId}`}>
+                        View Certificate
                       </Link>
                     </DropdownMenuItem>
-                    {hasRole('requester') && request.status === 'approved' && request.certificateId && (
-                      <DropdownMenuItem asChild>
-                        <Link href={`/dashboard/certificates/${request.certificateId}`}>
-                          View Certificate
-                        </Link>
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </TableCell>
           </TableRow>
         ))
