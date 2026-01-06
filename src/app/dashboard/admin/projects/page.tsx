@@ -62,6 +62,7 @@ export default function ProjectsPage() {
     const [isAlertOpen, setIsAlertOpen] = React.useState(false);
     const [selectedProject, setSelectedProject] = React.useState<Project | undefined>(undefined);
     const [newProjectId, setNewProjectId] = React.useState<string | undefined>(undefined);
+    const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
     const { toast } = useToast();
     const { hasPermission, user } = useAuth();
     
@@ -177,8 +178,10 @@ export default function ProjectsPage() {
           description: 'You do not have permission to edit projects.',
           variant: 'destructive',
         });
+        setOpenDropdownId(null);
         return;
       }
+      setOpenDropdownId(null);
       setSelectedProject(project);
       setNewProjectId(project.id); // For editing, use the existing ID
       setIsFormOpen(true);
@@ -191,8 +194,10 @@ export default function ProjectsPage() {
           description: 'You do not have permission to delete projects.',
           variant: 'destructive',
         });
+        setOpenDropdownId(null);
         return;
       }
+      setOpenDropdownId(null);
       setSelectedProject(project);
       setIsAlertOpen(true);
     }
@@ -396,7 +401,10 @@ export default function ProjectsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
+                        <DropdownMenu 
+                          open={openDropdownId === project.id} 
+                          onOpenChange={(open) => setOpenDropdownId(open ? project.id : null)}
+                        >
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
                               <span className="sr-only">Open menu</span>
@@ -405,7 +413,11 @@ export default function ProjectsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem asChild><Link href={`/dashboard/admin/projects/${project.id}`}>View Details</Link></DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/dashboard/admin/projects/${project.id}`} onClick={() => setOpenDropdownId(null)}>
+                                View Details
+                              </Link>
+                            </DropdownMenuItem>
                             {canUpdate && (
                               <DropdownMenuItem onClick={() => handleEdit(project)}>Edit</DropdownMenuItem>
                             )}
