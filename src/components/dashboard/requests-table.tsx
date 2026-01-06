@@ -66,24 +66,38 @@ export const CertificateRequestsTable = React.memo(function CertificateRequestsT
       {requests.length > 0 ? (
         requests.map((request) => (
           <TableRow key={request.id}>
-            <TableCell className="font-medium">
+            <TableCell className="font-medium" style={{ maxWidth: '220px', width: '220px' }}>
               <Link
                 href={`/dashboard/requests/${request.id}`}
                 className="block rounded-md px-2 py-1.5 text-sm font-semibold text-foreground transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 aria-label={`Open request ${request.taskTitle}`}
+                title={request.taskTitle}
               >
-                {request.taskTitle}
+                <p 
+                  className="m-0 overflow-hidden text-ellipsis whitespace-nowrap block" 
+                  style={{
+                    maxWidth: '100%',
+                  }}
+                >
+                  {request.taskTitle}
+                </p>
               </Link>
             </TableCell>
-            <TableCell className="hidden md:table-cell">
-              {request.associatedProject || '—'}
+            <TableCell className="hidden md:table-cell max-w-[120px]">
+              <span className="truncate block" title={request.associatedProject || '—'}>
+                {request.associatedProject || '—'}
+              </span>
             </TableCell>
             <TableCell className="hidden lg:table-cell">
-              <Badge variant={request.certificateRequired !== false ? 'outline' : 'secondary'} className="text-xs font-medium">
+              <Badge variant={request.certificateRequired !== false ? 'outline' : 'secondary'} className="text-xs font-medium whitespace-nowrap">
                 {request.certificateRequired !== false ? 'Certificate' : 'QA Sign-off'}
               </Badge>
             </TableCell>
-            <TableCell className="hidden xl:table-cell">{request.requesterName}</TableCell>
+            <TableCell className="hidden xl:table-cell max-w-[150px]">
+              <span className="truncate block" title={request.requesterName}>
+                {request.requesterName}
+              </span>
+            </TableCell>
             <TableCell className="hidden sm:table-cell">
               {format((request.createdAt as any)?.toDate() || new Date(), 'PP')}
             </TableCell>
@@ -128,21 +142,23 @@ export const CertificateRequestsTable = React.memo(function CertificateRequestsT
   );
 
   return (
-    <div className="rounded-lg border shadow-sm">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Task Title</TableHead>
-            <TableHead className="hidden md:table-cell">Project</TableHead>
-            <TableHead className="hidden lg:table-cell">Review Type</TableHead>
-            <TableHead className="hidden xl:table-cell">Requester</TableHead>
-            <TableHead className="hidden sm:table-cell">Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        {isLoading ? renderLoading() : renderData()}
-      </Table>
+    <div className="rounded-lg border shadow-sm overflow-x-auto w-full">
+      <div className="min-w-[800px]">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[180px]" style={{ maxWidth: '220px', width: '220px' }}>Task Title</TableHead>
+              <TableHead className="hidden md:table-cell min-w-[120px]">Project</TableHead>
+              <TableHead className="hidden lg:table-cell min-w-[100px]">Review Type</TableHead>
+              <TableHead className="hidden xl:table-cell min-w-[150px]">Requester</TableHead>
+              <TableHead className="hidden sm:table-cell min-w-[100px]">Date</TableHead>
+              <TableHead className="min-w-[80px]">Status</TableHead>
+              <TableHead className="text-right min-w-[80px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          {isLoading ? renderLoading() : renderData()}
+        </Table>
+      </div>
     </div>
   );
 });

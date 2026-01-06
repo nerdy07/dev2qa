@@ -51,8 +51,13 @@ export async function sendRequestApprovedEmail(data: { recipientEmail: string; r
     });
     return { success: true };
   } catch (emailError) {
-    console.warn(`Request approval notification email failed to send to ${data.recipientEmail}.`, emailError);
-    return { success: false, error: "Database updated, but email notification failed." };
+    const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
+    console.error(`Request approval notification email failed to send to ${data.recipientEmail}.`, emailError);
+    console.error('Email error details:', {
+      message: errorMessage,
+      stack: emailError instanceof Error ? emailError.stack : undefined,
+    });
+    return { success: false, error: `Email notification failed: ${errorMessage}` };
   }
 }
 

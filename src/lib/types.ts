@@ -68,6 +68,9 @@ export type Milestone = {
   startDate?: any; // Firestore Timestamp
   endDate?: any; // Firestore Timestamp
   tasks: Task[];
+  isActive?: boolean; // When true, milestone is an active sprint
+  activatedAt?: any; // Firestore Timestamp - when milestone was activated as sprint
+  activatedBy?: string; // User ID who activated the sprint
 };
 
 export type ProjectResource = {

@@ -19,7 +19,7 @@ export const StatCard = React.memo(function StatCard({ title, value, icon: Icon,
                 <Icon className="h-5 w-5 text-info" aria-hidden="true" />
             </CardHeader>
             <CardContent>
-                <div className="text-3xl font-bold text-foreground break-words overflow-wrap-anywhere">{value}</div>
+                <div className="text-2xl sm:text-3xl font-bold text-foreground break-words overflow-wrap-anywhere">{value}</div>
                 {description && <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>}
             </CardContent>
         </Card>

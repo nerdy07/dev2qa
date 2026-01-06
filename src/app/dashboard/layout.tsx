@@ -16,6 +16,7 @@ import { MobileBottomNav } from '@/components/common/mobile-bottom-nav';
 import { KeyboardShortcutsDialog } from '@/components/common/keyboard-shortcuts-dialog';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useRouter } from 'next/navigation';
+import { ClientOnly } from '@/components/common/client-only';
 
 export default function DashboardLayout({
   children,
@@ -69,7 +70,9 @@ export default function DashboardLayout({
             suppressHydrationWarning
           >
             <div className="flex items-center gap-sm" suppressHydrationWarning>
-              <MobileSidebar />
+              <ClientOnly>
+                <MobileSidebar />
+              </ClientOnly>
               <Link
                 href="/dashboard"
                 className="flex items-center gap-xs font-semibold text-primary md:hidden"
@@ -81,10 +84,17 @@ export default function DashboardLayout({
             </div>
 
             <div className="flex items-center gap-sm" suppressHydrationWarning>
-              <CommandPalette />
-              <KeyboardShortcutsDialog />
-              <NotificationBell />
-              <DropdownMenu>
+              <ClientOnly>
+                <CommandPalette />
+              </ClientOnly>
+              <ClientOnly>
+                <KeyboardShortcutsDialog />
+              </ClientOnly>
+              <ClientOnly>
+                <NotificationBell />
+              </ClientOnly>
+              <ClientOnly>
+                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-auto p-1.5" aria-label="Open account menu">
                     <Avatar className="h-9 w-9">
@@ -109,6 +119,7 @@ export default function DashboardLayout({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </ClientOnly>
             </div>
           </header>
 

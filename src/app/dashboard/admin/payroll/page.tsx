@@ -23,7 +23,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { DollarSign, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Users, Minus, Plus, Calculator } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Download } from 'lucide-react';
 
@@ -127,6 +127,36 @@ export default function PayrollPage() {
     });
   }, [users, infractions, bonuses, selectedDate, loading, error]);
 
+  // Calculate summary statistics
+  const summary = useMemo(() => {
+    if (!payrollData || payrollData.length === 0) {
+      return {
+        totalBaseSalary: 0,
+        totalDeductions: 0,
+        totalBonuses: 0,
+        totalNetSalary: 0,
+        employeeCount: 0,
+        averageNetSalary: 0,
+      };
+    }
+
+    const totalBaseSalary = payrollData.reduce((sum, entry) => sum + entry.baseSalary, 0);
+    const totalDeductions = payrollData.reduce((sum, entry) => sum + entry.totalDeductions, 0);
+    const totalBonuses = payrollData.reduce((sum, entry) => sum + entry.totalBonuses, 0);
+    const totalNetSalary = payrollData.reduce((sum, entry) => sum + entry.netSalary, 0);
+    const employeeCount = payrollData.length;
+    const averageNetSalary = employeeCount > 0 ? totalNetSalary / employeeCount : 0;
+
+    return {
+      totalBaseSalary,
+      totalDeductions,
+      totalBonuses,
+      totalNetSalary,
+      employeeCount,
+      averageNetSalary,
+    };
+  }, [payrollData]);
+
   const handleMonthChange = (month: string) => {
     if (!selectedDate) return;
     const newDate = new Date(selectedDate);
@@ -202,37 +232,108 @@ export default function PayrollPage() {
         title="Monthly Payroll"
         description="Calculate monthly salaries with deductions and bonuses."
       />
+      
+      {/* Date Filters - Prominent placement */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Select Period</CardTitle>
+          <CardDescription>Choose the month and year for the payroll report</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {selectedDate ? (
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-sm font-medium mb-2 block">Month</label>
+                <Select value={getMonth(selectedDate).toString()} onValueChange={handleMonthChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-[150px]">
+                <label className="text-sm font-medium mb-2 block">Year</label>
+                <Select value={getYear(selectedDate).toString()} onValueChange={handleYearChange}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end pb-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing: <span className="font-medium">{formatDate(selectedDate, "MMMM yyyy")}</span>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-sm font-medium mb-2 block">Month</label>
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <div className="flex-1 min-w-[150px]">
+                <label className="text-sm font-medium mb-2 block">Year</label>
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Summary Tiles */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-6">
+        <StatCard
+          title="Total Base Salary"
+          value={formatCurrency(summary.totalBaseSalary)}
+          description="Sum of all base salaries"
+          icon={DollarSign}
+        />
+        <StatCard
+          title="Total Deductions"
+          value={formatCurrency(summary.totalDeductions)}
+          description="Sum of all deductions"
+          icon={TrendingDown}
+          className="border-destructive/20"
+        />
+        <StatCard
+          title="Total Bonuses"
+          value={formatCurrency(summary.totalBonuses)}
+          description="Sum of all bonuses"
+          icon={TrendingUp}
+          className="border-primary/20"
+        />
+        <StatCard
+          title="Total Net Salary"
+          value={formatCurrency(summary.totalNetSalary)}
+          description="Total after deductions and bonuses"
+          icon={Calculator}
+          className="border-green-500/20"
+        />
+        <StatCard
+          title="Employees"
+          value={summary.employeeCount.toString()}
+          description="Number of employees"
+          icon={Users}
+        />
+        <StatCard
+          title="Average Net Salary"
+          value={formatCurrency(summary.averageNetSalary)}
+          description="Average net salary per employee"
+          icon={DollarSign}
+        />
+      </div>
+
       <Card>
         <CardHeader>
             <CardTitle>Payroll Report</CardTitle>
-            <CardDescription>Select a month and year to generate the report.</CardDescription>
-            <div className="flex items-center gap-4 pt-4">
-                {selectedDate ? (
-                  <>
-                    <Select value={getMonth(selectedDate).toString()} onValueChange={handleMonthChange}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select Month" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <Select value={getYear(selectedDate).toString()} onValueChange={handleYearChange}>
-                        <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder="Select Year" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                  </>
-                ) : (
-                  <>
-                    <Skeleton className="h-10 w-[180px]" />
-                    <Skeleton className="h-10 w-[120px]" />
-                  </>
-                )}
-            </div>
+            <CardDescription>
+              {selectedDate ? `Payroll details for ${formatDate(selectedDate, "MMMM yyyy")}` : "Select a month and year to generate the report."}
+            </CardDescription>
         </CardHeader>
         <CardContent>
             <Table>

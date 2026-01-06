@@ -10,12 +10,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive, CalendarClock, Download, Upload } from 'lucide-react';
+import { TriangleAlert, User as UserIcon, Calendar, Flag, Target, Info, CheckCircle, CircleDot, ClockIcon, Pencil, Link2, ExternalLink, FileArchive, CalendarClock, Download, Upload, Play, Pause, AlertTriangle, Rocket } from 'lucide-react';
 import { format } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
 import { CertificateRequestsTable } from '@/components/dashboard/requests-table';
 import { query, where, collection, doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import type { CompanyFile } from '@/lib/types';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -102,7 +102,9 @@ export default function ProjectDetailsPage() {
     const { data: project, loading: projectLoading, error: projectError, setData: setProject } = useDocument<Project>('projects', id as string);
 
     const [isTaskFormOpen, setIsTaskFormOpen] = React.useState(false);
-    const [selectedTask, setSelectedTask] = React.useState<{task: Task, milestoneId: string, milestoneName: string} | null>(null);
+    const [selectedTask, setSelectedTask] = React.useState<{task: Task, milestoneId: string, milestoneName: string, milestoneIsActive?: boolean} | null>(null);
+    const [activatingMilestone, setActivatingMilestone] = React.useState<string | null>(null);
+    const [detectingRisk, setDetectingRisk] = React.useState(false);
 
     const requestsQuery = React.useMemo(() => {
         if (!project) return null;
@@ -139,7 +141,13 @@ export default function ProjectDetailsPage() {
     }, [project]);
 
     const handleEditTask = (task: Task, milestoneId: string, milestoneName: string) => {
-        setSelectedTask({ task, milestoneId, milestoneName });
+        const milestone = project?.milestones?.find(m => m.id === milestoneId);
+        setSelectedTask({ 
+            task, 
+            milestoneId, 
+            milestoneName,
+            milestoneIsActive: milestone?.isActive || false
+        });
         setIsTaskFormOpen(true);
     };
 
@@ -213,6 +221,95 @@ export default function ProjectDetailsPage() {
     return (
         <>
             <PageHeader title={project.name} description={`Details for project ID: ${project.id}`} />
+            
+            {/* Risk Detection Card - Prominent Placement at Top */}
+            <Card className="border-orange-200 bg-orange-50/50 mb-6">
+                <CardHeader>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex-1">
+                            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                                <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                                Risk Detection
+                            </CardTitle>
+                            <CardDescription className="text-xs sm:text-sm mt-1">
+                                Analyze project team members for potential risks and send alerts
+                            </CardDescription>
+                        </div>
+                        <Button
+                            variant="default"
+                            size="default"
+                            className="bg-orange-600 hover:bg-orange-700 w-full sm:w-auto flex-shrink-0"
+                            onClick={async () => {
+                                setDetectingRisk(true);
+                                try {
+                                    // Get Firebase ID token for authentication
+                                    const idToken = await auth.currentUser?.getIdToken(true);
+                                    
+                                    if (!idToken) {
+                                        toast({
+                                            title: 'Authentication Error',
+                                            description: 'Please log in again to detect risks.',
+                                            variant: 'destructive',
+                                        });
+                                        setDetectingRisk(false);
+                                        return;
+                                    }
+
+                                    const response = await fetch(`/api/projects/${id}/detect-risk`, {
+                                        method: 'POST',
+                                        headers: { 
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${idToken}`,
+                                        },
+                                        body: JSON.stringify({ forceCheck: true }),
+                                    });
+                                    
+                                    const data = await response.json();
+                                    
+                                    if (!response.ok) {
+                                        throw new Error(data.error || data.message || 'Failed to detect risks');
+                                    }
+                                    
+                                    if (data.success) {
+                                        if (data.risks && data.risks.length > 0) {
+                                            toast({
+                                                title: "Risks Detected",
+                                                description: `Found ${data.risks.length} risk(s). Team members have been notified via email.`,
+                                            });
+                                        } else {
+                                            toast({
+                                                title: "No Risks Found",
+                                                description: "All team members are performing well.",
+                                            });
+                                        }
+                                    } else {
+                                        throw new Error(data.error || 'Failed to detect risks');
+                                    }
+                                } catch (error) {
+                                    console.error('Error detecting risks:', error);
+                                    toast({
+                                        title: "Error",
+                                        description: error instanceof Error ? error.message : "Failed to detect risks",
+                                        variant: "destructive",
+                                    });
+                                } finally {
+                                    setDetectingRisk(false);
+                                }
+                            }}
+                            disabled={detectingRisk}
+                        >
+                            {detectingRisk ? (
+                                <>Analyzing...</>
+                            ) : (
+                                <>
+                                    <AlertTriangle className="h-4 w-4 mr-2" />
+                                    Detect Risks
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </CardHeader>
+            </Card>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <aside className="lg:col-span-1 space-y-6">
@@ -319,6 +416,12 @@ export default function ProjectDetailsPage() {
                                                                 </span>
                                                             )}
                                                             <Badge variant="outline" className="text-xs">{milestone.status}</Badge>
+                                                            {milestone.isActive && (
+                                                                <Badge variant="default" className="text-xs bg-green-500">
+                                                                    <Rocket className="h-3 w-3 mr-1" />
+                                                                    Active Sprint
+                                                                </Badge>
+                                                            )}
                                                             {milestoneProgress.total > 0 && (
                                                                 <span className="inline-flex items-center gap-1 rounded-full bg-background/80 px-2 py-1">
                                                                     <CheckCircle className="h-3 w-3" />
@@ -329,13 +432,89 @@ export default function ProjectDetailsPage() {
                                                     </div>
                                                 </AccordionTrigger>
                                                 <AccordionContent className="space-y-4 border-t bg-background/60 px-4 py-4 sm:px-6">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Target className="h-4 w-4" />
+                                                            <span>{milestone.status === 'Completed' ? 'Milestone completed' : 'Milestone in progress'}</span>
+                                                        </div>
+                                                        {!milestone.isActive && milestone.status !== 'Completed' && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="default"
+                                                                onClick={async () => {
+                                                                    setActivatingMilestone(milestone.id);
+                                                                    try {
+                                                                        // Get Firebase ID token for authentication
+                                                                        const idToken = await auth.currentUser?.getIdToken(true);
+                                                                        
+                                                                        if (!idToken) {
+                                                                            toast({
+                                                                                title: 'Authentication Error',
+                                                                                description: 'Please log in again to activate sprint.',
+                                                                                variant: 'destructive',
+                                                                            });
+                                                                            setActivatingMilestone(null);
+                                                                            return;
+                                                                        }
+
+                                                                        const response = await fetch(`/api/projects/${id}/milestones/${milestone.id}/activate`, {
+                                                                            method: 'POST',
+                                                                            headers: { 
+                                                                                'Content-Type': 'application/json',
+                                                                                'Authorization': `Bearer ${idToken}`,
+                                                                            },
+                                                                            body: JSON.stringify({ activatedBy: currentUser?.id }),
+                                                                        });
+                                                                        
+                                                                        const data = await response.json();
+                                                                        
+                                                                        if (!response.ok) {
+                                                                            throw new Error(data.error || data.message || 'Failed to activate sprint');
+                                                                        }
+                                                                        
+                                                                        if (data.success) {
+                                                                            toast({
+                                                                                title: "Sprint Activated",
+                                                                                description: `${milestone.name} is now an active sprint. Team members have been notified.`,
+                                                                            });
+                                                                            // Refresh page data
+                                                                            window.location.reload();
+                                                                        } else {
+                                                                            throw new Error(data.error || 'Failed to activate sprint');
+                                                                        }
+                                                                    } catch (error) {
+                                                                        console.error('Error activating sprint:', error);
+                                                                        toast({
+                                                                            title: "Error",
+                                                                            description: error instanceof Error ? error.message : "Failed to activate sprint",
+                                                                            variant: "destructive",
+                                                                        });
+                                                                    } finally {
+                                                                        setActivatingMilestone(null);
+                                                                    }
+                                                                }}
+                                                                disabled={activatingMilestone === milestone.id}
+                                                            >
+                                                                {activatingMilestone === milestone.id ? (
+                                                                    <>Loading...</>
+                                                                ) : (
+                                                                    <>
+                                                                        <Play className="h-4 w-4 mr-2" />
+                                                                        Activate Sprint
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        )}
+                                                        {milestone.isActive && (
+                                                            <Badge variant="default" className="bg-green-500">
+                                                                <Rocket className="h-3 w-3 mr-1" />
+                                                                Active Sprint
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     {!milestone.description && (
                                                         <p className="text-sm text-muted-foreground">No description for this milestone.</p>
                                                     )}
-                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                        <Target className="h-4 w-4" />
-                                                        <span>{milestone.status === 'Completed' ? 'Milestone completed' : 'Milestone in progress'}</span>
-                                                    </div>
                                                     <div className="space-y-3">
                                                         <div className="flex items-center justify-between">
                                                             <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tasks</h4>
@@ -551,6 +730,7 @@ export default function ProjectDetailsPage() {
                             milestoneId={selectedTask.milestoneId}
                             milestoneName={selectedTask.milestoneName}
                             projectName={project.name}
+                            milestoneIsActive={selectedTask.milestoneIsActive || false}
                             onSave={handleSaveTask}
                             onCancel={() => setIsTaskFormOpen(false)}
                         />

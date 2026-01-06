@@ -70,6 +70,7 @@ function TeamsTable() {
   const [isAlertOpen, setIsAlertOpen] = React.useState(false);
   const [selectedTeam, setSelectedTeam] = React.useState<Team | undefined>(undefined);
   const [actionToConfirm, setActionToConfirm] = React.useState<ActionType | null>(null);
+  const [openDropdownId, setOpenDropdownId] = React.useState<string | null>(null);
   const { toast } = useToast();
 
   // Pagination
@@ -126,8 +127,13 @@ function TeamsTable() {
     return users?.filter(user => user.teamId === teamId) || [];
   };
 
-  const getTeamLead = (teamId: string) => {
-    return users?.find(user => user.teamId === teamId && user.role === 'team_lead');
+  const getTeamLead = (team: Team) => {
+    // Use team.teamLeadId if available, otherwise fall back to finding by role
+    if (team.teamLeadId) {
+      return users?.find(user => user.id === team.teamLeadId);
+    }
+    // Fallback: find user with team_lead role in this team
+    return users?.find(user => user.teamId === team.id && user.role === 'team_lead');
   };
 
   if (loading) {
@@ -216,7 +222,7 @@ function TeamsTable() {
                 <TableBody>
                   {paginatedTeams.map((team) => {
                     const members = getTeamMembers(team.id);
-                    const teamLead = getTeamLead(team.id);
+                    const teamLead = getTeamLead(team);
                     
                     return (
                       <TableRow key={team.id}>
@@ -267,7 +273,10 @@ function TeamsTable() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <DropdownMenu>
+                          <DropdownMenu 
+                            open={openDropdownId === team.id} 
+                            onOpenChange={(open) => setOpenDropdownId(open ? team.id : null)}
+                          >
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-8 w-8 p-0">
                                 <span className="sr-only">Open menu</span>
@@ -277,20 +286,29 @@ function TeamsTable() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuItem
-                                onClick={() => handleAction(team, 'view')}
+                                onClick={() => {
+                                  handleAction(team, 'view');
+                                  setOpenDropdownId(null);
+                                }}
                               >
                                 View Details
                               </DropdownMenuItem>
                               {hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) && (
                                 <DropdownMenuItem
-                                  onClick={() => handleAction(team, 'edit')}
+                                  onClick={() => {
+                                    handleAction(team, 'edit');
+                                    setOpenDropdownId(null);
+                                  }}
                                 >
                                   Edit Team
                                 </DropdownMenuItem>
                               )}
                               {hasPermission(ALL_PERMISSIONS.TEAMS.UPDATE) && (
                                 <DropdownMenuItem
-                                  onClick={() => handleManageMembers(team)}
+                                  onClick={() => {
+                                    handleManageMembers(team);
+                                    setOpenDropdownId(null);
+                                  }}
                                 >
                                   <Users className="mr-2 h-4 w-4" />
                                   Manage Members
@@ -299,7 +317,10 @@ function TeamsTable() {
                               <DropdownMenuSeparator />
                               {hasPermission(ALL_PERMISSIONS.TEAMS.DELETE) && (
                                 <DropdownMenuItem
-                                  onClick={() => handleAction(team, 'delete')}
+                                  onClick={() => {
+                                    handleAction(team, 'delete');
+                                    setOpenDropdownId(null);
+                                  }}
                                   className="text-destructive"
                                 >
                                   Delete Team

@@ -169,7 +169,8 @@ export default function RequestDetailsPage() {
             });
         }
 
-        const emailResult = await sendRequestApprovedEmail({
+        // Send email notification asynchronously (don't block on failure)
+        sendRequestApprovedEmail({
             recipientEmail: request.requesterEmail,
             requesterName: request.requesterName,
             taskTitle: request.taskTitle,
@@ -178,6 +179,13 @@ export default function RequestDetailsPage() {
             certificateId: issuedCertificate ? certificateId ?? undefined : undefined,
             certificateShortId: issuedCertificate && certShortId ? certShortId : undefined,
             certificateRequired: issuedCertificate,
+        }).catch((emailError) => {
+            console.error('Email notification failed:', emailError);
+            toast({ 
+                title: 'Email Failed', 
+                description: emailError instanceof Error ? emailError.message : 'Failed to send notification email', 
+                variant: 'destructive' 
+            });
         });
 
         toast({
@@ -187,14 +195,21 @@ export default function RequestDetailsPage() {
                 : `"${request.taskTitle}" has been approved without issuing a completion certificate.`,
         });
 
-        if (!emailResult.success) {
-            toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
-        }
-
-        router.push('/dashboard');
+        // Refresh the page data instead of redirecting
+        router.refresh();
+        // Small delay to ensure state updates
+        setTimeout(() => {
+            window.location.reload();
+        }, 500);
     } catch (e) {
         const error = e as Error;
         console.error("Error approving request: ", error);
+        console.error("Error stack: ", error.stack);
+        console.error("Error details: ", {
+            message: error.message,
+            name: error.name,
+            cause: (error as any).cause,
+        });
         toast({ 
             title: 'Approval Failed', 
             variant: 'destructive', 

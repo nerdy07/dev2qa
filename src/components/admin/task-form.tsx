@@ -37,11 +37,12 @@ interface TaskFormProps {
   milestoneId: string;
   milestoneName: string; // Pass milestone and project names for the email
   projectName: string;
+  milestoneIsActive?: boolean; // Whether the milestone is an active sprint
   onSave: (updatedTask: Task, milestoneId: string) => Promise<boolean>;
   onCancel: () => void;
 }
 
-export function TaskForm({ task, milestoneId, milestoneName, projectName, onSave, onCancel }: TaskFormProps) {
+export function TaskForm({ task, milestoneId, milestoneName, projectName, milestoneIsActive = false, onSave, onCancel }: TaskFormProps) {
   const { data: users, loading: usersLoading } = useCollection<User>('users');
   const { toast } = useToast();
 
@@ -65,10 +66,13 @@ export function TaskForm({ task, milestoneId, milestoneName, projectName, onSave
     };
     
     const wasJustAssigned = !task.assigneeId && selectedUser;
+    const wasReassigned = task.assigneeId && task.assigneeId !== selectedUser?.id && selectedUser;
+    // Send email if: task was just assigned OR task was reassigned in an active sprint
+    const shouldSendEmail = selectedUser && (wasJustAssigned || (wasReassigned && milestoneIsActive));
 
     const success = await onSave(updatedTask, milestoneId);
 
-    if (success && wasJustAssigned && selectedUser) {
+    if (success && shouldSendEmail && selectedUser) {
         const emailResult = await notifyOnTaskAssignment({
             recipientEmail: selectedUser.email,
             assigneeName: selectedUser.name,
@@ -80,7 +84,7 @@ export function TaskForm({ task, milestoneId, milestoneName, projectName, onSave
         if (emailResult.success) {
             toast({
                 title: "User Notified",
-                description: `${selectedUser.name} has been notified of their assignment.`
+                description: `${selectedUser.name} has been notified of their assignment${milestoneIsActive ? ' in the active sprint' : ''}.`
             })
         } else {
             toast({

@@ -299,6 +299,105 @@ export const getNewRequestNotificationTemplate = (taskTitle: string, requesterNa
   );
 };
 
+// Project Risk Alert Template
+export const getProjectRiskAlertTemplate = (data: {
+  projectName: string;
+  riskUser: string;
+  riskType: 'requester' | 'developer';
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  riskDescription: string;
+  impactDescription: string;
+  teamMembers: string[];
+}) => {
+  const riskColors = {
+    low: '#f59e0b',
+    medium: '#f97316',
+    high: '#ef4444',
+    critical: '#dc2626'
+  };
+
+  const riskLabels = {
+    low: 'Low Risk',
+    medium: 'Medium Risk',
+    high: 'High Risk',
+    critical: 'Critical Risk'
+  };
+
+  const content = `
+    <h2>⚠️ Project Risk Alert</h2>
+    <p>A potential risk has been identified in the project that may affect team performance.</p>
+    
+    <div class="info-card" style="border-left-color: ${riskColors[data.riskLevel]};">
+      <h3 style="margin-top: 0; color: #2d3748;">Risk Details</h3>
+      <ul class="info-list">
+        <li><strong>Project:</strong> ${data.projectName}</li>
+        <li><strong>Risk Level:</strong> <span style="color: ${riskColors[data.riskLevel]}; font-weight: 600;">${riskLabels[data.riskLevel]}</span></li>
+        <li><strong>${data.riskType === 'requester' ? 'Requester' : 'Developer'}:</strong> ${data.riskUser}</li>
+        <li><strong>Risk Type:</strong> ${data.riskType === 'requester' ? 'Requester Risk' : 'Developer Risk'}</li>
+      </ul>
+    </div>
+
+    <div style="background: #fef2f2; border-left: 4px solid ${riskColors[data.riskLevel]}; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+      <h3 style="margin-top: 0; color: #991b1b;">Risk Description</h3>
+      <p style="margin: 0; color: #7f1d1d;">${data.riskDescription}</p>
+    </div>
+
+    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+      <h3 style="margin-top: 0; color: #92400e;">Potential Impact</h3>
+      <p style="margin: 0; color: #78350f;">${data.impactDescription}</p>
+    </div>
+
+    <p><strong>Team Members Notified:</strong> ${data.teamMembers.join(', ')}</p>
+    
+    <p>Please review the situation and take appropriate action to mitigate the risk. Team coordination and support may be needed.</p>
+  `;
+  
+  // Note: URL will be resolved when email is sent
+  return getEmailTemplate(
+    "Project Risk Alert",
+    content,
+    "View Project",
+    "https://dev2qa.echobitstech.com/dashboard/admin/projects"
+  );
+};
+
+// Sprint Activation Notification Template
+export const getSprintActivationTemplate = (data: {
+  projectName: string;
+  sprintName: string;
+  activatedBy: string;
+  startDate: string;
+  endDate: string;
+  taskCount: number;
+}) => {
+  const content = `
+    <h2>🚀 Sprint Activated</h2>
+    <p>A new sprint has been activated for your project.</p>
+    
+    <div class="info-card">
+      <h3 style="margin-top: 0; color: #2d3748;">Sprint Information</h3>
+      <ul class="info-list">
+        <li><strong>Project:</strong> ${data.projectName}</li>
+        <li><strong>Sprint:</strong> ${data.sprintName}</li>
+        <li><strong>Activated By:</strong> ${data.activatedBy}</li>
+        <li><strong>Start Date:</strong> ${data.startDate}</li>
+        <li><strong>End Date:</strong> ${data.endDate}</li>
+        <li><strong>Tasks:</strong> ${data.taskCount} task(s)</li>
+      </ul>
+    </div>
+    
+    <p>The sprint is now active. All team members assigned to tasks in this sprint will be notified.</p>
+  `;
+  
+  // Note: URL will be resolved when email is sent
+  return getEmailTemplate(
+    "Sprint Activated",
+    content,
+    "View Sprint",
+    "https://dev2qa.echobitstech.com/dashboard/admin/projects"
+  );
+};
+
 // Leave Request Approved Template
 export const getLeaveApprovalTemplate = (userName: string, startDate: string, endDate: string, approverName: string) => {
   const content = `
