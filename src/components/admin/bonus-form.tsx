@@ -90,44 +90,71 @@ export function BonusForm({ onSuccess }: BonusFormProps) {
         issuedByName: currentUser.name,
       };
 
+      // Save bonus to Firestore first
       await addDoc(collection(db, 'bonuses'), bonusData);
       
-      // Create in-app notification
-      const { createInAppNotification } = await import('@/lib/notifications');
-      await createInAppNotification({
-        userId: selectedUser.id,
-        type: 'general',
-        title: 'Bonus Issued',
-        message: `You have been issued a bonus: ${values.bonusType}${values.description ? ` - ${values.description}` : ''}`,
-        read: false,
-      });
+      // Create in-app notification (non-blocking)
+      try {
+        const { createInAppNotification } = await import('@/lib/notifications');
+        await createInAppNotification({
+          userId: selectedUser.id,
+          type: 'general',
+          title: 'Bonus Issued',
+          message: `You have been issued a bonus: ${values.bonusType}${values.description ? ` - ${values.description}` : ''}`,
+          read: false,
+        });
+      } catch (notifError) {
+        console.warn('Failed to create in-app notification:', notifError);
+        // Don't fail the whole operation if notification fails
+      }
       
-      const emailResult = await sendBonusNotification({
-        recipientEmail: selectedUser.email,
-        userName: selectedUser.name,
-        bonusType: values.bonusType,
-        description: values.description
-      });
+      // Send email notification (non-blocking) - call server action
+      let emailResult = { success: true };
+      try {
+        emailResult = await sendBonusNotification({
+          recipientEmail: selectedUser.email,
+          userName: selectedUser.name,
+          bonusType: values.bonusType,
+          description: values.description
+        });
+      } catch (emailError) {
+        console.warn('Failed to send bonus notification email:', emailError);
+        emailResult = { success: false, error: emailError instanceof Error ? emailError.message : 'Email failed' };
+      }
 
       toast({
         title: 'Bonus Issued',
         description: `A bonus has been recorded for ${selectedUser.name}.`,
       });
       if (!emailResult.success) {
-        toast({ title: 'Email Failed', description: emailResult.error, variant: 'destructive' });
+        toast({ 
+          title: 'Email Failed', 
+          description: emailResult.error || 'Email notification could not be sent.', 
+          variant: 'destructive' 
+        });
       }
 
       onSuccess();
     } catch (err) {
       const error = err as Error;
       console.error('Error issuing bonus:', error);
-      toast({ title: 'Operation Failed', description: error.message, variant: 'destructive' });
+      toast({ 
+        title: 'Operation Failed', 
+        description: error.message || 'An unexpected error occurred. Please try again.', 
+        variant: 'destructive' 
+      });
     }
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form 
+        onSubmit={(e) => {
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }} 
+        className="space-y-4"
+      >
         <FormField
           control={form.control}
           name="userId"
