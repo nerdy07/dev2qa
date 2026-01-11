@@ -32,7 +32,6 @@ import { db } from '@/lib/firebase';
 import { CertificateRequest, Comment, User } from '@/lib/types';
 import { getStatusVariant, getStatusLabel, createStatusHistoryEntry, addStatusHistory } from '@/lib/request-workflow';
 import { parseMentions, getMentionedUserIds, getMentionedUserEmails } from '@/lib/comment-mentions';
-import { logRequestAction, logCommentAction, logStatusChange } from '@/lib/audit-log';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCollection, useDocument } from '@/hooks/use-collection';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
