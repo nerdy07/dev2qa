@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: npm install --force
 
-      - name: Build Mentors app (staging)
+      - name: Build Dev2QA app (staging)
         run: npm run build
 
       - name: Install SSHpass
@@ -34,10 +34,11 @@ jobs:
         env:
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          pwd
-          ls -la
-          ls -la .next/
           sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no root@88.223.92.10 << 'EOF'
-            rm -rf /var/www/dev2QA.echobitsone.com/*
+            cd /var/www/dev2QA.echobitsone.com || exit 1
+            rm -rf .next node_modules package-lock.json
           EOF
-          sshpass -p "$SERVER_PASSWORD" rsync -avz --delete out/ root@88.223.92.10:/var/www/dev2QA.echobitsone.com/
+      
+          sshpass -p "$SERVER_PASSWORD" rsync -avz \
+            .next package.json package-lock.json \
+            root@88.223.92.10:/var/www/dev2QA.echobitsone.com/
