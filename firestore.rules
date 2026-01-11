@@ -65,6 +65,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /emailGroups/{groupId} {
+      allow get: if request.auth != null;
+      allow list: if request.auth != null;
+      allow create, update, delete: if isAdmin();
+    }
+
     match /projects/{projectId} {
       // Allow authenticated users to read projects (needed to see assigned tasks)
       allow get: if request.auth != null;

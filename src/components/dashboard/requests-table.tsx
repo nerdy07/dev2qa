@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal } from 'lucide-react';
 import { useAuth } from '@/providers/auth-provider';
 import { Skeleton } from '../ui/skeleton';
+import { getStatusVariant, getStatusLabel } from '@/lib/request-workflow';
 
 interface CertificateRequestsTableProps {
   requests: CertificateRequest[];
@@ -33,16 +34,7 @@ export const CertificateRequestsTable = React.memo(function CertificateRequestsT
   const { hasRole } = useAuth();
 
   const statusVariant = (status: CertificateRequest['status']) => {
-    switch (status) {
-      case 'approved':
-        return 'default';
-      case 'pending':
-        return 'secondary';
-      case 'rejected':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
+    return getStatusVariant(status);
   };
 
   const renderLoading = () => (
@@ -103,7 +95,7 @@ export const CertificateRequestsTable = React.memo(function CertificateRequestsT
             </TableCell>
             <TableCell>
               <Badge variant={statusVariant(request.status)} className="capitalize">
-                {request.status}
+                {getStatusLabel(request.status)}
               </Badge>
             </TableCell>
             <TableCell className="text-right">

@@ -92,6 +92,32 @@ export type Project = {
   resources?: ProjectResource[];
 };
 
+// Request Status Types (Feature 2: Enhanced Workflow States)
+export type RequestStatus = 'pending' | 'assigned' | 'in_review' | 'needs_revision' | 'approved' | 'rejected';
+
+export type StatusHistoryEntry = {
+  status: RequestStatus;
+  changedAt: any; // Firestore Timestamp
+  changedById: string;
+  changedByName: string;
+  reason?: string;
+  previousStatus?: RequestStatus;
+};
+
+// Request Revision Types (Feature 4: Resubmission/Revision Workflow)
+export type RequestRevision = {
+  revisionNumber: number;
+  revisionData: {
+    taskTitle: string;
+    description: string;
+    taskLink?: string;
+  };
+  revisedAt: any; // Firestore Timestamp
+  revisedById: string;
+  revisedByName: string;
+  reason?: string;
+};
+
 export type CertificateRequest = {
   id: string;
   taskTitle: string;
@@ -102,12 +128,14 @@ export type CertificateRequest = {
   requesterId: string;
   requesterName: string;
   requesterEmail: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: RequestStatus; // Enhanced workflow states
   createdAt: any; // Firestore Timestamp
   updatedAt: any; // Firestore Timestamp
   qaTesterId?: string;
   qaTesterName?: string;
+  assignedAt?: any; // Firestore Timestamp - when assigned to QA tester
   rejectionReason?: string;
+  revisionReason?: string; // Reason for requesting revision (needs_revision status)
   certificateId?: string;
   certificateStatus?: 'valid' | 'revoked' | 'not_required';
   certificateRequired?: boolean;
@@ -116,6 +144,9 @@ export type CertificateRequest = {
   qaProcessFeedback?: string; // From Requester to QA
   firstReminderSentAt?: any; // Firestore Timestamp
   reminderCount?: number;
+  statusHistory?: StatusHistoryEntry[]; // Track status changes
+  revisions?: RequestRevision[]; // Track revisions/resubmissions
+  revisionCount?: number; // Count of revisions
 };
 
 export type DesignRequest = {
@@ -150,6 +181,15 @@ export type Certificate = {
     revocationDate?: any; // Firestore Timestamp
 };
 
+// Comment Types (Feature 5: Enhanced Commenting with @Mentions)
+export type CommentMention = {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  startIndex: number;
+  endIndex: number;
+};
+
 export type Comment = {
   id: string;
   requestId: string;
@@ -158,6 +198,11 @@ export type Comment = {
   userRole: User['role'];
   text: string;
   createdAt: any; // Firestore Timestamp
+  imageUrl?: string;
+  mentions?: CommentMention[]; // @mention tracking
+  editedAt?: any; // Firestore Timestamp
+  editedById?: string;
+  editedByName?: string;
 };
 
 export type Infraction = {
@@ -200,6 +245,18 @@ export type BonusType = {
   currency: 'NGN' | 'PERCENTAGE';
   createdAt?: any;
   updatedAt?: any;
+};
+
+export type EmailGroup = {
+  id: string;
+  name: string;
+  description?: string;
+  memberIds: string[]; // Array of user IDs
+  notificationEvents?: string[]; // Array of notification event types to CC this group on
+  createdAt?: any;
+  updatedAt?: any;
+  createdById?: string;
+  createdByName?: string;
 };
 
 export type LeaveRequest = {
@@ -305,6 +362,42 @@ export type Achievement = {
   icon?: string;
   earnedAt: any; // Firestore Timestamp
   badgeUrl?: string;
+};
+
+// Audit Log Types (Feature 6: Audit Log & Activity History)
+export type AuditLogAction = 
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'status_change'
+  | 'assign'
+  | 'approve'
+  | 'reject'
+  | 'revise'
+  | 'comment'
+  | 'mention'
+  | 'export'
+  | 'login'
+  | 'logout';
+
+export type AuditLog = {
+  id: string;
+  action: AuditLogAction;
+  entityType: string; // 'request', 'user', 'project', 'comment', etc.
+  entityId: string;
+  entityName?: string; // Denormalized name for easier display
+  userId: string;
+  userName: string;
+  userEmail: string;
+  changes?: {
+    field: string;
+    oldValue?: any;
+    newValue?: any;
+  }[];
+  metadata?: Record<string, any>; // Additional context
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: any; // Firestore Timestamp
 };
 
 export type CompanyFile = {

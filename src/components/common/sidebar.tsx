@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   User,
+  Mail,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -100,6 +101,7 @@ const navConfig: NavItemOrSeparator[] = [
             { href: '/dashboard/admin/infraction-types', icon: ShieldX, label: 'Infraction Types', permission: ALL_PERMISSIONS.INFRACTIONS.MANAGE, parent: '/dashboard/admin/infractions' },
             { href: '/dashboard/admin/bonuses', icon: Sparkles, label: 'Bonuses', permission: ALL_PERMISSIONS.BONUSES.MANAGE, isParent: true },
             { href: '/dashboard/admin/bonus-types', icon: Sparkles, label: 'Bonus Types', permission: ALL_PERMISSIONS.BONUSES.MANAGE, parent: '/dashboard/admin/bonuses' },
+            { href: '/dashboard/admin/email-groups', icon: Mail, label: 'Email Groups', permission: ALL_PERMISSIONS.ADMIN_SECTION.READ },
             { href: '/dashboard/admin/settings', icon: Building2, label: 'Company Settings', permission: ALL_PERMISSIONS.INVOICES.MANAGE },
         ]
     },

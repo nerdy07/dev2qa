@@ -3,6 +3,10 @@
 import { sendEmail } from '@/lib/email';
 import { wrapEmailContent, emailButton } from '@/lib/email-template';
 import { format } from 'date-fns';
+import { getFirestore } from '@/lib/firebase-admin-simple';
+import type { EmailGroup, User } from '@/lib/types';
+import type { NotificationEventType } from '@/lib/notification-events';
+import { logRequestAction, logCommentAction, logStatusChange } from '@/lib/audit-log';
 import {
   getWelcomeEmailTemplate,
   getRequestApprovedTemplate,
@@ -16,6 +20,66 @@ import {
   getNewCommentTemplate,
   getTestEmailTemplate
 } from '@/lib/email-templates';
+
+/**
+ * Helper function to get CC emails for a notification event from email groups
+ * @param eventType - The notification event type
+ * @param excludeEmails - Optional array of emails to exclude from CC (e.g., recipients in TO field)
+ * @returns Array of email addresses to CC
+ */
+async function getCCEmailsForEvent(
+  eventType: NotificationEventType,
+  excludeEmails: string[] = []
+): Promise<string[]> {
+  try {
+    const db = getFirestore();
+    
+    // Fetch email groups and users in parallel
+    const [emailGroupsSnap, usersSnap] = await Promise.all([
+      db.collection('emailGroups').get(),
+      db.collection('users').get(),
+    ]);
+    
+    const emailGroups = emailGroupsSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as EmailGroup[];
+    
+    const users = usersSnap.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as User[];
+    
+    // Normalize exclude emails to lowercase for comparison
+    const excludeSet = new Set(excludeEmails.map(email => email.toLowerCase().trim()));
+    
+    // Get emails from groups that have this event configured
+    const emailSet = new Set<string>();
+    const relevantGroups = emailGroups.filter(
+      group => group.notificationEvents && group.notificationEvents.includes(eventType)
+    );
+    
+    relevantGroups.forEach(group => {
+      if (group.memberIds) {
+        group.memberIds.forEach(memberId => {
+          const user = users.find(u => u.id === memberId && u.email);
+          if (user?.email) {
+            const emailLower = user.email.toLowerCase().trim();
+            // Only add if not in exclude list (not already a recipient)
+            if (!excludeSet.has(emailLower)) {
+              emailSet.add(user.email);
+            }
+          }
+        });
+      }
+    });
+    
+    return Array.from(emailSet);
+  } catch (error) {
+    console.warn('Error fetching CC emails for notification event:', error);
+    return []; // Return empty array on error to not block notification
+  }
+}
 
 export async function sendRequestApprovedEmail(data: { recipientEmail: string; requesterName: string; taskTitle: string; requestId: string; requestShortId?: string; certificateId?: string; certificateShortId?: string; certificateRequired?: boolean }) {
   try {
@@ -176,12 +240,27 @@ export async function notifyOnNewRequest(data: {
   associatedProject: string;
   associatedTeam: string;
   certificateRequired?: boolean;
+  ccEmails?: string[]; // Optional CC emails (manual override)
 }) {
   try {
+    // Normalize recipient emails for exclusion
+    const recipientEmails = data.qaEmails.map(email => email.toLowerCase().trim());
+    
+    // Get CC emails from email groups configured for this event
+    // Exclude recipients to avoid duplicates
+    const ccEmailsFromGroups = await getCCEmailsForEvent('new-request', recipientEmails);
+    
+    // Combine with any manually provided CC emails, excluding recipients
+    const manualCC = (data.ccEmails || []).filter(
+      email => !recipientEmails.includes(email.toLowerCase().trim())
+    );
+    const allCCEmails = [...new Set([...manualCC, ...ccEmailsFromGroups])];
+    
     await sendEmail({
       to: data.qaEmails.join(','),
       subject: `🔔 New Certificate Request: "${data.taskTitle}" - Dev2QA`,
-      html: getNewRequestNotificationTemplate(data.taskTitle, data.requesterName, data.associatedProject, data.associatedTeam)
+      html: getNewRequestNotificationTemplate(data.taskTitle, data.requesterName, data.associatedProject, data.associatedTeam),
+      cc: allCCEmails.length > 0 ? allCCEmails.join(',') : undefined
     });
     return { success: true };
   } catch (emailError) {
