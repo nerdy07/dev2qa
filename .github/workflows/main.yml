@@ -1,0 +1,43 @@
+name: Deploy dev2QA (Staging)
+
+on:
+  push:
+    branches:
+      - staging
+  pull_request:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --force
+
+      - name: Build Mentors app (staging)
+        run: npm run build
+
+      - name: Install SSHpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Deploy to Server
+        env:
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          pwd
+          ls -la
+          ls -la .next/
+          sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no root@88.223.92.10 << 'EOF'
+            rm -rf /var/www/dev2QA.echobitsone.com/*
+          EOF
+          sshpass -p "$SERVER_PASSWORD" rsync -avz --delete out/ root@88.223.92.10:/var/www/dev2QA.echobitsone.com/
