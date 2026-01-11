@@ -61,16 +61,7 @@ const getCreatedAt = (request: CertificateRequest): Date => {
 };
 
 const statusVariant = (status: CertificateRequest['status']) => {
-  switch (status) {
-    case 'approved':
-      return 'default';
-    case 'pending':
-      return 'secondary';
-    case 'rejected':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
+  return getStatusVariant(status);
 };
 
 function HeroCard({ summary }: { summary: HeroSummary }) {
@@ -180,14 +171,14 @@ function MetricsGrid({
 
 function RecentActivityList({ items }: { items: CertificateRequest[] }) {
   if (items.length === 0) {
-    return (
+        return (
       <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 p-6 text-center text-sm text-muted-foreground">
         Activity will appear here as soon as work starts flowing through the system.
       </div>
     );
-  }
+    }
 
-  return (
+    return (
     <div className="space-y-3">
       {items.map((request) => (
         <Link
@@ -201,7 +192,7 @@ function RecentActivityList({ items }: { items: CertificateRequest[] }) {
             <Badge variant={statusVariant(request.status)} className="capitalize">
               {request.status}
             </Badge>
-          </div>
+        </div>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <FolderKanban className="h-3 w-3" />
@@ -215,10 +206,10 @@ function RecentActivityList({ items }: { items: CertificateRequest[] }) {
               <Users className="h-3 w-3" />
               {request.requesterName}
             </span>
-          </div>
+        </div>
         </Link>
       ))}
-    </div>
+        </div>
   );
 }
 
@@ -432,9 +423,9 @@ export default function DashboardPage() {
           description: `${recentInvoice.clientName} • ${formatDistanceToNow(createdDate, { addSuffix: true })}`,
           meta: recentInvoice.status,
           href: `/dashboard/admin/invoices/${recentInvoice.id}`,
-        });
-      }
-    }
+                });
+            }
+          }
 
     // Add request actions based on role
     if (isQA) {
@@ -584,21 +575,21 @@ export default function DashboardPage() {
   // Note: AuthProvider handles the case when user is null, so we don't need to check here
   
   if (requestsError) {
-    return (
-      <Alert variant="destructive">
-        <TriangleAlert className="h-4 w-4" />
+        return (
+            <Alert variant="destructive">
+                <TriangleAlert className="h-4 w-4" />
         <AlertTitle>Dashboard unavailable</AlertTitle>
-        <AlertDescription>
+                <AlertDescription>
           We couldn't load your dashboard data. Please refresh or contact support if the problem persists.
-        </AlertDescription>
-      </Alert>
+                </AlertDescription>
+            </Alert>
     );
-  }
+    }
 
   // Show loading state with actual layout structure using skeletons
   const isLoading = loading || !requests || !user;
 
-  return (
+     return (
     <div className="space-y-8">
       {isLoading ? (
         <div className="space-y-8 opacity-100 transition-opacity duration-300">
@@ -628,23 +619,23 @@ export default function DashboardPage() {
               <Skeleton className="h-6 w-24" />
               <Skeleton className="h-10 w-32" />
               <Skeleton className="h-5 w-full max-w-md" />
-            </CardHeader>
+                    </CardHeader>
             <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-2">
                 <Skeleton className="h-7 w-48" />
                 <Skeleton className="h-4 w-64" />
               </div>
               <Skeleton className="h-10 w-full sm:w-40" />
-            </CardContent>
-          </Card>
+                    </CardContent>
+                </Card>
 
           {/* Next Actions Skeleton */}
-          <Card>
-            <CardHeader>
+                <Card>
+                    <CardHeader>
               <Skeleton className="h-6 w-32 mb-2" />
               <Skeleton className="h-4 w-64" />
-            </CardHeader>
-            <CardContent>
+                    </CardHeader>
+                    <CardContent>
               <div className="space-y-3">
                 {[...Array(3)].map((_, i) => (
                   <div key={i} className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-4 py-3">
@@ -658,9 +649,9 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
+                        </div>
+                    </CardContent>
+                </Card>
         </div>
       ) : (
         <div className="space-y-8 animate-[fadeIn_0.5s_ease-in-out_forwards]">

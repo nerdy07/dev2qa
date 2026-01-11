@@ -11,9 +11,10 @@ interface MailOptions {
     to: string;
     subject: string;
     html: string;
+    cc?: string; // Optional CC field - comma-separated emails
 }
 
-export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ success: boolean; error?: string }> {
+export async function sendEmail({ to, subject, html, cc }: MailOptions): Promise<{ success: boolean; error?: string }> {
     if (!isBrevoConfigured) {
         const errorMessage = 'Email service is not configured. Please provide BREVO_API_KEY and BREVO_SENDER_EMAIL in your .env file.';
         if (process.env.NODE_ENV === 'development') {
@@ -24,8 +25,9 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
 
     // Brevo API expects an array of objects for recipients
     const emailRecipients = to.split(',').map(email => ({ email: email.trim() }));
-
-    const payload = {
+    
+    // Add CC if provided
+    const payload: any = {
         sender: {
             name: brevoSenderName,
             email: brevoSenderEmail,
@@ -34,6 +36,11 @@ export async function sendEmail({ to, subject, html }: MailOptions): Promise<{ s
         subject: subject,
         htmlContent: html,
     };
+    
+    if (cc && cc.trim()) {
+        const ccRecipients = cc.split(',').map(email => ({ email: email.trim() }));
+        payload.cc = ccRecipients;
+    }
 
     try {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
