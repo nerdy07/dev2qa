@@ -28,7 +28,7 @@ export async function createUser(userData: any): Promise<CreateUserResult> {
     // BACKWARD COMPATIBILITY: If permissions not provided, derive from roles
     let userPermissions: string[] = [];
     let userRoles: string[] = [];
-    
+
     if (permissions && Array.isArray(permissions) && permissions.length > 0) {
       // Use permissions directly
       userPermissions = permissions.filter(p => p && typeof p === 'string' && p.trim()).map(p => p.trim());
@@ -58,23 +58,23 @@ export async function createUser(userData: any): Promise<CreateUserResult> {
     // 2. Create user document in Firestore
     const userDocRef = db.collection('users').doc(userRecord.uid);
     const { Timestamp } = await import('firebase-admin/firestore');
-    
+
     // Calculate if user has admin/project manager permissions based on permissions array
     const isAdmin = userPermissions.some(perm => ADMIN_PERMISSION_IDENTIFIERS.includes(perm as any));
-    const isProjectManager = userPermissions.some(perm => 
+    const isProjectManager = userPermissions.some(perm =>
       perm === 'projects:create' || perm === 'projects:delete' || perm === 'projects:update'
     );
-    
+
     const newUserFirestoreData: any = {
-        name,
-        email,
-        permissions: userPermissions, // Direct permissions array (primary)
-        isAdmin: isAdmin, // Computed field: true if user has admin permissions
-        isProjectManager: isProjectManager, // Computed field: true if user has project manager permissions
-        baseSalary: baseSalary || 0,
-        annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
-        expertise: userPermissions.includes('requests:approve') ? expertise : '',
-        disabled: false,
+      name,
+      email,
+      permissions: userPermissions, // Direct permissions array (primary)
+      isAdmin: isAdmin, // Computed field: true if user has admin permissions
+      isProjectManager: isProjectManager, // Computed field: true if user has project manager permissions
+      baseSalary: baseSalary || 0,
+      annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
+      expertise: userPermissions.includes('requests:approve') ? expertise : '',
+      disabled: false,
     };
     // Add startDate if provided
     if (startDate) {
@@ -85,10 +85,10 @@ export async function createUser(userData: any): Promise<CreateUserResult> {
     // 3. Send welcome email (don't block for this)
     sendWelcomeEmail({ name, email, password }).then(result => {
       if (!result.success) {
-          console.error(`Welcome email failed for ${email}: ${result.error}`);
+        console.error(`Welcome email failed for ${email}: ${result.error}`);
       }
     });
-    
+
     // 4. Revalidate the users page to show the new user
     revalidatePath('/dashboard/admin/users');
 
@@ -96,25 +96,94 @@ export async function createUser(userData: any): Promise<CreateUserResult> {
 
   } catch (error: any) {
     console.error('Error creating user via server action:', error);
-    
+
     let errorMessage = error.message || 'An unexpected error occurred during user creation.';
-    
+
     // Customize messages for common Firebase Auth errors
     if (error.code) {
-        switch (error.code) {
-            case 'auth/email-already-exists':
-                errorMessage = 'The email address is already in use by another account.';
-                break;
-            case 'auth/invalid-password':
-                errorMessage = 'The password must be a string with at least 6 characters.';
-                break;
-            case 'auth/invalid-email':
-                errorMessage = 'The email address provided is not a valid email address.';
-                break;
-        }
+      switch (error.code) {
+        case 'auth/email-already-exists':
+          errorMessage = 'The email address is already in use by another account.';
+          break;
+        case 'auth/invalid-password':
+          errorMessage = 'The password must be a string with at least 6 characters.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'The email address provided is not a valid email address.';
+          break;
+      }
     }
 
     return { success: false, error: errorMessage };
+  }
+}
+
+export async function updateUser(userId: string, userData: any): Promise<{ success: boolean; error?: string }> {
+  try {
+    const app = await initializeAdminApp();
+    const adminAuth = getAuth(app);
+    const db = getFirestore(app);
+
+    const { name, email, permissions, baseSalary, annualLeaveEntitlement, startDate, expertise } = userData;
+
+    if (!userId || !name || !email) {
+      return { success: false, error: 'Missing required fields' };
+    }
+
+    // 1. Update user in Firebase Auth
+    // Note: Some fields like email might require re-verification mechanisms in a real app
+    await adminAuth.updateUser(userId, {
+      email,
+      displayName: name,
+    });
+
+    // 2. Update user document in Firestore
+    const userDocRef = db.collection('users').doc(userId);
+    const { Timestamp } = await import('firebase-admin/firestore');
+
+    // Start with existing roles/permissions if valid, or empty array
+    let userPermissions: string[] = [];
+
+    if (permissions && Array.isArray(permissions)) {
+      userPermissions = permissions.filter(p => p && typeof p === 'string' && p.trim()).map(p => p.trim());
+    }
+
+    // Calculate computed fields
+    const isAdmin = userPermissions.some(perm => ADMIN_PERMISSION_IDENTIFIERS.includes(perm as any));
+    const isProjectManager = userPermissions.some(perm =>
+      perm === 'projects:create' || perm === 'projects:delete' || perm === 'projects:update'
+    );
+
+    const updateData: any = {
+      name,
+      email,
+      permissions: userPermissions,
+      isAdmin,
+      isProjectManager,
+      baseSalary: baseSalary || 0,
+      annualLeaveEntitlement: annualLeaveEntitlement ?? 20,
+      expertise: userPermissions.includes('requests:approve') ? expertise : '',
+    };
+
+    // Add startDate if provided
+    if (startDate) {
+      // Check if startDate is an ISO string (from JSON)
+      if (typeof startDate === 'string') {
+        updateData.startDate = Timestamp.fromDate(new Date(startDate));
+      } else if (startDate instanceof Date) {
+        updateData.startDate = Timestamp.fromDate(startDate);
+      }
+    }
+
+    await userDocRef.update(updateData);
+
+    // 3. Revalidate the users page
+    revalidatePath('/dashboard/admin/users');
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating user via server action:', error);
+    return { success: false, error: error.message || 'Failed to update user' };
   }
 }
 
@@ -135,21 +204,21 @@ export async function sendCustomPasswordResetEmail(email: string): Promise<Passw
       throw error;
     }
 
-        // Generate password reset link using Firebase Admin SDK
-        // The URL should point to where users should be redirected after resetting password
-        const { getAbsoluteUrl } = await import('@/lib/email-template');
-        const appUrl = getAbsoluteUrl('/');
-        
-        const actionCodeSettings = {
-          url: appUrl,
-          handleCodeInApp: false,
-        };
+    // Generate password reset link using Firebase Admin SDK
+    // The URL should point to where users should be redirected after resetting password
+    const { getAbsoluteUrl } = await import('@/lib/email-template');
+    const appUrl = getAbsoluteUrl('/');
 
-        const resetLink = await adminAuth.generatePasswordResetLink(email, actionCodeSettings);
+    const actionCodeSettings = {
+      url: appUrl,
+      handleCodeInApp: false,
+    };
 
-        // Send custom branded email via Brevo
-        const { wrapEmailContent, emailButton } = await import('@/lib/email-template');
-    
+    const resetLink = await adminAuth.generatePasswordResetLink(email, actionCodeSettings);
+
+    // Send custom branded email via Brevo
+    const { wrapEmailContent, emailButton } = await import('@/lib/email-template');
+
     const content = `
       <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">Hello,</h1>
       <p style="font-size: 16px; margin-bottom: 20px;">
@@ -171,7 +240,7 @@ export async function sendCustomPasswordResetEmail(email: string): Promise<Passw
         ${resetLink}
       </p>
     `;
-    
+
     const emailResult = await sendEmail({
       to: email,
       subject: 'Reset Your Dev2QA Password',
