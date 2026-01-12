@@ -28,7 +28,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { User, Role } from '@/lib/types';
 import { createUser } from '@/app/actions/user-actions';
 import { useCollection } from '@/hooks/use-collection';
-import { auth } from '@/lib/firebase';
 import React from 'react';
 import { getPermissionsByCategory, getPermissionLabel } from '@/lib/permissions-helper';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -141,13 +140,9 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
 
       if (isEditing && user) {
         // Server action for updating a user
-        const idToken = await auth.currentUser?.getIdToken();
         const response = await fetch(`/api/users/${user.id}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(submissionValues),
         });
 
