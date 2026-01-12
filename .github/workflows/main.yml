@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Next.js (staging)
+      - name: Build Dev2QA app (staging)
         run: npm run build
 
       - name: Install SSHpass
@@ -32,21 +32,10 @@ jobs:
           SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
         run: |
           sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no root@88.223.92.10 << 'EOF'
-            cd /var/www/dev2QA.echobitsone.com
-            rm -rf .next
+            cd /var/www/dev2QA.echobitsone.com || exit 1
+            rm -rf .next node_modules package-lock.json
           EOF
-
+      
           sshpass -p "$SERVER_PASSWORD" rsync -avz \
-            .next \
-            package.json \
-            package-lock.json \
-            ecosystem.config.js \
+            .next package.json package-lock.json \
             root@88.223.92.10:/var/www/dev2QA.echobitsone.com/
-
-          sshpass -p "$SERVER_PASSWORD" ssh -o StrictHostKeyChecking=no root@88.223.92.10 << 'EOF'
-            cd /var/www/dev2QA.echobitsone.com
-            nvm use 20
-            npm install --omit=dev
-            pm2 reload ecosystem.config.js --update-env
-            pm2 save
-          EOF
