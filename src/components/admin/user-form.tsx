@@ -26,7 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import type { User, Role } from '@/lib/types';
-import { createUser } from '@/app/actions/user-actions';
+import { createUser, updateUser } from '@/app/actions/user-actions';
 import { useCollection } from '@/hooks/use-collection';
 import React from 'react';
 import { getPermissionsByCategory, getPermissionLabel } from '@/lib/permissions-helper';
@@ -140,15 +140,10 @@ export function UserForm({ user, onSuccess }: UserFormProps) {
 
       if (isEditing && user) {
         // Server action for updating a user
-        const response = await fetch(`/api/users/${user.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(submissionValues),
-        });
+        const result = await updateUser(user.id, submissionValues);
 
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.message || 'Failed to update user.');
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to update user.');
         }
 
         toast({

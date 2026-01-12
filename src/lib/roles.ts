@@ -69,7 +69,7 @@ export const ALL_PERMISSIONS = {
         UPDATE: 'expenses:update',
         DELETE: 'expenses:delete',
     },
-    
+
     // QA & Requester Section
     REQUESTS: {
         CREATE: 'requests:create',
@@ -124,6 +124,9 @@ export const ALL_PERMISSIONS = {
         READ: 'clients:read',
         UPDATE: 'clients:update',
         DELETE: 'clients:delete',
+    },
+    EMAIL_GROUPS: {
+        MANAGE: 'email_groups:manage',
     },
 } as const;
 
@@ -266,7 +269,7 @@ export function getPermissionsFromAdminGroups(selectedGroups: string[]): string[
  */
 export function hasAdminPermissions(rolePermissions: string[]): boolean {
     if (!rolePermissions || rolePermissions.length === 0) return false;
-    return ADMIN_PERMISSION_IDENTIFIERS.some(adminPerm => 
+    return ADMIN_PERMISSION_IDENTIFIERS.some(adminPerm =>
         rolePermissions.includes(adminPerm)
     );
 }
@@ -314,6 +317,7 @@ const ADMIN_PERMISSIONS = [
     ALL_PERMISSIONS.FILES.READ_ALL,
     ALL_PERMISSIONS.FILES.UPDATE,
     ALL_PERMISSIONS.FILES.DELETE,
+    ALL_PERMISSIONS.EMAIL_GROUPS.MANAGE,
 ];
 
 const QA_TESTER_PERMISSIONS = [
@@ -403,6 +407,7 @@ const HR_ADMIN_PERMISSIONS = [
     ALL_PERMISSIONS.FILES.READ_ALL,
     ALL_PERMISSIONS.FILES.UPDATE,
     ALL_PERMISSIONS.FILES.DELETE,
+    ALL_PERMISSIONS.EMAIL_GROUPS.MANAGE,
 ];
 
 const PROJECT_MANAGER_PERMISSIONS = [

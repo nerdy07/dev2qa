@@ -10,7 +10,7 @@ import { ALL_PERMISSIONS } from './roles';
  */
 export function getAllPermissions(): string[] {
   const permissions: string[] = [];
-  
+
   // Iterate through all permission groups
   Object.values(ALL_PERMISSIONS).forEach(group => {
     if (typeof group === 'object' && group !== null) {
@@ -22,7 +22,7 @@ export function getAllPermissions(): string[] {
       });
     }
   });
-  
+
   return permissions.sort();
 }
 
@@ -31,7 +31,7 @@ export function getAllPermissions(): string[] {
  */
 export function getPermissionsByCategory(): Record<string, { label: string; permissions: string[] }> {
   const categories: Record<string, { label: string; permissions: string[] }> = {};
-  
+
   // Map permission groups to human-readable labels
   const categoryLabels: Record<string, string> = {
     ADMIN_SECTION: 'Admin',
@@ -54,8 +54,9 @@ export function getPermissionsByCategory(): Record<string, { label: string; perm
     DESIGNS: 'Designs',
     REQUISITIONS: 'Requisitions',
     FILES: 'Files',
+    EMAIL_GROUPS: 'Email Groups',
   };
-  
+
   // Group permissions by category
   Object.entries(ALL_PERMISSIONS).forEach(([groupKey, group]) => {
     if (typeof group === 'object' && group !== null) {
@@ -65,7 +66,7 @@ export function getPermissionsByCategory(): Record<string, { label: string; perm
           permissions.push(permission);
         }
       });
-      
+
       if (permissions.length > 0) {
         categories[groupKey] = {
           label: categoryLabels[groupKey] || groupKey,
@@ -74,7 +75,7 @@ export function getPermissionsByCategory(): Record<string, { label: string; perm
       }
     }
   });
-  
+
   return categories;
 }
 
@@ -138,9 +139,10 @@ export function getPermissionLabel(permission: string): string {
     'files:read_staff': 'View Staff Files',
     'files:update': 'Update Files',
     'files:delete': 'Delete Files',
+    'email_groups:manage': 'Manage Email Groups',
     'profile:read': 'View Profile',
   };
-  
+
   return labels[permission] || permission;
 }
 
