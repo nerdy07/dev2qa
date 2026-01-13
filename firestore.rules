@@ -46,6 +46,11 @@ service cloud.firestore {
       return (userData.keys().hasAny(['permissions']) && 'email_groups:manage' in userData.permissions) || userData.isAdmin == true;
     }
 
+    function hasInvoiceManagePermission() {
+      let userData = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return (userData.keys().hasAny(['permissions']) && 'invoices:manage' in userData.permissions) || userData.isAdmin == true;
+    }
+
     match /users/{userId} {
       // Allow users to read their own profile or admins to read any profile
       allow get: if isOwner(userId) || isAdmin();
@@ -312,10 +317,11 @@ service cloud.firestore {
                      request.resource.data.createdByName != null;
       
       // Update: users with invoices:manage permission or invoice creator
-      // Allow update if user is admin, or if user is creator (permission checked in app)
+      // Allow update if user is admin, has invoices:manage permission, or is creator (permission checked in app)
       // Note: App-level permission checks ensure only users with invoices:manage can update
       allow update: if request.auth != null && request.auth.uid != null && (
         isAdminSafe() ||
+        hasInvoiceManagePermission() ||
         resource.data.createdById == request.auth.uid
       );
       

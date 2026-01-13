@@ -33,37 +33,81 @@ export async function initializeAdminApp() {
 
   if (!serviceAccountKey) {
     // Log available env vars for debugging (carefully)
-    console.error('Available keys:', Object.keys(process.env).filter(k => k.includes('FIREBASE') || k.includes('SERVICE')));
+    const availableKeys = Object.keys(process.env).filter(k => k.includes('FIREBASE') || k.includes('SERVICE'));
+    console.error('[FIREBASE ADMIN] Service account key not found. Available env vars:', availableKeys);
     throw new Error('Firebase service account key is not set in environment variables. Please set SERVICE_ACCOUNT_KEY or FIREBASE_SERVICE_ACCOUNT_KEY.');
   }
 
+  // Log that we found the key (but don't log the actual key for security)
+  const keyLength = serviceAccountKey.length;
+  const keyPreview = serviceAccountKey.substring(0, 50) + '...';
+  console.log(`[FIREBASE ADMIN] Found service account key (length: ${keyLength}, preview: ${keyPreview})`);
+
   try {
-    console.log('Parsing service account key...');
+    console.log('[FIREBASE ADMIN] Parsing service account key...');
     const serviceAccount = JSON.parse(serviceAccountKey);
-    console.log('Service account parsed successfully');
+    console.log('[FIREBASE ADMIN] Service account parsed successfully. Project ID:', serviceAccount.project_id);
+
+    // Validate required fields
+    if (!serviceAccount.private_key) {
+      throw new Error('Service account key is missing the private_key field');
+    }
+    if (!serviceAccount.client_email) {
+      throw new Error('Service account key is missing the client_email field');
+    }
+    if (!serviceAccount.project_id) {
+      throw new Error('Service account key is missing the project_id field');
+    }
 
     // Convert \n to actual newlines in the private key
+    // Handle both escaped newlines (\\n) and actual newlines
+    let privateKey = serviceAccount.private_key;
+    if (typeof privateKey === 'string') {
+      // If it contains escaped newlines, convert them
+      if (privateKey.includes('\\n') && !privateKey.includes('\n')) {
+        privateKey = privateKey.replace(/\\n/g, '\n');
+      }
+      // Ensure the private key starts and ends correctly
+      if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+        console.warn('[FIREBASE ADMIN] Warning: Private key format may be incorrect');
+      }
+    }
+
     const processedServiceAccount = {
       ...serviceAccount,
-      private_key: serviceAccount.private_key.replace(/\\n/g, '\n')
+      private_key: privateKey
     };
 
-    console.log('Initializing Firebase Admin app...');
+    console.log('[FIREBASE ADMIN] Initializing Firebase Admin app...');
     app = admin.initializeApp({
       credential: admin.credential.cert(processedServiceAccount),
     });
 
-    console.log('Firebase Admin app initialized successfully');
+    console.log('[FIREBASE ADMIN] Firebase Admin app initialized successfully');
     return app;
   } catch (error: any) {
-    console.error('Error initializing Firebase Admin SDK:', error);
-    console.error('Error details:', {
+    console.error('[FIREBASE ADMIN] Error initializing Firebase Admin SDK:', error);
+    
+    // Provide more specific error messages
+    if (error instanceof SyntaxError) {
+      console.error('[FIREBASE ADMIN] JSON Parse Error: The service account key is not valid JSON. Check for proper escaping and formatting.');
+      throw new Error('Service account key is not valid JSON. Please check the format and ensure it\'s properly escaped.');
+    }
+    
+    if (error.message?.includes('private_key')) {
+      console.error('[FIREBASE ADMIN] Private key error: Check that the private key is properly formatted with newlines.');
+      throw new Error('Service account private key format is invalid. Ensure newlines are properly escaped as \\n.');
+    }
+
+    console.error('[FIREBASE ADMIN] Error details:', {
       message: error.message,
       name: error.name,
       code: error.code,
-      stack: error.stack
+      // Don't log full stack in production
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
-    throw new Error('Failed to initialize Firebase Admin SDK. Double check your service account key JSON format.');
+    
+    throw new Error(`Failed to initialize Firebase Admin SDK: ${error.message || 'Unknown error'}`);
   }
 }
 

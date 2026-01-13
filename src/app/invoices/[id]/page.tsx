@@ -29,9 +29,15 @@ export default function PublicInvoicePage() {
         if (!response.ok) {
           if (response.status === 404) {
             setError(new Error('Invoice not found'));
+          } else if (response.status === 503) {
+            setError(new Error('Invoice service is temporarily unavailable. Please contact support or try again later.'));
           } else {
-            const errorData = await response.json();
-            setError(new Error(errorData.error || 'Failed to fetch invoice'));
+            try {
+              const errorData = await response.json();
+              setError(new Error(errorData.error || 'Failed to fetch invoice'));
+            } catch {
+              setError(new Error('Failed to fetch invoice. Please try again later.'));
+            }
           }
           setLoading(false);
           return;

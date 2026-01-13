@@ -11,7 +11,26 @@ export async function GET(
     const { id } = await params;
     
     // Use Admin SDK to bypass security rules for public access
-    const app = await initializeAdminApp();
+    let app;
+    try {
+      app = await initializeAdminApp();
+    } catch (initError: any) {
+      console.error('[INVOICE API] Failed to initialize Firebase Admin:', {
+        message: initError.message,
+        name: initError.name,
+        // Log if key exists but might be malformed
+        hasKey: !!(process.env.SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_KEY),
+        keyLength: (process.env.SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '').length,
+      });
+      // Return a user-friendly error without exposing internal config details
+      if (initError.message?.includes('service account key') || initError.message?.includes('not set')) {
+        return NextResponse.json(
+          { error: 'Invoice service is temporarily unavailable. Please contact support.' },
+          { status: 503 }
+        );
+      }
+      throw initError;
+    }
     const db = getFirestore(app);
 
     const invoiceDoc = await db.collection('invoices').doc(id).get();

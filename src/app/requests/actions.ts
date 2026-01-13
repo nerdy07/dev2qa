@@ -108,15 +108,21 @@ export async function sendRequestApprovedEmail(data: { recipientEmail: string; r
             ${emailButton(linkUrl, buttonText)}
         `;
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: data.recipientEmail,
       subject: requiresCertificate ? `Your Certificate Request has been Approved!` : `Your Task Has Been Approved by QA`,
       html: wrapEmailContent(content, requiresCertificate ? 'Certificate Request Approved' : 'QA Review Approved')
     });
+    
+    if (!emailResult.success) {
+      console.error(`[EMAIL] Request approval notification email failed to send to ${data.recipientEmail}:`, emailResult.error);
+      return { success: false, error: `Email notification failed: ${emailResult.error}` };
+    }
+    
     return { success: true };
   } catch (emailError) {
     const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);
-    console.error(`Request approval notification email failed to send to ${data.recipientEmail}.`, emailError);
+    console.error(`[EMAIL] Request approval notification email failed to send to ${data.recipientEmail}.`, emailError);
     console.error('Email error details:', {
       message: errorMessage,
       stack: emailError instanceof Error ? emailError.stack : undefined,
@@ -152,14 +158,20 @@ export async function sendRequestRejectedEmail(data: { recipientEmail: string; r
             ${emailButton(requestUrl, 'View Request Details & Reply')}
         `;
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: data.recipientEmail,
       subject: `Action Required: Your Certificate Request was Rejected`,
       html: wrapEmailContent(content, 'Certificate Request Rejected')
     });
+    
+    if (!emailResult.success) {
+      console.error(`[EMAIL] Request rejection notification email failed to send to ${data.recipientEmail}:`, emailResult.error);
+      return { success: false, error: `Database updated, but email notification failed: ${emailResult.error}` };
+    }
+    
     return { success: true };
   } catch (emailError) {
-    console.warn(`Request rejection notification email failed to send to ${data.recipientEmail}.`, emailError);
+    console.error(`[EMAIL] Request rejection notification email failed to send to ${data.recipientEmail}.`, emailError);
     return { success: false, error: "Database updated, but email notification failed." };
   }
 }
@@ -256,15 +268,21 @@ export async function notifyOnNewRequest(data: {
     );
     const allCCEmails = [...new Set([...manualCC, ...ccEmailsFromGroups])];
     
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: data.qaEmails.join(','),
       subject: `🔔 New Certificate Request: "${data.taskTitle}" - Dev2QA`,
       html: getNewRequestNotificationTemplate(data.taskTitle, data.requesterName, data.associatedProject, data.associatedTeam),
       cc: allCCEmails.length > 0 ? allCCEmails.join(',') : undefined
     });
+    
+    if (!emailResult.success) {
+      console.error(`[EMAIL] New request notification email failed to send to ${data.qaEmails.join(', ')}:`, emailResult.error);
+      return { success: false, error: `Database updated, but email notification failed: ${emailResult.error}` };
+    }
+    
     return { success: true };
   } catch (emailError) {
-    console.warn(`New request notification email failed to send to ${data.qaEmails.join(', ')}.`, emailError);
+    console.error(`[EMAIL] New request notification email failed to send to ${data.qaEmails.join(', ')}.`, emailError);
     return { success: false, error: "Database updated, but email notification failed." };
   }
 }
@@ -294,11 +312,17 @@ export async function sendTestEmail(email: string) {
 
 export async function sendWelcomeEmail(data: { name: string, email: string, password?: string }) {
   try {
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: data.email,
       subject: `🎉 Welcome to Dev2QA! Your Account is Ready`,
       html: getWelcomeEmailTemplate(data.name, data.email, data.password || '')
     });
+    
+    if (!emailResult.success) {
+      console.error(`[EMAIL] Welcome email failed to send to ${data.email}:`, emailResult.error);
+      return { success: false, error: `Welcome email failed: ${emailResult.error}` };
+    }
+    
     return { success: true };
   } catch (error) {
     console.warn('Failed to send notification emails to QA testers.', error);
@@ -641,11 +665,25 @@ export async function sendInvoiceEmail(data: {
   currency: string;
   dueDate: string;
   invoiceUrl: string;
+  ccEmails?: string[]; // Optional CC emails (manual override)
 }) {
   try {
     const { getAbsoluteUrl } = await import('@/lib/email-template');
     const publicInvoiceUrl = getAbsoluteUrl(`/invoices/${data.invoiceId}`);
     const pdfUrl = getAbsoluteUrl(`/api/invoices/${data.invoiceId}/pdf`);
+
+    // Normalize recipient email for exclusion
+    const recipientEmail = data.recipientEmail.toLowerCase().trim();
+    
+    // Get CC emails from email groups configured for 'invoice-sent' event
+    // Exclude recipient to avoid duplicates
+    const ccEmailsFromGroups = await getCCEmailsForEvent('invoice-sent', [recipientEmail]);
+    
+    // Combine with any manually provided CC emails, excluding recipient
+    const manualCC = (data.ccEmails || []).filter(
+      email => email.toLowerCase().trim() !== recipientEmail
+    );
+    const allCCEmails = [...new Set([...manualCC, ...ccEmailsFromGroups])];
 
     const content = `
       <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">Invoice ${data.invoiceNumber}</h1>
@@ -677,14 +715,21 @@ export async function sendInvoiceEmail(data: {
       </p>
     `;
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to: data.recipientEmail,
       subject: `Invoice ${data.invoiceNumber} from Dev2QA`,
-      html: wrapEmailContent(content, 'Invoice')
+      html: wrapEmailContent(content, 'Invoice'),
+      cc: allCCEmails.length > 0 ? allCCEmails.join(',') : undefined
     });
+    
+    if (!emailResult.success) {
+      console.error(`[EMAIL] Invoice email failed to send to ${data.recipientEmail}:`, emailResult.error);
+      return { success: false, error: `Failed to send invoice email: ${emailResult.error}` };
+    }
+    
     return { success: true };
   } catch (error: any) {
-    console.warn(`Invoice email failed to send to ${data.recipientEmail}.`, error);
+    console.error(`[EMAIL] Invoice email failed to send to ${data.recipientEmail}.`, error);
     return { success: false, error: 'Failed to send invoice email.' };
   }
 }

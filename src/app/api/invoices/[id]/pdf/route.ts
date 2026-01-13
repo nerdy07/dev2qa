@@ -13,7 +13,26 @@ export async function GET(
     const { id } = await params;
     
     // Use Admin SDK to bypass security rules
-    const app = await initializeAdminApp();
+    let app;
+    try {
+      app = await initializeAdminApp();
+    } catch (initError: any) {
+      console.error('[INVOICE PDF API] Failed to initialize Firebase Admin:', {
+        message: initError.message,
+        name: initError.name,
+        // Log if key exists but might be malformed
+        hasKey: !!(process.env.SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_KEY),
+        keyLength: (process.env.SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '').length,
+      });
+      // Return a user-friendly error without exposing internal config details
+      if (initError.message?.includes('service account key') || initError.message?.includes('not set')) {
+        return NextResponse.json(
+          { error: 'Invoice download service is temporarily unavailable. Please contact support.' },
+          { status: 503 }
+        );
+      }
+      throw initError;
+    }
     const db = getFirestore(app);
 
     const invoiceDoc = await db.collection('invoices').doc(id).get();
@@ -60,6 +79,29 @@ export async function GET(
     });
   } catch (error: any) {
     console.error('Error generating invoice PDF:', error);
+    // If it's a service account error, return user-friendly HTML error page
+    if (error.message?.includes('service account key')) {
+      const errorHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Service Unavailable</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+    .error { color: #dc2626; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>Service Temporarily Unavailable</h1>
+  <p class="error">Invoice download service is temporarily unavailable. Please contact support or try again later.</p>
+</body>
+</html>`;
+      return new NextResponse(errorHtml, {
+        status: 503,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    }
     return NextResponse.json({ error: error.message || 'Failed to generate invoice' }, { status: 500 });
   }
 }
