@@ -21,7 +21,7 @@ export function getFirebaseAdmin() {
 
   try {
     const serviceAccount = JSON.parse(serviceAccountKey);
-    
+
     // Convert \n to actual newlines in the private key
     const processedServiceAccount = {
       ...serviceAccount,
@@ -35,7 +35,11 @@ export function getFirebaseAdmin() {
     return app;
   } catch (error: any) {
     console.error('Firebase Admin initialization error:', error);
-    throw new Error('Failed to initialize Firebase Admin SDK. Check your FIREBASE_SERVICE_ACCOUNT_KEY environment variable.');
+    // Explicitly check for JSON parse errors which indicate bad .env format
+    if (error instanceof SyntaxError) {
+      console.error('JSON Parse Error: Your SERVICE_ACCOUNT_KEY or FIREBASE_SERVICE_ACCOUNT_KEY in .env might be malformed. Ensure it is a single line or properly quoted.');
+    }
+    throw new Error('Failed to initialize Firebase Admin SDK. Check your FIREBASE_SERVICE_ACCOUNT_KEY environment variable and ensure it is valid JSON.');
   }
 }
 

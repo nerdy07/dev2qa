@@ -21,35 +21,38 @@ export async function initializeAdminApp() {
   if (app) {
     return app;
   }
-  
+
   // Check if any app is already initialized
   if (admin.apps.length > 0) {
     app = admin.apps[0]!;
     return app;
   }
-  
-  const serviceAccountKey = process.env.SERVICE_ACCOUNT_KEY;
+
+  // Try both variable names
+  const serviceAccountKey = process.env.SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   if (!serviceAccountKey) {
-    throw new Error('Firebase service account key is not set in environment variables. Please set SERVICE_ACCOUNT_KEY.');
+    // Log available env vars for debugging (carefully)
+    console.error('Available keys:', Object.keys(process.env).filter(k => k.includes('FIREBASE') || k.includes('SERVICE')));
+    throw new Error('Firebase service account key is not set in environment variables. Please set SERVICE_ACCOUNT_KEY or FIREBASE_SERVICE_ACCOUNT_KEY.');
   }
 
   try {
     console.log('Parsing service account key...');
     const serviceAccount = JSON.parse(serviceAccountKey);
     console.log('Service account parsed successfully');
-    
+
     // Convert \n to actual newlines in the private key
     const processedServiceAccount = {
       ...serviceAccount,
       private_key: serviceAccount.private_key.replace(/\\n/g, '\n')
     };
-    
+
     console.log('Initializing Firebase Admin app...');
     app = admin.initializeApp({
       credential: admin.credential.cert(processedServiceAccount),
     });
-    
+
     console.log('Firebase Admin app initialized successfully');
     return app;
   } catch (error: any) {
@@ -60,7 +63,7 @@ export async function initializeAdminApp() {
       code: error.code,
       stack: error.stack
     });
-    throw new Error('Failed to initialize Firebase Admin SDK. Check your FIREBASE_SERVICE_ACCOUNT_KEY environment variable.');
+    throw new Error('Failed to initialize Firebase Admin SDK. Double check your service account key JSON format.');
   }
 }
 
